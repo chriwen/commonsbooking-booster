@@ -1,6 +1,8 @@
 # Performance-Booster: abschaltbar und downgrade-fest
 
-Stand: 06.11.2026. Ergänzt `timeframe-index.md` (Stufe 2) und `availability-precompute.md` (Stufe 3).
+Stand: 06.11.2026. Ergänzt `timeframe-index.md` (Stufe 2) und `availability-precompute.md` (Stufe 3). Maßgeblich für
+den aktuellen Stand ist `technische-dokumentation-booster.md`; diese Notiz hält die Entscheidungen und Tests zu
+Schalter, Wächter und Downgrade fest.
 
 ## Ziel
 
@@ -34,9 +36,11 @@ Grenzen:
   Stichprobe des Index-Verifiers. Für die Buchungsprüfung spielt das keine Rolle (Originalabfragen).
 - Stornierungen der alten Version (direktes SQL, ohne Änderungsdatum) erkennt die stündliche Prüfung über den Status.
   Bis dahin erscheint der Tag höchstens noch als belegt, buchen lässt er sich schon.
-- Trägt die Booster-Version dieselbe Versionsnummer wie die Vorgängerversion (derzeit beide 2.11.3), greift die
-  erste Prüfung nicht. Die beiden anderen decken das ab. Für einen eigenen Fork empfiehlt sich trotzdem eine eigene
-  Versionsnummer.
+- Trägt die Booster-Version dieselbe Versionsnummer wie die Vorgängerversion, greift die erste Prüfung nicht; die
+  beiden anderen decken das ab. Deshalb trägt der Branch eine eigene Nummer (`2.11.4-beta.2` gegenüber 2.11.3), damit
+  der Wechsel zwischen beiden Versionen schon an der Versionsoption erkannt wird. Beispiel: Wird 2.11.3 eingespielt,
+  setzt deren Upgrade-Routine `commonsbooking_plugin_version` auf `2.11.3`; beim Zurückwechseln sieht der Wächter
+  `2.11.3 ≠ 2.11.4-beta.2`, das die Booster-Version zuletzt selbst geschrieben hat, und baut den Index neu auf.
 
 ## Empfohlener Ablauf für ein Downgrade
 
@@ -75,10 +79,11 @@ Ein baut den Index bei den nächsten Seitenaufrufen neu auf.
 
 ## Tests
 
-- `tests/php/Service/Booster/BoosterTest.php` (12 Tests): Schalter, Umgehung bei der Buchungsprüfung (auch mit einer
+- `tests/php/Service/Booster/BoosterTest.php` (13 Tests): Schalter, Umgehung bei der Buchungsprüfung (auch mit einer
   Buchung, die im Index fehlt), Ein-/Ausschalten, alle drei Wächter-Prüfungen, Wartezeit für parallele Anfragen,
   `purge`.
-- Suite in vier Modi: Booster an (524 Tests grün), `CB_USE_BOOSTER=0` (Index- und Verfügbarkeitstests übersprungen),
+- Suite in vier Modi: Booster an (555 Tests grün, Stand 06.11.2026), `CB_USE_BOOSTER=0` (Index- und
+  Verfügbarkeitstests übersprungen),
   `CB_USE_INDEX=0`, `CB_USE_AVAILABILITY=0`. Der zusätzliche CI-Lauf mit ausgeschaltetem Booster ist in
   `.github/workflows/phpunit.yml` eingetragen.
 
@@ -94,7 +99,8 @@ mit `wp i18n make-mo` erzeugt. Das Plugin lädt die eigene `.mo` vor dem Sprachp
 
 Alle Messwerte des Boosters stammen aus Umgebungen mit `WP_DEBUG`, also ohne den Plugin-Cache. Karte und Tabelle
 brauchen ihn mit Booster nicht mehr. Er puffert aber weiterhin Repository-Abfragen, Kalenderdaten der Artikelseite
-und Listen. Für API und GBFS, die noch nicht aus dem Booster lesen, ist er weiter nützlich. Er bleibt deshalb
+und Listen. API und GBFS lesen inzwischen ebenfalls aus der Vorberechnung (technische Dokumentation 6.6), außer bei
+den Live-Rückfällen dort; für diese und für die Artikelseite bleibt der Cache nützlich. Er bleibt deshalb
 eingeschaltet. Nur die Buchungsprüfung umgeht ihn.
 
 ### Messung mit und ohne Plugin-Cache (06.11.2026)

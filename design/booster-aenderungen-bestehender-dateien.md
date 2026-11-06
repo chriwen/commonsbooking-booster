@@ -1,9 +1,10 @@
 # Booster: Änderungen an bestehenden Dateien
 
 Stand 2026-11-06. Vergleich `master` (wielebenwir, `7aa75a81`, entspricht 2.11.3) mit
-`chriwen/commonsbooking-booster` Branch `booster/index-availability` (`32666523`).
+`chriwen/commonsbooking-booster` Branch `booster/index-availability` (Arbeitsstand
+nach `8ade45b8`, einschließlich der Umstellung von `Item::getClosestBooking()`).
 
-Nur **geänderte** Dateien (35). Neue Dateien – vor allem `src/Service/Index/`, `src/Service/Availability/`,
+Nur **geänderte** Dateien (37, davon 3 Sprachdateien). Neue Dateien – vor allem `src/Service/Index/`, `src/Service/Availability/`,
 `src/Service/Booster/`, `src/Repository/Index.php`, neue Tests und `design/` – sind hier nicht beschrieben, sondern in
 `technische-dokumentation-booster.md`.
 
@@ -15,13 +16,14 @@ Nur **geänderte** Dateien (35). Neue Dateien – vor allem `src/Service/Index/`
 |---|---|---|---|
 | Verdrahtung | `Plugin.php`, `includes/OptionsArray.php`, `commonsbooking.php` | Booster starten/stoppen, Einstellung, Version | Schalter und Einstellung ja, sonst nein |
 | Datenzugriff | `Repository/Timeframe.php`, `Booking.php`, `Restriction.php`, `BookablePost.php` | Abfragen lesen aus dem Index statt aus `postmeta` | nein (Originalabfragen), **außer** `Booking::getForUser()` |
+| Artikelmodell | `Model/Item.php` | `getClosestBooking()` (GBFS `vehicle_id`) lädt nur noch die Kandidaten mit dem spätesten Start | nein (ohne Index unverändert) |
 | Kalendermodell | `Model/Calendar.php`, `Week.php`, `Day.php` | Einschränkungen einmal je Kalender laden, Beiträge erst bei Bedarf, API-Slots aus der Vorberechnung | ja (Laden), Slots nur mit Booster |
 | Anzeige | `View/Calendar.php`, `Map/MapItemAvailable.php` | Tageslogik in gemeinsamen Kern ausgelagert, lesen aus der Vorberechnung | Refactoring ja, Vorberechnung nein |
 | Karte | `Model/Map.php` | Zeitrahmen, Terms, Bilder für alle Standorte gebündelt laden | ja |
 | Buchen | `Wordpress/CustomPostType/Booking.php`, `Timeframe.php`, `Model/Booking.php`, `Service/BookingRuleApplied.php`, `includes/Public.php` | Prüfung immer ohne Booster, Artikelsperre, Doppelklick-Schutz | **ja** (Sperre, Doppelklick, Regelprüfung) |
 | Cache | `Service/Cache.php` | Rollen im Cache-Schlüssel, `withoutCache()` | **ja** |
 | Kleinere Fixes | `templates/location-calendar-header.php`, `_lists.scss` | Abholhinweise ohne Leerraum | ja |
-| Tests, CI, Doku | `tests/…`, `.github/workflows/phpunit.yml`, `phpstan*.neon`, `TECHNICAL.md` | Booster in Tests an, drei zusätzliche CI-Läufe | – |
+| Tests, CI, Doku | `tests/…` (u. a. `Model/ItemTest.php`), `.github/workflows/phpunit.yml`, `phpstan*.neon`, `TECHNICAL.md` | Booster in Tests an, drei zusätzliche CI-Läufe | – |
 | Übersetzungen | `languages/*` | neue Texte (Einstellungsseite, Sperrmeldung) | – |
 
 **Leitlinie des Umbaus:** Jede umgestellte Abfrage prüft zuerst `Index::isAvailable()` bzw.
@@ -42,7 +44,7 @@ umgangen, läuft der unveränderte Originalcode. `wp_posts`/`wp_postmeta` werden
 `Booster::SETTINGS_FIELD`, Statusbereich über `SettingsView::render` (Diagnose, Knöpfe „Prüfen“/„Neu aufbauen“).
 Standard: aus.
 
-**`commonsbooking.php`** – Version `2.11.4-beta.1`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
+**`commonsbooking.php`** – Version `2.11.4-beta.2`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
 verfallen damit.
 
 ---
@@ -58,6 +60,7 @@ Index (`Index::findPostIds()` + `Index::loadPosts()`) und Originalabfrage. PHP-F
 | `Repository/Timeframe.php` | `get()`, `getInRange()` (und damit `getBookable*`, `getInRangeForCurrentUser`) | neue private `queryPosts()`: Datums- und Zeitraumfilter direkt in SQL über den Index statt `getPostIdsByType()` (Full Scan auf `postmeta`) + `getPostsByBaseParams()` |
 | | neu `getByAuthor()` | Zeitrahmen/Buchungen eines Autors (für `getForUser`), mit Index oder per SQL auf `post_author` |
 | `Repository/Booking.php` | `getByTimerange()`, `getBeginningBookingsByDate()`, `getEndingBookingsByDate()`, `getByDate()` | neue private `findViaIndex()`; unterstützt `$customArgs` `author`, `post_status`, `orderby=date`, `order`, bei allem anderen `null` → `WP_Query` wie bisher. Sortierung wie `WP_Query` (`post_date DESC`) |
+| | neu `getLatestPastConfirmed( $itemId, $locationId, $now )` | Kandidaten für `Item::getClosestBooking()`: bestätigte Buchungen des Paares, die vor `$now` geendet haben, mit dem spätesten Start (zwei Indexabfragen). Ohne Index `null` → Aufrufer nutzt den Originalweg. Einzelheiten unten in 4a |
 | | `getForUser()` | **auch ohne Booster:** lädt nicht mehr alle Buchungen, sondern Kandidaten (`getVisibleCandidates()`): eigene + Buchungen verwalteter Artikel/Standorte (`getManagedPostIds()`: Autor oder `_cb_*_admins`). CB-Admins weiter alles. `commonsbooking_isUserAllowedToSee()` filtert weiterhin, Ergebnis identisch |
 | `Repository/Restriction.php` | `get()` | `queryPostsFromIndex()` mit `restriction_state = active`, sonst `queryPosts()` wie bisher |
 | `Repository/BookablePost.php` | `getRelatedPosts()` (`Item::getByLocation`, `Location::getByItem`) | `getTimeframesByRelation()`: Kandidaten aus dem Index, danach Filter auf den **einzelnen** `*-id`-Wert (alte Semantik). Verwandte Beiträge werden gebündelt geladen (`_prime_post_caches`), auch ohne Index |
@@ -80,6 +83,27 @@ Nicht umgestellt: Admin-Listen, `Booking::getForUserPaginated()`, alle Schreibwe
 `Day::getRestrictions()` filtert dann die vorgeladenen Einschränkungen in PHP (`isInRestriction()`, gleiche
 Datumsbedingung wie die SQL-Abfrage), sonst fragt der Tag wie bisher selbst. Neue Konstante
 `Day::RESTRICTION_STATUSES`.
+
+**`Model/Item.php`** (4a) – `getClosestBooking()` bestimmt die zuletzt beendete bestätigte Buchung des Artikels an
+seinem aktuellen Standort; daraus entsteht die verschleierte GBFS-`vehicle_id` (`getCloakedId()`), die nach jeder
+Ausleihe wechselt. Bisher lud die Methode **alle** bestätigten Buchungen des Paares als Modelle und filterte in PHP
+(`isPast()`), auf dev rund 1.300 Buchungen bzw. 10 MB und 95 ms je Artikel; `vehicle_availability.json` brach mit
+128 MB Speicherlimit mit HTTP 500 ab. Neu:
+
+```php
+$allBookings = Repository\Booking::getLatestPastConfirmed( $this->ID, $location->ID, current_time( 'timestamp' ) );
+if ( $allBookings === null ) {          // kein Index: Originalweg wie in 2.11.3
+    $allBookings = Repository\Booking::get( [ $location->ID ], [ $this->ID ], null, true, null, [ 'confirmed' ] );
+    $allBookings = array_filter( $allBookings, fn( $b ) => $b->isPast() );
+}
+// danach unverändert: usort nach Starttag, bei Gleichstand nach Startzeit; array_pop()
+```
+
+Der Index liefert nur die Buchungen mit dem spätesten Start (meist eine). Die unveränderte Sortierung wählt unter
+ihnen genau wie vorher unter allen, deshalb bleibt die `vehicle_id` identisch: auf dev für alle 126 Artikel, auf der
+Testumgebung für alle 41 Artikel geprüft. Ergebnis: `vehicle_availability.json` 0,65 s statt HTTP 500. Ohne Booster
+ändert sich nichts (auch nicht die Speicherlast). Test: `ItemTest::testGetClosestBooking_indexMatchesLegacy`.
+Ausführlich: `technische-dokumentation-booster.md`, Abschnitt 5.5.
 
 ---
 
@@ -146,6 +170,7 @@ ohne Booster.
 - `tests/php/BaseTestCase.php`: setzt statische Zustände von `Store`, `Calculator`, `Invalidator` zurück.
 - `tests/php/Model/CalendarTest.php`: erwartete `Week`-Objekte mit dem neuen Parameter.
 - Neue Testfälle in `Repository/BookingTest.php` (`getForUser`), `View/CalendarTest.php` (is-locked),
+  `Model/ItemTest.php` (`getClosestBooking` Index gegen Originalweg),
   `CustomPostType/BookingTest.php` (Regel „eine unbestätigte Buchung“ mit verwaltetem Artikel).
 - `.github/workflows/phpunit.yml`: drei zusätzliche Läufe (PHP 8.1, WP latest) mit Booster aus, ohne Index, ohne
   Vorberechnung.
@@ -173,7 +198,7 @@ nur eigener Buchungen, gebündeltes Laden der Karte, Einschränkungen einmal je 
 | `Map\MapItemAvailable::markDaysInTimeframe()` (protected) | entfernt, ersetzt durch `markDays()` |
 | `Model\Day::__construct()`, `Model\Week::__construct()` | zusätzlicher optionaler Parameter |
 | `Model\Calendar` | `$timeframes` jetzt `?array`, Laden in `loadPosts()` |
-| neu öffentlich | `Calendar::getAvailabilitySlotsLive()`, `Repository\Timeframe::getByAuthor()`, `Map::getBookableTimeframesByPair()`, `Cache::withoutCache()`, `Day::RESTRICTION_STATUSES` |
+| neu öffentlich | `Calendar::getAvailabilitySlotsLive()`, `Repository\Timeframe::getByAuthor()`, `Repository\Booking::getLatestPastConfirmed()`, `Map::getBookableTimeframesByPair()`, `Cache::withoutCache()`, `Day::RESTRICTION_STATUSES` |
 
 **Wer Beiträge per direktem SQL ändert** (wie `Model\Booking::cancel()`), muss `Indexer::touch( $id )` und
 `Indexer::flush()` aufrufen, sonst sieht der Index die Änderung erst über den Wächter bzw. die tägliche Prüfung.

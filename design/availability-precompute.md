@@ -1,6 +1,11 @@
-# Stufe 3: Vorberechnete Verfügbarkeit (Entwurf)
+# Stufe 3: Vorberechnete Verfügbarkeit (Entwurf und Umsetzungsprotokoll)
 
-Stand: 2026-11-06, lokaler Fork, nicht committet. Baut auf dem Index aus [timeframe-index.md](timeframe-index.md) auf.
+Stand: 2026-11-06, umgesetzt im Branch `booster/index-availability`. Baut auf dem Index aus
+[timeframe-index.md](timeframe-index.md) auf.
+
+> Diese Notiz hält den Entwurf und die Umsetzungsschritte fest (historisch). Den aktuellen Stand mit allen späteren
+> Ergänzungen (Spalte `slots` für API und GBFS, Korrekturen in der Artikeltabelle) beschreibt
+> [technische-dokumentation-booster.md](technische-dokumentation-booster.md), Abschnitte 1.4.5, 2.4 und 6.
 
 ## 1. Ziel und Ausgangslage
 
@@ -218,9 +223,9 @@ produktionsreif.
 
 - ~~API und GBFS~~: umgesetzt, Spalte `slots` (siehe Nachtrag in 13).
 - **Paare mit Rollenbeschränkung:** zunächst live. Bei Bedarf eine Variante je Rollenkombination speichern.
-- **Buchungskalender auf der Artikelseite:** weiter live (braucht Slots und ist nutzerabhängig).
-- **Bestehende Transient-Caches** (`Plugin::getCacheItem`): unverändert. Für Karte und Tabelle werden sie durch die
-  neue Tabelle weitgehend überflüssig. Der Fehler beim Cache-Schlüssel in `renderTable` sollte trotzdem behoben werden.
+- **Buchungskalender auf der Artikelseite:** weiter live (braucht Uhrzeiten und ist nutzerabhängig).
+- **Bestehende Transient-Caches** (`Plugin::getCacheItem`): bleiben eingeschaltet, für Karte und Tabelle weitgehend
+  überflüssig. ~~Fehler beim Cache-Schlüssel in `renderTable`~~: behoben (technische Dokumentation 6.1).
 
 ## 11. Risiken
 
@@ -238,7 +243,7 @@ produktionsreif.
 2. Paare mit Rollenbeschränkung werden live berechnet.
 3. API und GBFS kamen später (Spalte `slots`, Calc-Version 2).
 
-## 13. Stand der Umsetzung (2026-11-06, nicht committet)
+## 13. Stand der Umsetzung (2026-11-06)
 
 Alle Phasen A–E sind umgesetzt. Code in `src/Service/Availability/`, Tests in `tests/php/View/CalendarSnapshotTest.php`
 und `tests/php/Service/Availability/AvailabilityTest.php`.
@@ -333,14 +338,13 @@ Testumgebung (`testenv/`, 15 Paare, Browser, Zeit bis zur Antwort): Kartenabfrag
 15 Artikel, rund 560 Buchungen, Feiertage, Reparatur, Rollenbeschränkung), Seiten für alle Shortcodes und einem
 MU-Plugin zum Umschalten zwischen vorberechnet, live und ohne Index (`?cb-mode=`). Anleitung in `testenv/README.md`.
 
-### Offene Punkte
+### Nachtrag: API und GBFS (Spalte `slots`)
 
-- Buchungskalender der Artikelseite rechnet weiter live (ein Paar, braucht Slots).
-- Bestehender Fehler: Cache-Schlüssel in `renderTable`.
-
-Nachtrag (2026-11-06): API und GBFS lesen die gespeicherten Slots (`Schema::SCHEMA_VERSION = 2`, Spalte `slots`,
-`Calculator::VERSION = 2`, `SlotReader`, Test `SlotsTest`); `<span'is-locked'>` und `Booking::getForUser` sind
-behoben. Details in `technische-dokumentation-booster.md` (6.6) und `booster-offene-punkte.md`.
+API und GBFS lesen die gespeicherten Slots (`Schema::SCHEMA_VERSION = 2`, Spalte `slots`, `Calculator::VERSION = 2`,
+`SlotReader`, Test `SlotsTest`). Gemessen auf den Entwicklungsdaten (126 Artikel): `/availability` 1.067 ms → 605 ms,
+GBFS `station_status` 194 ms → 138 ms. Ebenfalls behoben: der Cache-Schlüssel in `renderTable` und das Markup
+`<span'is-locked'>`. Einzelheiten, Abweichungen vom Live-Weg und verbleibende offene Punkte:
+`technische-dokumentation-booster.md`, Abschnitte 2.4, 6.1, 6.6 und 12.3.
 
 
 ## Nachtrag 06.11.2026: Performance-Booster

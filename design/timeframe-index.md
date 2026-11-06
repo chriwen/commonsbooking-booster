@@ -1,6 +1,11 @@
 # Design: Index-Tabelle für Zeitrahmen, Buchungen und Einschränkungen
 
-Status: Entwurf · Stand: 2026-11-05 · Basis: CommonsBooking 2.11.3 (`7aa75a81`)
+Status: umgesetzt (Phasen 1–5) im Branch `booster/index-availability` · Entwurf vom 2026-11-05, Protokoll bis
+2026-11-06 · Basis: CommonsBooking 2.11.3 (`7aa75a81`)
+
+> Diese Notiz hält Entwurf, Entscheidungen und Messreihen der einzelnen Phasen fest (historisch). Den aktuellen Stand
+> des Index, einschließlich der späteren Umstellungen von `Booking::getForUser()` und `Item::getClosestBooking()`,
+> beschreibt [technische-dokumentation-booster.md](technische-dokumentation-booster.md), Abschnitte 2 bis 5.
 
 ## 1. Ziel und Abgrenzung
 
@@ -211,7 +216,8 @@ Bei leerer Artikel- oder Standortliste entfällt die jeweilige Bedingung bzw. de
 | `Timeframe::filterTimeframesByConfiguredDays()` | Wochentag/Manuell aus der Index-Zeile, ohne `get_post_meta` |
 | `Timeframe::getByLocationItemTimestamp()` | `Index::find()` + Vergleich `start_time`/`end_time` aus der Zeile |
 | `Repository\Booking::getByDate/getByTimerange/getExistingBookings` | `Index::find(post_types=[cb_booking], type=6, …)`. **Konfliktprüfung**: liest die Quelle (Index ist im selben Request aktuell, siehe 4.3) |
-| `Booking::getForUser/getForCurrentUser`, Buchungsregeln (`BookingRule::check*`) | `Index::find(authors=[…])` über `author_type` |
+| `Booking::getForUser/getForCurrentUser`, Buchungsregeln (`BookingRule::check*`) | `Index::find(authors=[…])` über `author_type`. Umgesetzt als Vereinigung aus eigenen und verwalteten Buchungen (technische Dokumentation 5.4) |
+| `Item::getClosestBooking()` (GBFS `vehicle_id`) | später ergänzt: `Booking::getLatestPastConfirmed()`, zwei Indexabfragen statt aller Buchungen des Paares (technische Dokumentation 5.5) |
 | `Booking::getBeginningBookingsByDate/getEndingBookingsByDate` (Erinnerungs-Mails) | `type_range` |
 | `Repository\Restriction::get/queryPosts` | `Index::find(post_types=[cb_restriction], restriction_state='active', include_wildcards)`. **Einmal pro Zeitraum statt pro Tag.** |
 | `BookablePost::getRelatedPosts()` (Artikel ↔ Standort, Karte/Listen) | `SELECT DISTINCT location_id/item_id FROM cb_index WHERE … post_type='cb_timeframe' AND is_multi=0`. Dieselbe Semantik wie heute: nur Einzelzuordnung, alle Typen und Status aus der bestehenden Abfrage. |
@@ -252,7 +258,7 @@ Admin-Listen (`filterAdminList`, `pre_get_posts`) und die REST-API bleiben in Ph
 Danach Stufe 3 (vorberechnete Verfügbarkeit): Sie nutzt `Index::rows()` und die alten Werte aus `Indexer` für die
 gezielte Neuberechnung.
 
-## 8a. Stand Phase 1 (umgesetzt am 2026-11-06, nicht committet)
+## 8a. Stand Phase 1 (umgesetzt am 2026-11-06)
 
 Code: `src/Service/Index/` (`Schema`, `Projector`, `Indexer`, `Backfill`, `Verifier`, `Cli`), Tests:
 `tests/php/Service/Index/IndexerTest.php` (14 Tests). Geändert: `Plugin::init/activation/deactivation`,
@@ -273,7 +279,7 @@ Abweichungen vom Entwurf oben:
 Hinweis für die Entwicklung: Neue Klassen unter `src/` erfordern `composer prefix-namespaces`, weil das Plugin nur den
 Strauss-Autoloader in `vendor-prefixed/` lädt.
 
-## 8b. Stand Phase 2 (umgesetzt am 2026-11-06, nicht committet)
+## 8b. Stand Phase 2 (umgesetzt am 2026-11-06)
 
 - `src/Repository/Index.php`: `findPostIds()` (UNION ALL aus Einzel- und Mehrfachzuordnung, sortiert nach `post_id`,
   ruft vorher `Indexer::flush()` auf, damit Änderungen des eigenen Requests sichtbar sind) und `loadPosts()`
@@ -302,7 +308,7 @@ Messung auf dem Testbestand (Cache aus, 100 Artikel, 17.100 Zeitrahmen und Buchu
 Restkosten: `Restriction::get()` pro Tag (6.000 bzw. 3.200 Abfragen, rund 1 s) → Phase 3. Die Karte berechnet weiter
 60 statt 12 Tage → Stufe 1 (Quick Win).
 
-## 8c. Stand Phase 3 (umgesetzt am 2026-11-06, nicht committet)
+## 8c. Stand Phase 3 (umgesetzt am 2026-11-06)
 
 - `Repository\Booking`: `getByDate`, `getByTimerange` (und damit `getExistingBookings`, `getByRestriction`,
   Buchungsregeln, angrenzende Buchungen), `getBeginningBookingsByDate` und `getEndingBookingsByDate` (Dashboard,
@@ -332,12 +338,13 @@ Messung auf dem Testbestand (Cache aus):
 Der Rest ist jetzt überwiegend PHP-Rechenzeit (Karte: 0,26 s SQL von 1,17 s). Größter Hebel: Die Karte berechnet
 60 statt der angezeigten 12 Tage (Quick Win). Danach folgt Stufe 3 (vorberechnete Verfügbarkeit).
 
-Offener Punkt: `Booking::getForUser()` (Seite „Meine Buchungen“, `BookingRuleApplied`) lädt **alle** Buchungen der
-Instanz und filtert in PHP nach `commonsbooking_isUserAllowedToSee()`. Das skaliert mit der Gesamtzahl der
-Buchungen. Eine Umstellung braucht eine Index-Abfrage „eigene Buchungen + Buchungen administrierter
-Artikel/Standorte“.
+Offener Punkt (damals): `Booking::getForUser()` (Seite „Meine Buchungen“, `BookingRuleApplied`) lud **alle**
+Buchungen der Instanz und filterte in PHP nach `commonsbooking_isUserAllowedToSee()`. **Inzwischen umgesetzt:**
+Vereinigung aus eigenen Buchungen und Buchungen verwalteter Artikel/Standorte, für einen normalen Nutzer auf dev
+1.203 statt 167.000 geladene Buchungen; `BookingRuleApplied` fragt nur noch die eigenen unbestätigten Buchungen ab.
+Für CB-Admins bleibt es beim Laden aller Buchungen (technische Dokumentation 5.4 und 12.3).
 
-## 8d. Stand Phase 4 (umgesetzt am 2026-11-06, nicht committet)
+## 8d. Stand Phase 4 (umgesetzt am 2026-11-06)
 
 - `BookablePost::getRelatedPosts()` (`Item::getByLocation`, `Location::getByItem`) holt die Zeitrahmen über
   `getTimeframesByRelation()` aus dem Index. Danach filtert es auf den **einzelnen** `*-id`-Wert (Semantik der
@@ -363,7 +370,7 @@ zusammen 0,05 s). Die Karte mit Verfügbarkeit wird von der PHP-Berechnung der T
 1,17 s). Nächster Hebel: nur den angezeigten Zeitraum berechnen (Quick Win), danach die vorberechnete Verfügbarkeit
 (Stufe 3).
 
-## 8e. Stand Phase 5 (umgesetzt am 2026-11-06, nicht committet)
+## 8e. Stand Phase 5 (umgesetzt am 2026-11-06)
 
 - Weitere Hook-Tests: Stornierung durch `Restriction::apply()`, Aufräum-Cron für unbestätigte Buchungen, neuer
   Artikel bei „alle Artikel“-Feiertag, Papierkorb/Wiederherstellen. Dazu ein Test, der die Abweichung bei leerem

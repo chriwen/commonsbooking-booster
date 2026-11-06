@@ -619,6 +619,54 @@ class Booking extends PostRepository {
 	}
 
 	/**
+	 * Candidates for {@see \CommonsBooking\Model\Item::getClosestBooking()}: the confirmed bookings of the pair that
+	 * ended before $now and have the latest start of those. Only these can win the sort by start date in
+	 * getClosestBooking(), which then decides between them (start time, order by post id) exactly as before.
+	 *
+	 * Without the index all confirmed bookings of the pair are loaded and filtered in PHP, which grows with the whole
+	 * booking history (about 10 MB and 95 ms per item on 167,000 bookings). With the index this reads index rows only
+	 * and loads a single post in the usual case.
+	 *
+	 * Same semantics as the legacy path: Booking::isPast() compares the end meta as integer, so a missing end (index
+	 * NULL) counts as past; a missing start counts as 0.
+	 *
+	 * @param int $itemId item of the pair
+	 * @param int $locationId location of the pair
+	 * @param int $now local timestamp, as current_time( 'timestamp' )
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|null ordered by post id, null if the index is not available
+	 */
+	public static function getLatestPastConfirmed( int $itemId, int $locationId, int $now ): ?array {
+		if ( ! Index::isAvailable() ) {
+			return null;
+		}
+		\CommonsBooking\Service\Index\Indexer::flush();
+
+		global $wpdb;
+		$table = \CommonsBooking\Service\Index\Schema::table();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery -- table name only, derived data
+		$where       = $wpdb->prepare(
+			"item_id = %d AND location_id = %d AND type = %d AND post_type = %s AND post_status = 'confirmed'
+			AND (end_ts IS NULL OR end_ts < %d)",
+			$itemId,
+			$locationId,
+			Timeframe::BOOKING_ID,
+			\CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
+			$now
+		);
+		$latestStart = $wpdb->get_var( "SELECT MAX(COALESCE(start_ts, 0)) FROM $table WHERE $where" );
+		if ( $latestStart === null ) {
+			return [];
+		}
+		$ids = $wpdb->get_col(
+			$wpdb->prepare( "SELECT post_id FROM $table WHERE $where AND COALESCE(start_ts, 0) = %d ORDER BY post_id", (int) $latestStart )
+		);
+		// phpcs:enable
+
+		return array_map( fn( $post ) => new \CommonsBooking\Model\Booking( $post ), Index::loadPosts( array_map( 'intval', $ids ) ) );
+	}
+
+	/**
 	 * Finds bookings with the index, mirroring the WP_Query based methods of this class.
 	 * Returns null if the index is not available or $customArgs contains arguments the index does not support;
 	 * the caller then runs the legacy WP_Query.
