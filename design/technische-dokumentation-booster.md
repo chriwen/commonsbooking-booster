@@ -1,5 +1,7 @@
 # Technische Dokumentation: Performance-Booster
 
+*English version: [technische-dokumentation-booster.en.md](technische-dokumentation-booster.en.md)*
+
 Stand: 06.11.2026 · Branch `booster/index-availability` · Vergleichsbasis: CommonsBooking 2.11.3 (`master`, `7aa75a81`)
 
 Diese Dokumentation richtet sich an Entwickler, die CommonsBooking 2.11.3 kennen. Sie beschreibt, was sich geändert hat,

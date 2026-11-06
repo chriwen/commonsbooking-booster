@@ -1,5 +1,7 @@
 # Stufe 3: Vorberechnete Verfügbarkeit (Entwurf und Umsetzungsprotokoll)
 
+*English version: [availability-precompute.en.md](availability-precompute.en.md)*
+
 Stand: 2026-11-06, umgesetzt im Branch `booster/index-availability`. Baut auf dem Index aus
 [timeframe-index.md](timeframe-index.md) auf.
 

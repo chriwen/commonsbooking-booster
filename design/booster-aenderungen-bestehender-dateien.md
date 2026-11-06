@@ -1,5 +1,7 @@
 # Booster: Änderungen an bestehenden Dateien
 
+*English version: [booster-aenderungen-bestehender-dateien.en.md](booster-aenderungen-bestehender-dateien.en.md)*
+
 Stand 2026-11-06. Vergleich `master` (wielebenwir, `7aa75a81`, entspricht 2.11.3) mit
 `chriwen/commonsbooking-booster` Branch `booster/index-availability` (Arbeitsstand
 nach `8ade45b8`, einschließlich der Umstellung von `Item::getClosestBooking()`).

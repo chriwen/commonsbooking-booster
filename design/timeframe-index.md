@@ -1,5 +1,7 @@
 # Design: Index-Tabelle für Zeitrahmen, Buchungen und Einschränkungen
 
+*English version: [timeframe-index.en.md](timeframe-index.en.md)*
+
 Status: umgesetzt (Phasen 1–5) im Branch `booster/index-availability` · Entwurf vom 2026-11-05, Protokoll bis
 2026-11-06 · Basis: CommonsBooking 2.11.3 (`7aa75a81`)
 
