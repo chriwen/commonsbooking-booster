@@ -4962,3 +4962,155 @@ msgstr "Bitte warten …"
 #: src/Wordpress/CustomPostType/Booking.php:211
 msgid "Other booking requests for this item are being processed right now. Please try again in a moment."
 msgstr "Für diesen Artikel werden gerade andere Buchungsanfragen bearbeitet. Bitte versuche es gleich noch einmal."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Assigned timeframes"
+msgstr "Zugeordnete Zeitrahmen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "All timeframes and restrictions assigned to this item, whether directly, via a list, a category or \"all\". Holidays and blocked timeframes only apply at locations that are selected in the timeframe as well. The column \"Applies at\" shows where. ⚠ marks entries that are assigned but currently have no effect."
+msgstr "Alle Zeitrahmen und Einschränkungen, die diesem Artikel zugeordnet sind – direkt, über eine Liste, eine Kategorie oder „alle“. Feiertage und Blockierungen wirken nur an Standorten, die im Zeitrahmen ebenfalls ausgewählt sind. Die Spalte „Wirkt an“ zeigt, wo. ⚠ markiert Einträge, die zugeordnet sind, aber derzeit nicht wirken."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "All timeframes and restrictions assigned to this location, whether directly, via a list, a category or \"all\". Holidays and blocked timeframes only apply to items that are selected in the timeframe as well. The column \"Affects items\" shows which ones. ⚠ marks entries that are assigned but currently have no effect."
+msgstr "Alle Zeitrahmen und Einschränkungen, die diesem Standort zugeordnet sind – direkt, über eine Liste, eine Kategorie oder „alle“. Feiertage und Blockierungen wirken nur für Artikel, die im Zeitrahmen ebenfalls ausgewählt sind. Die Spalte „Betrifft Artikel“ zeigt, welche. ⚠ markiert Einträge, die zugeordnet sind, aber derzeit nicht wirken."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Applies at"
+msgstr "Wirkt an"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Affects items"
+msgstr "Betrifft Artikel"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Bookable at:"
+msgstr "Buchbar an:"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Bookable items:"
+msgstr "Buchbare Artikel:"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "Category: %1$s (%2$d)"
+msgstr "Kategorie: %1$s (%2$d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Current"
+msgstr "Aktuell"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Upcoming"
+msgstr "Zukünftig"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Expired"
+msgstr "Abgelaufen"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "%d more entries are not shown."
+msgstr "%d weitere Einträge werden nicht angezeigt."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Slot"
+msgstr "Slot"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "List (%d)"
+msgstr "Liste (%d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "No timeframes or restrictions are assigned."
+msgstr "Es sind keine Zeitrahmen oder Einschränkungen zugeordnet."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Repetition"
+msgstr "Wiederholung"
+
+#: src/Repository/AssignedTimeframes.php
+msgid "Restriction: notice"
+msgstr "Einschränkung: Hinweis"
+
+#: src/Repository/AssignedTimeframes.php
+msgid "Restriction: total breakdown"
+msgstr "Einschränkung: Totalausfall"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Save the post first to see its timeframes."
+msgstr "Speichere zuerst, um die zugeordneten Zeitrahmen zu sehen."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Show in timeframe list"
+msgstr "In der Zeitrahmen-Liste anzeigen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Title (status)"
+msgstr "Titel (Status)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "active"
+msgstr "aktiv"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "solved"
+msgstr "behoben"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "not active"
+msgstr "nicht aktiv"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "all"
+msgstr "alle"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "all (%d)"
+msgstr "alle (%d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "assigned, but not at a location of this item"
+msgstr "zugeordnet, aber an keinem Standort dieses Artikels"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "assigned, but not for an item of this location"
+msgstr "zugeordnet, aber für keinen Artikel dieses Standorts"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "every day"
+msgstr "jeden Tag"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "managed by an administrator"
+msgstr "verwaltet von einem Admin"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "none (no bookable timeframe)"
+msgstr "keine (kein buchbarer Zeitrahmen)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "not published"
+msgstr "nicht veröffentlicht"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "open end"
+msgstr "offen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "restriction not active"
+msgstr "Einschränkung nicht aktiv"
+
+#. translators: %d: number of further items or locations
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "%d weiterer"
+msgstr[1] "%d weitere"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "No entries."
+msgstr "Keine Einträge."
