@@ -46,6 +46,13 @@ class Calendar {
 	protected array $timeframes;
 
 	/**
+	 * Active restrictions overlapping the calendar range, loaded once and handed to the days.
+	 *
+	 * @var Restriction[]
+	 */
+	protected array $restrictions = [];
+
+	/**
 	 * When this is enabled, @see Timeframe::META_BOOKING_START_DAY_OFFSET is ignored.
 	 * This is used for the API routes, where we want to show the actual availability of the items, regardless of the booking start day offset.
 	 *
@@ -99,6 +106,17 @@ class Calendar {
 			true,
 			[ 'confirmed', 'publish' ]
 		);
+
+		// Superset for all days of the range (end after the day before the start or open end).
+		// Each day filters for itself, see Day::getRestrictions().
+		$this->restrictions = \CommonsBooking\Repository\Restriction::get(
+			$this->locations,
+			$this->items,
+			null,
+			true,
+			$this->startDate->getStartTimestamp() - 1,
+			Day::RESTRICTION_STATUSES
+		);
 	}
 
 	/**
@@ -134,7 +152,8 @@ class Calendar {
 					$this->locations,
 					$this->items,
 					$this->types,
-					$this->timeframes
+					$this->timeframes,
+					$this->restrictions
 				);
 				$startDate = strtotime( 'next monday', $startDate );
 			}

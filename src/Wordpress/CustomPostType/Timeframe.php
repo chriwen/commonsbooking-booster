@@ -958,7 +958,8 @@ class Timeframe extends CustomPostType {
 	 */
 	protected static function validateTimeFrame( $timeframe ): bool {
 		try {
-			$timeframe->isValid();
+			// validation always uses the original queries, never the booster tables
+			\CommonsBooking\Service\Booster\Booster::withoutBooster( array( $timeframe, 'isValid' ) );
 		} catch ( TimeframeInvalidException $e ) {
 			set_transient(
 				\CommonsBooking\Model\Timeframe::ERROR_TYPE,

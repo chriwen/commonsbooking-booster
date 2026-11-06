@@ -140,20 +140,7 @@ class Timeframe extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = [];
-
-			// Get Post-IDs considering types, items and locations
-			$postIds = self::getPostIdsByType( $types, $items, $locations );
-
-			if ( $postIds ) {
-				$posts = self::getPostsByBaseParams(
-					$date,
-					$minTimestamp,
-					null,
-					$postIds,
-					$postStatus
-				);
-			}
+			$posts = self::queryPosts( $types, $items, $locations, $date, $minTimestamp, null, $postStatus );
 
 			if ( $posts ) {
 				$posts = self::filterTimeframes( $posts, $date );
@@ -171,6 +158,56 @@ class Timeframe extends PostRepository {
 			);
 			return $posts;
 		}
+	}
+
+	/**
+	 * Returns timeframe and booking posts by types, items, locations, date filter and status.
+	 * Uses the index if available, otherwise the legacy postmeta queries.
+	 *
+	 * Date filter modes (same as {@see self::getPostsByBaseParams()}):
+	 * - $date without $minTimestamp: posts active on that day
+	 * - $minTimestamp without $maxTimestamp: posts ending at or after the start of that day (or open end)
+	 * - $minTimestamp and $maxTimestamp: posts overlapping the range
+	 *
+	 * @param int[]       $types
+	 * @param int[]       $items
+	 * @param int[]       $locations
+	 * @param string|null $date YYYY-mm-dd
+	 * @param int|null    $minTimestamp
+	 * @param int|null    $maxTimestamp
+	 * @param string[]    $postStatus
+	 *
+	 * @return \WP_Post[]
+	 */
+	private static function queryPosts( array $types, array $items, array $locations, ?string $date, ?int $minTimestamp, ?int $maxTimestamp, array $postStatus ): array {
+		if ( ! Index::isAvailable() ) {
+			// Get Post-IDs considering types, items and locations
+			$postIds = self::getPostIdsByType( $types, $items, $locations );
+
+			return $postIds ? self::getPostsByBaseParams( $date, $minTimestamp, $maxTimestamp, $postIds, $postStatus ) : [];
+		}
+
+		$criteria = [
+			'post_types' => \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes(),
+			'types'      => $types,
+			'statuses'   => $postStatus,
+			'items'      => $items,
+			'locations'  => $locations,
+		];
+
+		if ( $date && ! $minTimestamp ) {
+			$criteria['start_min'] = 0;
+			$criteria['start_max'] = strtotime( $date . 'T23:59' );
+			$criteria['end_min']   = strtotime( $date );
+			$criteria['end_max']   = 3000000000;
+		} elseif ( $minTimestamp && ! $maxTimestamp ) {
+			$criteria['end_min'] = Helper::getLastFullDayTimestamp( $minTimestamp );
+		} elseif ( $minTimestamp && $maxTimestamp ) {
+			$criteria['start_max'] = $maxTimestamp;
+			$criteria['end_min']   = $minTimestamp;
+		}
+
+		return Index::loadPosts( Index::findPostIds( $criteria ) );
 	}
 
 	/**
@@ -879,20 +916,7 @@ class Timeframe extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = [];
-
-			// Get Post-IDs considering types, items and locations
-			$postIds = self::getPostIdsByType( $types, $items, $locations );
-
-			if ( $postIds ) {
-				$posts = self::getPostsByBaseParams(
-					null,
-					$minTimestamp,
-					$maxTimestamp,
-					$postIds,
-					$postStatus
-				);
-			}
+			$posts = self::queryPosts( $types, $items, $locations, null, $minTimestamp, $maxTimestamp, $postStatus );
 
 			// if returnAsModel == TRUE the result is a timeframe model instead of a WordPress object
 			if ( $returnAsModel ) {

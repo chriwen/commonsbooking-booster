@@ -58,6 +58,9 @@ class Plugin {
 		// Init booking codes table
 		BookingCodes::initBookingCodesTable();
 
+		// Performance booster (if switched on): the index may be outdated after a phase of inactivity, rebuild it
+		\CommonsBooking\Service\Booster\Booster::onPluginActivation();
+
 		self::clearCache();
 	}
 
@@ -66,6 +69,7 @@ class Plugin {
 	 */
 	public static function deactivation() {
 		do_action( Scheduler::UNSCHEDULER_HOOK );
+		\CommonsBooking\Service\Booster\Booster::onPluginDeactivation();
 	}
 
 	/**
@@ -419,7 +423,10 @@ class Plugin {
 	 */
 	public static function handleBookingForms(): void {
 		try {
-			\CommonsBooking\Wordpress\CustomPostType\Booking::handleFormRequest();
+			// booking validation always uses the original queries, never the booster tables
+			\CommonsBooking\Service\Booster\Booster::withoutBooster(
+				array( \CommonsBooking\Wordpress\CustomPostType\Booking::class, 'handleFormRequest' )
+			);
 		} catch ( BookingDeniedException $e ) {
 			set_transient(
 				\CommonsBooking\Wordpress\CustomPostType\Booking::ERROR_TYPE . '-' . get_current_user_id(),
@@ -726,6 +733,9 @@ class Plugin {
 	 */
 	public function init() {
 		do_action( 'cmb2_init' );
+
+		// Performance booster: timeframe index and precomputed availability, only if switched on
+		\CommonsBooking\Service\Booster\Booster::init();
 
 		// Enable CB1 User Fields (needed in case of migration from cb 0.9.x)
 		add_action( 'init', array( self::class, 'maybeEnableCB1UserFields' ) );

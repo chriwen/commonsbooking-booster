@@ -313,6 +313,56 @@ abstract class BookablePost extends PostRepository {
 	}
 
 	/**
+	 * Returns the timeframes (cb_timeframe, any type) whose single "{$originType}-id" meta equals $postId,
+	 * ordered like WP_Query (post_date DESC).
+	 *
+	 * @param int    $postId
+	 * @param string $originType item|location
+	 *
+	 * @return WP_Post[]
+	 */
+	private static function getTimeframesByRelation( int $postId, string $originType ): array {
+		$postStatus = array( 'confirmed', 'unconfirmed', 'publish', 'inherit' );
+		$metaKey    = $originType . '-id';
+
+		if ( ! Index::isAvailable() ) {
+			$query = new WP_Query(
+				array(
+					'post_type'   => Timeframe::$postType,
+					'post_status' => $postStatus,
+					'meta_query'  => array(
+						'relation' => 'AND',
+						array(
+							'key'   => $metaKey,
+							'value' => $postId,
+						),
+					),
+					'nopaging'    => true,
+				)
+			);
+
+			return $query->have_posts() ? $query->get_posts() : [];
+		}
+
+		// The index matches the single id and id lists; the legacy query only the single meta value.
+		$candidates = Index::loadPosts(
+			Index::findPostIds(
+				[
+					'post_types'                                => [ Timeframe::$postType ],
+					'statuses'                                  => $postStatus,
+					$originType === 'item' ? 'items' : 'locations' => [ $postId ],
+				]
+			)
+		);
+		$timeframes = array_filter(
+			$candidates,
+			fn( WP_Post $timeframe ) => in_array( (string) $postId, array_map( 'strval', get_post_meta( $timeframe->ID, $metaKey ) ), true )
+		);
+
+		return Index::sortByDate( $timeframes, 'DESC' );
+	}
+
+	/**
 	 * Returns array with related posts for post with post id and origin type.
 	 * Works only for locations and items!
 	 *
@@ -333,22 +383,16 @@ abstract class BookablePost extends PostRepository {
 		} else {
 			$relatedPosts   = [];
 			$relatedPostIds = [];
-			$args           = array(
-				'post_type'   => Timeframe::$postType,
-				'post_status' => array( 'confirmed', 'unconfirmed', 'publish', 'inherit' ),
-				'meta_query'  => array(
-					'relation' => 'AND',
-					array(
-						'key'   => $originType . '-id',
-						'value' => $postId,
-					),
-				),
-				'nopaging'    => true,
-			);
+			$timeframes     = self::getTimeframesByRelation( (int) $postId, $originType );
 
-			$query = new WP_Query( $args );
-			if ( $query->have_posts() ) {
-				$timeframes = $query->get_posts();
+			if ( $timeframes ) {
+				// load all related posts with one query
+				_prime_post_caches(
+					array_filter( array_map( fn( $timeframe ) => (int) get_post_meta( $timeframe->ID, $relatedType . '-id', true ), $timeframes ) ),
+					false,
+					false
+				);
+
 				foreach ( $timeframes as $timeframe ) {
 					$relatedPostId = get_post_meta( $timeframe->ID, $relatedType . '-id', true );
 					if ( $relatedPostId && ! in_array( $relatedPostId, $relatedPostIds ) ) {
