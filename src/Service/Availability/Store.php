@@ -16,6 +16,11 @@ class Store {
 	private const BYTES_PER_DAY = 2;
 
 	/**
+	 * Columns loaded by {@see self::preload()}: all but the slots.
+	 */
+	private const COLUMNS = 'item_id, location_id, gen, computed_gen, days_from, days, has_role_limit, computed_at, calc_version';
+
+	/**
 	 * Rows loaded in this request, by "locationId:itemId".
 	 *
 	 * @var array<string, array|null>
@@ -60,11 +65,60 @@ class Store {
 		}
 		foreach ( array_chunk( $conditions, 200 ) as $chunk ) {
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared -- only integers
-			$rows = $wpdb->get_results( 'SELECT * FROM ' . Schema::table() . ' WHERE ' . implode( ' OR ', $chunk ), ARRAY_A );
+			$rows = $wpdb->get_results( 'SELECT ' . self::COLUMNS . ' FROM ' . Schema::table() . ' WHERE ' . implode( ' OR ', $chunk ), ARRAY_A );
 			foreach ( $rows as $row ) {
 				self::$rows[ self::key( (int) $row['item_id'], (int) $row['location_id'] ) ] = $row;
 			}
 		}
+	}
+
+	/**
+	 * Loads the rows of several pairs including the packed slots. Not kept in this request's row cache, the slots
+	 * can be large and are only needed by {@see SlotReader}.
+	 *
+	 * @param array<int, array{0:int,1:int}> $pairs list of [itemId, locationId]
+	 *
+	 * @return array<string, array> rows by "locationId:itemId", missing pairs are left out
+	 */
+	public static function loadWithSlots( array $pairs ): array {
+		global $wpdb;
+
+		$byLocation = [];
+		foreach ( $pairs as [ $itemId, $locationId ] ) {
+			$byLocation[ (int) $locationId ][ (int) $itemId ] = true;
+		}
+		$conditions = [];
+		foreach ( $byLocation as $locationId => $itemIds ) {
+			$conditions[] = sprintf( '(location_id = %d AND item_id IN (%s))', $locationId, implode( ',', array_map( 'intval', array_keys( $itemIds ) ) ) );
+		}
+
+		$result = [];
+		foreach ( array_chunk( $conditions, 200 ) as $chunk ) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared -- only integers
+			$rows = $wpdb->get_results( 'SELECT ' . self::COLUMNS . ', slots FROM ' . Schema::table() . ' WHERE ' . implode( ' OR ', $chunk ), ARRAY_A );
+			foreach ( $rows as $row ) {
+				$result[ self::key( (int) $row['item_id'], (int) $row['location_id'] ) ] = $row;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Returns the offset of a day in a usable row, null if the day is not covered.
+	 *
+	 * @param array  $row
+	 * @param string $date Y-m-d
+	 *
+	 * @return int|null
+	 */
+	public static function getDayOffset( array $row, string $date ): ?int {
+		$offset = (int) round( ( strtotime( $date . ' 12:00 UTC' ) - strtotime( $row['days_from'] . ' 12:00 UTC' ) ) / DAY_IN_SECONDS );
+		if ( $offset < 0 || ( $offset + 1 ) * self::BYTES_PER_DAY > strlen( $row['days'] ) ) {
+			return null;
+		}
+
+		return $offset;
 	}
 
 	/**
@@ -118,8 +172,8 @@ class Store {
 	 * @return int|null null if the day is not covered by the row
 	 */
 	public static function getFlags( array $row, string $date ): ?int {
-		$offset = (int) round( ( strtotime( $date . ' 12:00 UTC' ) - strtotime( $row['days_from'] . ' 12:00 UTC' ) ) / DAY_IN_SECONDS );
-		if ( $offset < 0 || ( $offset + 1 ) * self::BYTES_PER_DAY > strlen( $row['days'] ) ) {
+		$offset = self::getDayOffset( $row, $date );
+		if ( $offset === null ) {
 			return null;
 		}
 
@@ -147,24 +201,26 @@ class Store {
 	/**
 	 * Stores computed days, if the pair did not change since $gen was read.
 	 *
-	 * @param int    $itemId
-	 * @param int    $locationId
-	 * @param int    $gen gen read before the computation
-	 * @param string $daysFrom Y-m-d
-	 * @param int[]  $flags flags per day starting at $daysFrom
-	 * @param bool   $hasRoleLimit
+	 * @param int         $itemId
+	 * @param int         $locationId
+	 * @param int         $gen gen read before the computation
+	 * @param string      $daysFrom Y-m-d
+	 * @param int[]       $flags flags per day starting at $daysFrom
+	 * @param bool        $hasRoleLimit
+	 * @param string|null $slots packed slots of the same days ({@see Slots::pack()})
 	 *
 	 * @return bool true if stored, false if the pair changed in the meantime
 	 */
-	public static function write( int $itemId, int $locationId, int $gen, string $daysFrom, array $flags, bool $hasRoleLimit ): bool {
+	public static function write( int $itemId, int $locationId, int $gen, string $daysFrom, array $flags, bool $hasRoleLimit, ?string $slots = null ): bool {
 		global $wpdb;
 		$table = Schema::table();
 		// hex keeps the query ASCII only, wpdb may strip bytes it considers invalid text from queries
-		$days = $hasRoleLimit ? 'NULL' : "UNHEX('" . bin2hex( pack( 'v*', ...$flags ) ) . "')";
+		$days     = $hasRoleLimit ? 'NULL' : "UNHEX('" . bin2hex( pack( 'v*', ...$flags ) ) . "')";
+		$slotsHex = ( $hasRoleLimit || null === $slots ) ? 'NULL' : "UNHEX('" . bin2hex( $slots ) . "')";
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$sql    = $wpdb->prepare(
-			"UPDATE $table SET computed_gen = gen, days_from = %s, days = $days, has_role_limit = %d, computed_at = %s, calc_version = %d WHERE location_id = %d AND item_id = %d AND gen = %d",
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name and hex literals only
+		$sql = $wpdb->prepare(
+			"UPDATE $table SET computed_gen = gen, days_from = %s, days = $days, slots = $slotsHex, has_role_limit = %d, computed_at = %s, calc_version = %d WHERE location_id = %d AND item_id = %d AND gen = %d",
 			$daysFrom,
 			$hasRoleLimit ? 1 : 0,
 			gmdate( 'Y-m-d H:i:s' ),
@@ -173,6 +229,7 @@ class Store {
 			$itemId,
 			$gen
 		);
+		// phpcs:enable
 		$stored = (int) $wpdb->query( $sql ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
 		unset( self::$rows[ self::key( $itemId, $locationId ) ] );

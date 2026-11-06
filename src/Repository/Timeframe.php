@@ -161,6 +161,67 @@ class Timeframe extends PostRepository {
 	}
 
 	/**
+	 * Returns timeframe and booking posts of one author. Same filters and result as {@see self::get()} without
+	 * item / location filter, restricted to posts with post_author = $authorId.
+	 * Uses the index if available, otherwise a query on posts + postmeta for the author's posts.
+	 *
+	 * @param int      $authorId
+	 * @param int[]    $types
+	 * @param bool     $returnAsModel
+	 * @param int|null $minTimestamp
+	 * @param string[] $postStatus
+	 *
+	 * @return \WP_Post[]|\CommonsBooking\Model\Timeframe[]|\CommonsBooking\Model\Booking[] ordered by post id
+	 * @throws Exception
+	 */
+	public static function getByAuthor(
+		int $authorId,
+		array $types,
+		bool $returnAsModel = false,
+		?int $minTimestamp = null,
+		array $postStatus = [ 'confirmed', 'unconfirmed', 'publish', 'inherit' ]
+	): array {
+		global $wpdb;
+
+		if ( Index::isAvailable() ) {
+			$criteria = [
+				'post_types' => \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes(),
+				'types'      => $types,
+				'statuses'   => $postStatus,
+				'authors'    => [ $authorId ],
+			];
+			if ( $minTimestamp ) {
+				$criteria['end_min'] = Helper::getLastFullDayTimestamp( $minTimestamp );
+			}
+			$posts = Index::loadPosts( Index::findPostIds( $criteria ) );
+		} else {
+			$postTypes = "'" . implode( "','", array_map( 'esc_sql', \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes() ) ) . "'";
+			$typeList  = implode( ',', array_map( 'intval', $types ) );
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- post types are escaped, types cast to int
+			$postIds = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT DISTINCT p.ID FROM $wpdb->posts p
+					INNER JOIN $wpdb->postmeta pm ON pm.post_id = p.ID AND pm.meta_key = 'type' AND pm.meta_value IN ($typeList)
+					WHERE p.post_author = %d AND p.post_type IN ($postTypes)",
+					$authorId
+				)
+			);
+			// phpcs:enable
+			$posts = $postIds ? self::getPostsByBaseParams( null, $minTimestamp, null, array_map( 'intval', $postIds ), $postStatus ) : [];
+			usort( $posts, fn( $a, $b ) => $a->ID <=> $b->ID );
+		}
+
+		if ( $posts ) {
+			$posts = self::filterTimeframes( $posts, null );
+		}
+		if ( $returnAsModel ) {
+			self::castPostsToModels( $posts );
+		}
+
+		return array_values( $posts );
+	}
+
+	/**
 	 * Returns timeframe and booking posts by types, items, locations, date filter and status.
 	 * Uses the index if available, otherwise the legacy postmeta queries.
 	 *

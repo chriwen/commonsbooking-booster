@@ -253,7 +253,7 @@ class Maintenance {
 		$mismatches = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
 			Store::reset();
-			$row = Store::get( $itemId, $locationId );
+			$row = Store::loadWithSlots( [ [ $itemId, $locationId ] ] )[ $locationId . ':' . $itemId ] ?? null;
 			if ( ! Store::isUsable( $row ) ) {
 				continue;
 			}
@@ -284,14 +284,42 @@ class Maintenance {
 	 * @return bool
 	 */
 	private static function matches( array $row, array $fresh ): bool {
+		if ( ( $row['slots'] ?? null ) === null ) {
+			return false;
+		}
+		$storedSlots = Slots::unpack( (string) $row['slots'] );
+		$freshSlots  = Slots::unpack( (string) $fresh['slots'] );
+
 		foreach ( $fresh['flags'] as $offset => $flags ) {
 			$date   = date( 'Y-m-d', strtotime( $fresh['from'] . ' +' . $offset . ' days' ) );
 			$stored = Store::getFlags( $row, $date );
-			if ( $stored !== null && $stored !== $flags ) {
+			if ( $stored === null ) {
+				continue;
+			}
+			if ( $stored !== $flags ) {
+				return false;
+			}
+			$storedOffset = Store::getDayOffset( $row, $date );
+			if ( self::resolveSlots( $storedSlots, $storedOffset ) !== self::resolveSlots( $freshSlots, $offset ) ) {
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * Slots of a day with the timeframe index replaced by timeframe, location and item id.
+	 *
+	 * @param array $unpacked result of {@see Slots::unpack()}
+	 * @param int   $offset day offset
+	 *
+	 * @return array
+	 */
+	private static function resolveSlots( array $unpacked, int $offset ): array {
+		return array_map(
+			fn( $slot ) => [ $slot[0], $slot[1], $unpacked['timeframes'][ $slot[2] ] ?? null ],
+			$unpacked['days'][ $offset ] ?? []
+		);
 	}
 }

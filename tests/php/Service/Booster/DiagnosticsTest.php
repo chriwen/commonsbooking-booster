@@ -125,7 +125,13 @@ class DiagnosticsTest extends CustomPostTypeTest {
 	}
 
 	public function testRecordCheckStoresTimeAndResult() {
-		Diagnostics::recordCheck( 'index_verify', [ 'checked' => 5, 'mismatches' => 0 ] );
+		Diagnostics::recordCheck(
+			'index_verify',
+			[
+				'checked' => 5,
+				'mismatches' => 0,
+			]
+		);
 		$check = Diagnostics::getChecks()['index_verify'];
 		$this->assertSame( 5, $check['checked'] );
 		$this->assertEqualsWithDelta( time(), $check['time'], 5 );

@@ -170,7 +170,7 @@ SELECT x.post_id FROM cb_index_rel ri
 
 ### 2.3 `{prefix}cb_availability`: vorberechneter Tageszustand pro Paar
 
-Klasse: `Service\Availability\Schema` (Schema-Version 1, Option `commonsbooking_availability_schema_version`).
+Klasse: `Service\Availability\Schema` (Schema-Version 2, Option `commonsbooking_availability_schema_version`).
 Die Tabelle ist ein reiner Cache. Bei einer Strukturänderung wird sie verworfen und neu angelegt.
 
 Eine Zeile pro Artikel/Standort-Paar, das einen buchbaren Zeitrahmen (Typ 2) hat. Die Tage stehen gepackt in einer
@@ -185,7 +185,8 @@ Binärspalte, Lesen und Schreiben eines Paares ist damit je eine Anweisung.
 | `days` | varbinary(1024), NULL | 2 Byte pro Tag (unsigned short, little endian), bis 512 Tage. Geschrieben per `UNHEX()`, weil `wpdb` sonst Bytes entfernen kann, die es für ungültigen Text hält |
 | `has_role_limit` | tinyint(1) | Paar hat Zeitrahmen mit Rollenbeschränkung, wird immer live berechnet |
 | `computed_at` | datetime (UTC) | Zeitpunkt der Berechnung |
-| `calc_version` | smallint | `Calculator::VERSION` (derzeit 1) |
+| `calc_version` | smallint | `Calculator::VERSION` (derzeit 2) |
+| `slots` | mediumblob, NULL | freie buchbare Slots je Tag für API und GBFS (Format siehe 6.6). NULL bei Rollenbeschränkung. Wird nur von `SlotReader` und dem Verifier gelesen, `Store::preload()` lädt die Spalte nicht |
 
 Schlüssel: `PRIMARY (location_id, item_id)`, `KEY item_id`, `KEY computed_at` (Cron sucht alte Zeilen).
 
@@ -364,7 +365,14 @@ Jede Methode prüft zuerst `Index::isAvailable()`. Ist der Index nicht verfügba
 | `Repository\BookablePost::getRelatedPosts()` (`Item::getByLocation`, `Location::getByItem`) | `WP_Query` mit Meta-Abfrage `{type}-id` | `getTimeframesByRelation()`: Kandidaten aus dem Index, danach Filter auf den **einzelnen** `*-id`-Wert (alte Semantik), verwandte Beiträge gebündelt geladen |
 | `Model\Map::get_locations()` | pro Paar `Timeframe::getBookableForCurrentUser()` | **eine** Abfrage für alle Paare (`Map::getBookableTimeframesByPair()`), Artikel pro Standort, Term-Cache und Vorschaubilder gebündelt. Diese Bündelung gilt auch ohne Booster |
 
-Nicht umgestellt: Admin-Listen, REST-API/GBFS-Abfragen, `Booking::getForUserPaginated()`, `Booking::getForUser()`.
+`Repository\Booking::getForUser()` („Meine Buchungen“, auch ohne Booster): lädt nicht mehr alle Buchungen, sondern
+die Vereinigung aus eigenen Buchungen (`Timeframe::getByAuthor()`, mit Index über das Kriterium `authors`) und den
+Buchungen der verwalteten Artikel und Standorte (Autor oder Admin-Meta, serialisiert oder als einzelner String).
+CB-Admins erhalten wie bisher alle Buchungen. `commonsbooking_isUserAllowedToSee()` läuft weiterhin über die
+Kandidaten, das Ergebnis ist identisch. `BookingRuleApplied` fragt nur noch die eigenen unbestätigten Buchungen ab
+(`getForUserPaginated()`).
+
+Nicht umgestellt: Admin-Listen, `Booking::getForUserPaginated()`.
 
 ### 5.3 Einschränkungen pro Zeitraum statt pro Tag
 
@@ -427,8 +435,8 @@ Ablauf pro Paar:
 3. `CalendarWindow::mapDay()` wendet das Fenster an, `DayStatus::fromDayArray()` liefert den Status.
 
 Verwendet von `MapItemAvailable::create_items_availabilities()` und `View\Calendar::renderTable()`, wenn
-`Availability::isEnabled()`. **Nicht** verwendet von: Buchungskalender der Artikelseite (braucht Slots), API/GBFS
-(`getAvailabilitySlots`), Buchungsprüfung.
+`Availability::isEnabled()`. **Nicht** verwendet von: Buchungskalender der Artikelseite (braucht Slots),
+Buchungsprüfung. API und GBFS lesen über `SlotReader` (6.6).
 
 ### 6.3 Berechnen: `Availability\Calculator` und `Store`
 
@@ -438,8 +446,8 @@ Verwendet von `MapItemAvailable::create_items_availabilities()` und `View\Calend
 - `Store::write()` schreibt optimistisch:
 
   ```sql
-  UPDATE cb_availability SET computed_gen = gen, days_from = ?, days = UNHEX('…'), has_role_limit = ?,
-         computed_at = ?, calc_version = ?            -- computed_at: gmdate(), also UTC
+  UPDATE cb_availability SET computed_gen = gen, days_from = ?, days = UNHEX('…'), slots = UNHEX('…'),
+         has_role_limit = ?, computed_at = ?, calc_version = ?            -- computed_at: gmdate(), also UTC
    WHERE location_id = ? AND item_id = ? AND gen = G
   ```
 
@@ -471,6 +479,43 @@ Nutzer nicht.
   über 12 h alte Zeilen neu berechnen (20 s Budget, danach neu eingeplant). Damit wandert der Horizont mit;
 - täglich: Stichprobe von 50 Paaren gegen eine frische Berechnung, Abweichungen reparieren;
 - Zeilen älter als 24 h werden nie verwendet. Das begrenzt die Wirkung von Schreibvorgängen an den Hooks vorbei.
+
+
+### 6.6 API und GBFS: `Availability\SlotReader`
+
+`Model\Calendar::getAvailabilitySlots()` (REST `/availability`, GBFS Vehicle/Station Status) fragt zuerst
+`SlotReader::getAvailabilitySlots()`. Liefert der `null`, rechnet wie bisher `getAvailabilitySlotsLive()`. Der Kalender
+lädt Zeitrahmen und Einschränkungen erst beim Live-Rechnen (`loadPosts()`), nicht mehr im Konstruktor.
+
+**Speichern:** `Calculator::compute()` sammelt aus demselben Raster, aus dem die Tagesfakten entstehen, die Slots,
+die die Live-Methode ausgeben würde (`Slots::bookableSlots()`: höchstpriorer Slot ist buchbar, nicht gebucht, nicht
+eingeschränkt). Gepackt (`Slots::pack()`, little endian):
+
+```
+Kopf:    uint16 Anzahl Zeitrahmen, je Zeitrahmen uint32 ID, uint32 Standort, uint32 Artikel
+je Tag:  uint8 Anzahl Slots, je Slot uint32 Start, uint32 Ende (Sekunden ab Tagesbeginn), uint16 Zeitrahmen-Index
+```
+
+Die Prüfung „erster buchbarer Tag“ (`getFirstBookableDay()`, hängt vom heutigen Datum ab) passiert beim **Lesen**,
+`ignoreStartDayOffset` ist deshalb nur ein Schalter und keine eigene Variante.
+
+**Lesen:** Paare aus dem Index (buchbare Zeitrahmen der Artikel im Bereich, optional nach Standort gefiltert), Zeilen
+mit einer Abfrage (`Store::loadWithSlots()`), ungültige Zeilen werden wie beim `Reader` sofort berechnet. Pro Tag
+werden die Slots aller Paare nach Startzeit sortiert und wie live dedupliziert.
+
+**Live gerechnet** (`null`) wird bei: Vorberechnung aus, `ignoreRestrictions` (GBFS `isCurrentlyFreeAtLocation(…, true)`),
+keinem Artikelfilter, Bereich außerhalb des Horizonts, Zeitrahmen mit mehreren Artikeln/Standorten, Rollenbeschränkung.
+
+**Abweichungen vom Live-Weg** (beide sind Fehler des Live-Wegs, per `SlotsTest::testKnownLiveDeviations()` festgehalten):
+
+- Kalender ohne Standortfilter (`/availability`): live findet `Restriction::get( [], [ $item ] )` keine Einschränkungen,
+  die Artikel **und** Standort tragen; Reparaturtage erscheinen als frei. Gespeichert wirken sie. Außerdem ist das
+  Ergebnis die Vereinigung der Paare statt eines gemeinsamen Rasters; gleich, solange ein Artikel keine sich
+  überschneidenden Zeitrahmen an verschiedenen Standorten hat.
+- Tage nach dem Enddatum (der Kalender läuft immer bis Sonntag): live kennt dort nur die Zeitrahmen, die den
+  angefragten Bereich überlappen; eine Buchung, die danach beginnt, fehlt. Gespeichert wird sie berücksichtigt.
+
+Der Verifier vergleicht in der Stichprobe zusätzlich die Slots (`Maintenance::matches()`).
 
 ---
 
@@ -528,8 +573,8 @@ Beide Änderungen gelten auch ohne Booster.
   zwischengespeicherte Anzeige eines Admins erhalten und umgekehrt. Nutzer mit denselben Rollen teilen sich weiterhin
   einen Eintrag. Folge: Es gibt etwas mehr Cache-Einträge als vorher.
 
-Der Symfony-Cache bleibt mit Booster eingeschaltet; Karte und Tabelle profitieren kaum noch, API/GBFS und Kalender aber
-weiterhin.
+Der Symfony-Cache bleibt mit Booster eingeschaltet; Karte, Tabelle, API und GBFS profitieren kaum noch, der
+Buchungskalender der Artikelseite aber weiterhin.
 
 ---
 
@@ -611,6 +656,8 @@ Prüfungen. Knöpfe „Jetzt alle Prüfungen ausführen“ und „Index neu aufb
 | `tests/php/Service/Booster/*` | Schalter, Umgehung bei der Buchungsprüfung, Wächter, `purge`, Diagnose, Cache-Rollenkontext |
 | `tests/php/Service/Booster/TimeframeVariantsParityTest.php` + `Fixtures/TimeframeVariants.php` | 31 Zeitrahmen-Konfigurationen, Vergleich mit dem Originalcode für sechs Nutzerrollen |
 | `tests/php/Wordpress/CustomPostType/BookingItemLockTest.php` | Artikelsperre |
+| `tests/php/Service/Availability/SlotsTest.php` | API/GBFS-Slots gespeichert gegen live (Tages- und Stundenraster, Startversatz, Reparatur), Abweichungen, Live-Rückfälle, Verifier |
+| `tests/php/Repository/BookingTest.php::testGetForUserMatchesFilteringAllBookings` | „Meine Buchungen“: Ergebnis gleich dem Filter über alle Buchungen für sieben Nutzerarten |
 
 Die Suite läuft standardmäßig mit eingeschaltetem Booster (`tests/php/bootstrap.php` baut den Index auf). Umgebungsvariablen:
 
@@ -638,12 +685,17 @@ Die Suite läuft standardmäßig mit eingeschaltetem Booster (`tests/php/bootstr
   Buchungen bleiben in jedem Fall korrekt geprüft (Originalabfragen).
 - Paare mit Rollenbeschränkung werden immer live berechnet.
 - Anfragen über den Horizont hinaus (z. B. `[cb_items_table days=180]`) werden live berechnet.
+- `Timeframe::isBookable()` (Vorausbuchungsfenster) hängt vom heutigen Datum ab und fließt beim Berechnen in die Auswahl
+  der Zeitrahmen ein. Rückt ein Zeitrahmen ins Vorausbuchungsfenster, kann eine Zeile (Tagesfakten und Slots) bis zur
+  nächtlichen Neuberechnung, höchstens 24 h, veraltet sein.
 
 ### 12.3 Offene Punkte
 
-- API und GBFS (`getAvailabilitySlots`) lesen noch nicht aus der Vorberechnung (bräuchten Slot-Intervalle).
-- `Booking::getForUser()` (Seite „Meine Buchungen“) lädt weiter alle Buchungen und filtert in PHP.
-- Bestehender Darstellungsfehler `<span'is-locked'>` in der Tabelle wurde bewusst unverändert übernommen.
+Die drei früheren Punkte sind umgesetzt (API/GBFS aus der Vorberechnung, `getForUser()` ohne Vollscan,
+`<span'is-locked'>` korrigiert), siehe `booster-offene-punkte.md`. Offen:
+
+- Für CB-Admins lädt „Meine Buchungen“ weiterhin alle Buchungen und paginiert in PHP.
+- Buchungskalender der Artikelseite rechnet weiter live.
 
 ---
 

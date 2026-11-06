@@ -183,7 +183,7 @@ class TimeframeVariants {
 			'manual'     => '',
 			'selection'  => TimeframeModel::SELECTION_MANUAL_ID,
 		];
-		$meta = [
+		$meta     = [
 			'type'                                              => $options['type'],
 			TimeframeModel::META_REPETITION                     => $options['repetition'],
 			TimeframeModel::REPETITION_START                    => $options['start'],
@@ -298,7 +298,14 @@ class TimeframeVariants {
 
 		// ---------------------------------------------------------------- repetition
 		[ $item, $location ] = $this->station( 'Täglich, ohne Ende' );
-		$this->timeframe( $location, $item, [ 'title' => 'Täglich ohne Enddatum', 'end' => null ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Täglich ohne Enddatum',
+				'end' => null,
+			]
+		);
 		$this->booking( $location, $item, 2, 4 );
 		$this->booking( $location, $item, 6, 6, 'unconfirmed' );
 		$this->booking( $location, $item, 8, 9, 'canceled' );
@@ -306,7 +313,14 @@ class TimeframeVariants {
 		$this->add( 'daily_open_end', $item, $location, 'täglich, ohne Enddatum, Buchungen bestätigt/unbestätigt/storniert/vergangen' );
 
 		[ $item, $location ] = $this->station( 'Lange Buchungen' );
-		$this->timeframe( $location, $item, [ 'title' => 'Täglich, bis 14 Tage am Stück', 'max_days' => 14 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Täglich, bis 14 Tage am Stück',
+				'max_days' => 14,
+			]
+		);
 		$this->booking( $location, $item, -3, 1 );
 		$this->booking( $location, $item, 3, 9 );
 		$this->booking( $location, $item, 11, 24 );
@@ -315,55 +329,140 @@ class TimeframeVariants {
 		$this->add( 'long_bookings', $item, $location, 'max. 14 Tage: laufende Buchung (seit 3 Tagen), 7 und 14 Tage bestätigt, 10 Tage storniert, 5 Tage unbestätigt' );
 
 		[ $item, $location ] = $this->station( 'Täglich, endet bald' );
-		$this->timeframe( $location, $item, [ 'title' => 'Täglich bis in 10 Tagen', 'end' => $this->day( 10 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Täglich bis in 10 Tagen',
+				'end' => $this->day( 10 ),
+			]
+		);
 		$this->booking( $location, $item, 9, 10 );
 		$this->add( 'daily_ends_soon', $item, $location, 'täglich, endet in 10 Tagen, Buchung am Ende' );
 
 		[ $item, $location ] = $this->station( 'Wochentage Mo–Fr' );
-		$this->timeframe( $location, $item, [ 'title' => 'Mo–Fr', 'repetition' => 'w', 'weekdays' => $workdays ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Mo–Fr',
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+			]
+		);
 		$monday = $this->nextWeekday( 1, [ 1 ] );
 		$this->booking( $location, $item, $monday, $monday + 1 );
 		$this->add( 'weekly_workdays', $item, $location, 'wöchentlich Mo–Fr, Wochenende nicht buchbar' );
 
 		[ $item, $location ] = $this->station( 'Nur Wochenende' );
-		$this->timeframe( $location, $item, [ 'title' => 'Sa+So', 'repetition' => 'w', 'weekdays' => [ '6', '7' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Sa+So',
+				'repetition' => 'w',
+				'weekdays' => [ '6', '7' ],
+			]
+		);
 		$saturday = $this->nextWeekday( 1, [ 6 ] );
 		$this->booking( $location, $item, $saturday, $saturday + 1 );
 		$this->add( 'weekly_weekend', $item, $location, 'wöchentlich nur Sa und So, Wochenend-Buchung' );
 
 		[ $item, $location ] = $this->station( 'Monatlich' );
-		$this->timeframe( $location, $item, [ 'title' => 'Monatlich am Tag des Starts', 'repetition' => 'm', 'start' => $this->day( -40 ), 'end' => $this->day( 200 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Monatlich am Tag des Starts',
+				'repetition' => 'm',
+				'start' => $this->day( -40 ),
+				'end' => $this->day( 200 ),
+			]
+		);
 		$this->add( 'monthly', $item, $location, 'monatlich (am Tag des Monats des Startdatums)' );
 
 		[ $item, $location ] = $this->station( 'Jährlich' );
-		$this->timeframe( $location, $item, [ 'title' => 'Jährlich am Starttag', 'repetition' => 'y', 'start' => $this->day( 5 - 365 ), 'end' => $this->day( 800 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Jährlich am Starttag',
+				'repetition' => 'y',
+				'start' => $this->day( 5 - 365 ),
+				'end' => $this->day( 800 ),
+			]
+		);
 		$this->add( 'yearly', $item, $location, 'jährlich (Tag und Monat des Startdatums, in 5 Tagen)' );
 
 		[ $item, $location ] = $this->station( 'Manuelle Termine' );
-		$manual = implode( ',', array_map( [ $this, 'date' ], [ 1, 3, 4, 11, 25, 40 ] ) );
-		$this->timeframe( $location, $item, [ 'title' => 'Manuelle Termine', 'repetition' => 'manual', 'manual' => $manual, 'start' => $this->day( 1 ), 'end' => $this->day( 40 ) ] );
+		$manual              = implode( ',', array_map( [ $this, 'date' ], [ 1, 3, 4, 11, 25, 40 ] ) );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Manuelle Termine',
+				'repetition' => 'manual',
+				'manual' => $manual,
+				'start' => $this->day( 1 ),
+				'end' => $this->day( 40 ),
+			]
+		);
 		$this->booking( $location, $item, 3, 3 );
 		$this->add( 'manual_dates', $item, $location, 'manuelle Termine (6 Tage), einer gebucht' );
 
 		[ $item, $location ] = $this->station( 'Einmalig' );
-		$this->timeframe( $location, $item, [ 'title' => 'Einmaliger Zeitraum', 'repetition' => 'norep', 'start' => $this->day( 4 ), 'end' => $this->day( 8 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Einmaliger Zeitraum',
+				'repetition' => 'norep',
+				'start' => $this->day( 4 ),
+				'end' => $this->day( 8 ),
+			]
+		);
 		$this->booking( $location, $item, 5, 5 );
 		$this->add( 'no_repetition', $item, $location, 'keine Wiederholung, Zeitraum Tag 4–8' );
 
 		// ---------------------------------------------------------------- slots and hours
 		[ $item, $location ] = $this->station( 'Vormittag/Nachmittag Mo–Do' );
-		$monToThu = [ '1', '2', '3', '4' ];
-		$slot     = [
+		$monToThu            = [ '1', '2', '3', '4' ];
+		$slot                = [
 			'repetition' => 'w',
 			'weekdays'   => $monToThu,
 			'full_day'   => 'off',
 			'grid'       => 0,
 			'max_days'   => 1,
 		];
-		$this->timeframe( $location, $item, $slot + [ 'title' => 'Vormittag Mo–Do', 'start_time' => '08:00', 'end_time' => '12:00' ] );
-		$this->timeframe( $location, $item, $slot + [ 'title' => 'Nachmittag Mo–Do', 'start_time' => '13:00', 'end_time' => '18:00' ] );
+		$this->timeframe(
+			$location,
+			$item,
+			$slot + [
+				'title' => 'Vormittag Mo–Do',
+				'start_time' => '08:00',
+				'end_time' => '12:00',
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			$slot + [
+				'title' => 'Nachmittag Mo–Do',
+				'start_time' => '13:00',
+				'end_time' => '18:00',
+			]
+		);
 		// Sunday: full day, Friday and Saturday: not bookable
-		$this->timeframe( $location, $item, [ 'title' => 'Sonntag ganztägig', 'repetition' => 'w', 'weekdays' => [ '7' ], 'max_days' => 1 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Sonntag ganztägig',
+				'repetition' => 'w',
+				'weekdays' => [ '7' ],
+				'max_days' => 1,
+			]
+		);
 		$tuesday = $this->nextWeekday( 1, [ 2 ] );
 		$this->booking( $location, $item, $tuesday, $tuesday, 'confirmed', '08:00', '12:00' );
 		$wednesday = $this->nextWeekday( 1, [ 3 ] );
@@ -372,63 +471,194 @@ class TimeframeVariants {
 		$this->add( 'two_slots_mon_thu', $item, $location, 'Mo–Do Vormittag (8–12) und Nachmittag (13–18), Fr+Sa geschlossen, So ganztägig; Di Vormittag gebucht, Mi ganz gebucht' );
 
 		[ $item, $location ] = $this->station( 'Stundenweise' );
-		$this->timeframe( $location, $item, [ 'title' => 'Stündlich 9–18', 'full_day' => 'off', 'grid' => 1, 'start_time' => '09:00', 'end_time' => '18:00', 'max_days' => 1 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Stündlich 9–18',
+				'full_day' => 'off',
+				'grid' => 1,
+				'start_time' => '09:00',
+				'end_time' => '18:00',
+				'max_days' => 1,
+			]
+		);
 		$this->booking( $location, $item, 2, 2, 'confirmed', '10:00', '12:00', 1 );
 		$this->booking( $location, $item, 3, 3, 'confirmed', '09:00', '18:00', 1 );
 		$this->add( 'hourly_grid', $item, $location, 'stundenweise 9–18 Uhr; Tag 2 teilweise, Tag 3 ganz gebucht' );
 
 		[ $item, $location ] = $this->station( 'Stundenweise am Wochenende' );
-		$this->timeframe( $location, $item, [ 'title' => 'Sa+So stündlich 10–16', 'repetition' => 'w', 'weekdays' => [ '6', '7' ], 'full_day' => 'off', 'grid' => 1, 'start_time' => '10:00', 'end_time' => '16:00', 'max_days' => 1 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Sa+So stündlich 10–16',
+				'repetition' => 'w',
+				'weekdays' => [ '6', '7' ],
+				'full_day' => 'off',
+				'grid' => 1,
+				'start_time' => '10:00',
+				'end_time' => '16:00',
+				'max_days' => 1,
+			]
+		);
 		// overlapping bookable timeframes must use the same grid, even on different weekdays
-		$this->timeframe( $location, $item, [ 'title' => 'Mo–Fr stündlich 8–20', 'repetition' => 'w', 'weekdays' => $workdays, 'full_day' => 'off', 'grid' => 1, 'start_time' => '08:00', 'end_time' => '20:00', 'max_days' => 1 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Mo–Fr stündlich 8–20',
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+				'full_day' => 'off',
+				'grid' => 1,
+				'start_time' => '08:00',
+				'end_time' => '20:00',
+				'max_days' => 1,
+			]
+		);
 		$this->booking( $location, $item, $this->nextWeekday( 1, [ 6 ] ), $this->nextWeekday( 1, [ 6 ] ), 'confirmed', '12:00', '14:00', 1 );
 		$this->add( 'hourly_two_timeframes', $item, $location, 'Sa+So stündlich 10–16, Mo–Fr stündlich 8–20 (zwei Zeitrahmen, gleiches Raster); Samstag 12–14 gebucht' );
 
 		// ---------------------------------------------------------------- booking window
 		[ $item, $location ] = $this->station( 'Kurzer Vorlauf' );
-		$this->timeframe( $location, $item, [ 'title' => 'Nur 7 Tage im Voraus', 'advance' => 7 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Nur 7 Tage im Voraus',
+				'advance' => 7,
+			]
+		);
 		$this->add( 'advance_7', $item, $location, 'nur 7 Tage im Voraus buchbar' );
 
 		[ $item, $location ] = $this->station( 'Startversatz' );
-		$this->timeframe( $location, $item, [ 'title' => 'Frühestens in 3 Tagen', 'offset' => 3, 'max_days' => 5 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Frühestens in 3 Tagen',
+				'offset' => 3,
+				'max_days' => 5,
+			]
+		);
 		$this->add( 'start_offset_3', $item, $location, 'Buchung frühestens in 3 Tagen, maximal 5 Tage' );
 
 		[ $item, $location ] = $this->station( 'Ein Tag maximal' );
-		$this->timeframe( $location, $item, [ 'title' => 'Maximal 1 Tag', 'max_days' => 1 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Maximal 1 Tag',
+				'max_days' => 1,
+			]
+		);
 		$this->booking( $location, $item, 4, 4 );
 		$this->add( 'max_days_1', $item, $location, 'maximal 1 Tag am Stück' );
 
 		[ $item, $location ] = $this->station( 'Beginnt später' );
-		$this->timeframe( $location, $item, [ 'title' => 'Ab Tag 15', 'start' => $this->day( 15 ), 'end' => $this->day( 60 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Ab Tag 15',
+				'start' => $this->day( 15 ),
+				'end' => $this->day( 60 ),
+			]
+		);
 		$this->add( 'starts_later', $item, $location, 'Zeitrahmen beginnt in 15 Tagen' );
 
 		[ $item, $location ] = $this->station( 'Abgelaufen' );
-		$this->timeframe( $location, $item, [ 'title' => 'Vergangen', 'start' => $this->day( -60 ), 'end' => $this->day( -1 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Vergangen',
+				'start' => $this->day( -60 ),
+				'end' => $this->day( -1 ),
+			]
+		);
 		$this->add( 'expired', $item, $location, 'Zeitrahmen endete gestern (nicht mehr buchbar)' );
 
 		[ $item, $location ] = $this->station( 'Zwei Zeiträume' );
-		$this->timeframe( $location, $item, [ 'title' => 'Teil 1 bis Tag 9', 'start' => $this->day( -10 ), 'end' => $this->day( 9 ) ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Teil 2 ab Tag 12 Mo–Fr', 'start' => $this->day( 12 ), 'end' => $this->day( 90 ), 'repetition' => 'w', 'weekdays' => $workdays ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Teil 1 bis Tag 9',
+				'start' => $this->day( -10 ),
+				'end' => $this->day( 9 ),
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Teil 2 ab Tag 12 Mo–Fr',
+				'start' => $this->day( 12 ),
+				'end' => $this->day( 90 ),
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+			]
+		);
 		$this->booking( $location, $item, 8, 9 );
 		$this->add( 'two_ranges_gap', $item, $location, 'zwei aufeinanderfolgende Zeitrahmen mit Lücke (Tag 10–11) und anderen Wochentagen' );
 
 		// ---------------------------------------------------------------- user roles
 		[ $item, $location ] = $this->station( 'Nur Redaktion' );
-		$this->timeframe( $location, $item, [ 'title' => 'Nur für Redakteure', 'roles' => [ 'editor' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Nur für Redakteure',
+				'roles' => [ 'editor' ],
+			]
+		);
 		$this->add( 'roles_editor', $item, $location, 'nur Rolle Redakteur (Admins dürfen immer)' );
 
 		[ $item, $location ] = $this->station( 'Mitglieder und Redaktion' );
-		$this->timeframe( $location, $item, [ 'title' => 'Abonnenten und Redakteure', 'roles' => [ 'subscriber', 'editor' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Abonnenten und Redakteure',
+				'roles' => [ 'subscriber', 'editor' ],
+			]
+		);
 		$this->booking( $location, $item, 2, 3 );
 		$this->add( 'roles_subscriber_editor', $item, $location, 'Rollen Abonnent und Redakteur' );
 
 		[ $item, $location ] = $this->station( 'Gemischt: Rolle und offen' );
-		$this->timeframe( $location, $item, [ 'title' => 'Mo–Fr für alle', 'repetition' => 'w', 'weekdays' => $workdays ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Wochenende nur Redaktion', 'repetition' => 'w', 'weekdays' => [ '6', '7' ], 'roles' => [ 'editor' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Mo–Fr für alle',
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Wochenende nur Redaktion',
+				'repetition' => 'w',
+				'weekdays' => [ '6', '7' ],
+				'roles' => [ 'editor' ],
+			]
+		);
 		$this->add( 'roles_weekend_only', $item, $location, 'Mo–Fr für alle, Wochenende nur Redakteure' );
 
 		[ $item, $location ] = $this->station( 'Nur CB-Manager' );
-		$this->timeframe( $location, $item, [ 'title' => 'Nur für CB-Manager', 'roles' => [ 'cb_manager' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Nur für CB-Manager',
+				'roles' => [ 'cb_manager' ],
+			]
+		);
 		$this->add( 'roles_cb_manager', $item, $location, 'nur Rolle CB-Manager' );
 
 		[ $item, $location ] = $this->station( 'Von Manager betreut' );
@@ -436,7 +666,17 @@ class TimeframeVariants {
 			update_post_meta( $item, '_cb_item_admins', [ (string) $this->managerId ] );
 			update_post_meta( $location, '_cb_location_admins', [ (string) $this->managerId ] );
 		}
-		$this->timeframe( $location, $item, [ 'title' => 'Mo–Fr, 7 Tage Vorlauf', 'repetition' => 'w', 'weekdays' => $workdays, 'advance' => 7, 'max_days' => 2 ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Mo–Fr, 7 Tage Vorlauf',
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+				'advance' => 7,
+				'max_days' => 2,
+			]
+		);
 		$this->booking( $location, $item, $this->nextWeekday( 1, [ 1 ] ), $this->nextWeekday( 1, [ 1 ] ) );
 		$this->add( 'managed_by_cb_manager', $item, $location, 'Artikel und Standort von einem CB-Manager betreut, Mo–Fr, 7 Tage Vorlauf' );
 
@@ -448,9 +688,36 @@ class TimeframeVariants {
 		$locationB = $this->location( 'Liste Standort 2' );
 		$this->timeframe( $locationA, $itemA, [ 'title' => 'Liste A täglich' ] );
 		// an item can only be bookable at one location at a time: B moves from location 1 to 2 on day 21
-		$this->timeframe( $locationA, $itemB, [ 'title' => 'Liste B Mo–Fr bis Tag 20', 'repetition' => 'w', 'weekdays' => $workdays, 'end' => $this->day( 20 ) ] );
-		$this->timeframe( $locationB, $itemB, [ 'title' => 'Liste B ab Tag 21 Sa+So an Standort 2', 'repetition' => 'w', 'weekdays' => [ '6', '7' ], 'start' => $this->day( 21 ) ] );
-		$this->timeframe( [ $locationA, $locationB ], [ $itemA, $itemB ], [ 'title' => 'Feiertag Tag 6–7 für zwei Artikel und Standorte', 'type' => Timeframe::HOLIDAYS_ID, 'start' => $this->day( 6 ), 'end' => $this->day( 7 ) ] );
+		$this->timeframe(
+			$locationA,
+			$itemB,
+			[
+				'title' => 'Liste B Mo–Fr bis Tag 20',
+				'repetition' => 'w',
+				'weekdays' => $workdays,
+				'end' => $this->day( 20 ),
+			]
+		);
+		$this->timeframe(
+			$locationB,
+			$itemB,
+			[
+				'title' => 'Liste B ab Tag 21 Sa+So an Standort 2',
+				'repetition' => 'w',
+				'weekdays' => [ '6', '7' ],
+				'start' => $this->day( 21 ),
+			]
+		);
+		$this->timeframe(
+			[ $locationA, $locationB ],
+			[ $itemA, $itemB ],
+			[
+				'title' => 'Feiertag Tag 6–7 für zwei Artikel und Standorte',
+				'type' => Timeframe::HOLIDAYS_ID,
+				'start' => $this->day( 6 ),
+				'end' => $this->day( 7 ),
+			]
+		);
 		$this->booking( $locationA, $itemA, 1, 2 );
 		$this->add( 'holiday_list_a', $itemA, $locationA, 'Artikel A täglich; Feiertag (Liste mit 2 Artikeln und 2 Standorten) Tag 6–7; Tag 1–2 gebucht' );
 		$this->add( 'holiday_list_b1', $itemB, $locationA, 'Artikel B Mo–Fr an Standort 1 bis Tag 20, Feiertag aus der Liste' );
@@ -459,8 +726,26 @@ class TimeframeVariants {
 		// ---------------------------------------------------------------- holidays, repairs, restrictions
 		[ $item, $location ] = $this->station( 'Feiertage' );
 		$this->timeframe( $location, $item, [ 'title' => 'Täglich, mit Feiertagen' ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Feiertag Tag 3', 'type' => Timeframe::HOLIDAYS_ID, 'start' => $this->day( 3 ), 'end' => $this->day( 3 ) ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Ruhetag montags', 'type' => Timeframe::HOLIDAYS_ID, 'repetition' => 'w', 'weekdays' => [ '1' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Feiertag Tag 3',
+				'type' => Timeframe::HOLIDAYS_ID,
+				'start' => $this->day( 3 ),
+				'end' => $this->day( 3 ),
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Ruhetag montags',
+				'type' => Timeframe::HOLIDAYS_ID,
+				'repetition' => 'w',
+				'weekdays' => [ '1' ],
+			]
+		);
 		$this->add( 'holidays', $item, $location, 'Feiertag an Tag 3 und wöchentlicher Ruhetag Montag' );
 
 		[ $item, $location ] = $this->station(
@@ -471,14 +756,39 @@ class TimeframeVariants {
 				COMMONSBOOKING_METABOX_PREFIX . 'count_lockdays_maximum'  => '1',
 			]
 		);
-		$this->timeframe( $location, $item, [ 'title' => 'Täglich, Schließtage überbuchbar', 'max_days' => 5 ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Geschlossen Tag 5–6', 'type' => Timeframe::HOLIDAYS_ID, 'start' => $this->day( 5 ), 'end' => $this->day( 6 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Täglich, Schließtage überbuchbar',
+				'max_days' => 5,
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Geschlossen Tag 5–6',
+				'type' => Timeframe::HOLIDAYS_ID,
+				'start' => $this->day( 5 ),
+				'end' => $this->day( 6 ),
+			]
+		);
 		$this->booking( $location, $item, 4, 7 );
 		$this->add( 'holidays_overbookable', $item, $location, 'Standort erlaubt Buchung über Schließtage (zählt max. 1), Buchung Tag 4–7 über Schließtage' );
 
 		[ $item, $location ] = $this->station( 'Reparatur' );
 		$this->timeframe( $location, $item, [ 'title' => 'Täglich, mit Reparatur' ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Reparatur Tag 2–3', 'type' => Timeframe::REPAIR_ID, 'start' => $this->day( 2 ), 'end' => $this->day( 3 ) ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Reparatur Tag 2–3',
+				'type' => Timeframe::REPAIR_ID,
+				'start' => $this->day( 2 ),
+				'end' => $this->day( 3 ),
+			]
+		);
 		$this->add( 'repair_timeframe', $item, $location, 'Reparatur-Zeitrahmen Tag 2–3' );
 
 		[ $item, $location ] = $this->station( 'Einschränkungen' );
@@ -495,14 +805,49 @@ class TimeframeVariants {
 
 		// ---------------------------------------------------------------- posts that must not count
 		[ $item, $location ] = $this->station( 'Entwurf und Papierkorb' );
-		$this->timeframe( $location, $item, [ 'title' => 'Mo–Mi veröffentlicht', 'repetition' => 'w', 'weekdays' => [ '1', '2', '3' ] ] );
-		$this->timeframe( $location, $item, [ 'title' => 'Do–So Entwurf', 'repetition' => 'w', 'weekdays' => [ '4', '5', '6', '7' ], 'status' => 'draft' ] );
-		$trashed = $this->timeframe( $location, $item, [ 'title' => 'Do–So gelöscht', 'repetition' => 'w', 'weekdays' => [ '4', '5', '6', '7' ] ] );
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Mo–Mi veröffentlicht',
+				'repetition' => 'w',
+				'weekdays' => [ '1', '2', '3' ],
+			]
+		);
+		$this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Do–So Entwurf',
+				'repetition' => 'w',
+				'weekdays' => [ '4', '5', '6', '7' ],
+				'status' => 'draft',
+			]
+		);
+		$trashed = $this->timeframe(
+			$location,
+			$item,
+			[
+				'title' => 'Do–So gelöscht',
+				'repetition' => 'w',
+				'weekdays' => [ '4', '5', '6', '7' ],
+			]
+		);
 		wp_trash_post( $trashed );
 		$this->add( 'draft_and_trash', $item, $location, 'Mo–Mi veröffentlicht; Do–So als Entwurf und im Papierkorb (dürfen nicht zählen)' );
 
 		if ( $globalHoliday ) {
-			$this->timeframe( 0, 0, [ 'title' => 'Feiertag für alle Tag 20', 'type' => Timeframe::HOLIDAYS_ID, 'start' => $this->day( 20 ), 'end' => $this->day( 20 ), 'selection' => TimeframeModel::SELECTION_ALL_ID ] );
+			$this->timeframe(
+				0,
+				0,
+				[
+					'title' => 'Feiertag für alle Tag 20',
+					'type' => Timeframe::HOLIDAYS_ID,
+					'start' => $this->day( 20 ),
+					'end' => $this->day( 20 ),
+					'selection' => TimeframeModel::SELECTION_ALL_ID,
+				]
+			);
 		}
 	}
 }
