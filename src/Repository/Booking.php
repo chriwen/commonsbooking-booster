@@ -359,14 +359,7 @@ class Booking extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = self::get(
-				[],
-				[],
-				null,
-				$asModel,
-				$minTimestamp,
-				$postStatus
-			);
+			$posts = self::getVisibleCandidates( $user, $asModel, $minTimestamp, $postStatus );
 			if ( $posts ) {
 				// Check if it is the main query and one of our custom post types
 				$posts = array_filter(
@@ -385,6 +378,94 @@ class Booking extends PostRepository {
 		}
 
 		return $posts;
+	}
+
+	/**
+	 * Returns a superset of the bookings the user is allowed to see ({@see commonsbooking_isUserAllowedToSee()}),
+	 * without loading all bookings for users who are not CommonsBooking admins:
+	 * - own bookings (post author)
+	 * - bookings of items the user manages (item author or listed in the item admins)
+	 * - bookings of locations the user manages (location author or listed in the location admins)
+	 * This matches {@see \CommonsBooking\Model\Timeframe::getAdmins()}, which merges item and location admins.
+	 *
+	 * @param \WP_User $user
+	 * @param bool     $asModel
+	 * @param int|null $minTimestamp
+	 * @param string[] $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|\WP_Post[] ordered by post id
+	 * @throws Exception
+	 */
+	private static function getVisibleCandidates( \WP_User $user, bool $asModel, $minTimestamp, array $postStatus ): array {
+		if ( commonsbooking_isUserAdmin( $user ) ) {
+			return self::get( [], [], null, $asModel, $minTimestamp, $postStatus );
+		}
+
+		$minTimestamp = $minTimestamp ? (int) $minTimestamp : null;
+		$candidates   = \CommonsBooking\Repository\Timeframe::getByAuthor(
+			$user->ID,
+			[ Timeframe::BOOKING_ID ],
+			$asModel,
+			$minTimestamp,
+			$postStatus
+		);
+
+		$managedItems = self::getManagedPostIds( $user, \CommonsBooking\Wordpress\CustomPostType\Item::$postType );
+		if ( $managedItems ) {
+			$candidates = array_merge( $candidates, self::get( [], $managedItems, null, $asModel, $minTimestamp, $postStatus ) );
+		}
+		$managedLocations = self::getManagedPostIds( $user, \CommonsBooking\Wordpress\CustomPostType\Location::$postType );
+		if ( $managedLocations ) {
+			$candidates = array_merge( $candidates, self::get( $managedLocations, [], null, $asModel, $minTimestamp, $postStatus ) );
+		}
+
+		$unique = [];
+		foreach ( $candidates as $candidate ) {
+			$unique[ $candidate->ID ] = $candidate;
+		}
+		ksort( $unique );
+
+		return array_values( $unique );
+	}
+
+	/**
+	 * Returns ids of the items or locations the user manages: posts the user is author of or listed in the
+	 * admins meta (`_{post type}_admins`, a serialized list or a single id, see Location::getAdmins()).
+	 * Post status is not checked, as in getAdmins().
+	 *
+	 * @param \WP_User $user
+	 * @param string   $postType cb_item or cb_location
+	 *
+	 * @return int[]
+	 */
+	private static function getManagedPostIds( \WP_User $user, string $postType ): array {
+		global $wpdb;
+
+		$ids = array_map(
+			'intval',
+			$wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = %s AND post_author = %d", $postType, $user->ID ) )
+		);
+
+		// LIKE narrows the rows down, the exact check is done in PHP on the unserialized value
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT pm.post_id, pm.meta_value FROM $wpdb->postmeta pm
+				INNER JOIN $wpdb->posts p ON p.ID = pm.post_id AND p.post_type = %s
+				WHERE pm.meta_key = %s AND pm.meta_value LIKE %s",
+				$postType,
+				'_' . $postType . '_admins',
+				'%' . $wpdb->esc_like( (string) $user->ID ) . '%'
+			)
+		);
+		foreach ( $rows as $row ) {
+			$admins = maybe_unserialize( $row->meta_value );
+			$admins = is_array( $admins ) ? $admins : [ $admins ];
+			if ( in_array( $user->ID, array_map( 'intval', $admins ), true ) ) {
+				$ids[] = (int) $row->post_id;
+			}
+		}
+
+		return array_values( array_unique( $ids ) );
 	}
 
 	/**
