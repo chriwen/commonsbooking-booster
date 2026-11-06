@@ -311,7 +311,7 @@ class Calendar {
 
 		// Show item as not available outside of timeframe timerange.
 		for ( $dayIterator; $dayIterator < count( $days_display ); $dayIterator++ ) {
-			$days_display[ $dayIterator ] = "<span'is-locked'></span>";
+			$days_display[ $dayIterator ] = self::TABLE_STATUS_MARKUP[ DayStatus::LOCKED ];
 		}
 
 		$dayStr         = implode( $divider, $days_display );
