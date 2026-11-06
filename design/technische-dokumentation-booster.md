@@ -31,7 +31,7 @@ Gemessen auf einem Bestand mit 17.100 Zeitrahmen/Buchungen: Karte mit Verfügbar
 | Baustein | Namespace | Aufgabe |
 |---|---|---|
 | **Index** | `Service\Index`, `Repository\Index` | Projiziert jeden Zeitrahmen, jede Buchung und jede Einschränkung in eine schmale, indizierte Tabelle. Die Repositories lesen daraus statt aus `postmeta`. |
-| **Vorberechnete Verfügbarkeit** | `Service\Availability` | Speichert pro Artikel/Standort-Paar den datumsunabhängigen Zustand der nächsten 92 Tage. Karte und Artikeltabelle lesen ihn fertig aus. |
+| **Vorberechnete Verfügbarkeit** | `Service\Availability` | Speichert pro Artikel/Standort-Paar den datumsunabhängigen Zustand von gestern bis heute + 92 Tage. Karte und Artikeltabelle lesen ihn fertig aus. |
 | **Booster** | `Service\Booster` | Ein gemeinsamer Schalter für beide Bausteine, Schutz vor Inkonsistenzen (Wächter), Diagnose in den Einstellungen, WP-CLI. |
 
 ### 1.3 Leitprinzipien
@@ -49,7 +49,328 @@ Gemessen auf einem Bestand mit 17.100 Zeitrahmen/Buchungen: Karte mit Verfügbar
 5. **Sofort aktuell.** Index und Verfügbarkeit werden im selben Request aktualisiert, in dem sich ein Beitrag ändert.
    Ein täglicher Cron reicht ausdrücklich nicht.
 
-### 1.4 Architektur
+### 1.4 Grundprinzip
+
+Dieser Abschnitt erklärt die Idee hinter dem Booster so, dass sie auch ohne genaue Kenntnis von CommonsBooking
+verständlich ist. Ein durchgehendes Beispiel begleitet alle Schritte. Die technischen Einzelheiten zu Tabellen und
+Spalten stehen danach in Kapitel 2.
+
+#### 1.4.1 Wie CommonsBooking seine Daten ablegt
+
+CommonsBooking verleiht **Artikel** (zum Beispiel ein Lastenrad) an **Standorten** (zum Beispiel einer Bäckerei, die
+das Rad ausgibt). Wann ein Artikel an einem Standort ausgeliehen werden kann, legt ein **Zeitrahmen** fest, etwa
+„montags bis freitags, ganztägig, ab 1. Januar 2026, unbefristet“. Daneben gibt es weitere Zeitrahmen-Arten wie
+Feiertage („Standort vom 24. bis 26. Dezember geschlossen“), **Buchungen** („Nutzerin 17 leiht das Rad am 10. November“)
+und **Einschränkungen** („Rad ist ab 10. November in Reparatur“).
+
+Für das Beispiel dieses Abschnitts gilt:
+
+| | Beispiel | ID |
+|---|---|---|
+| Artikel | Lastenrad „Emil“ | 812 |
+| Standort | Bäckerei Sonnenschein | 455 |
+| Zeitrahmen | buchbar Mo–Fr, ganztägig, ab 01.01.2026, unbefristet, bis zu 30 Tage im Voraus | 501 |
+| Buchung | Dienstag, 10.11.2026, ganztägig, Nutzerin 17 | 9301 |
+| heutiges Datum | Freitag, 06.11.2026 | |
+
+CommonsBooking ist ein WordPress-Plugin und speichert alles davon so, wie WordPress Inhalte speichert: als
+**Beiträge**. Jeder Zeitrahmen, jede Buchung und jede Einschränkung ist eine Zeile in der Tabelle `wp_posts`. Diese Zeile
+kennt aber nur allgemeine Angaben wie ID, Titel, Status und Autor. Alle fachlichen Angaben (welcher Artikel, welcher
+Standort, von wann bis wann) stehen in einer zweiten Tabelle, `wp_postmeta`, und zwar als einzelne Schlüssel-Wert-Paare,
+**eine Zeile pro Angabe**. Die Buchung 9301 sieht in der Datenbank ungefähr so aus:
+
+```
+wp_posts                       ID 9301 · post_type cb_booking · post_status confirmed · post_author 17
+
+wp_postmeta   post_id  meta_key            meta_value
+              9301     type                6               (6 = Buchung)
+              9301     item-id             812
+              9301     location-id         455
+              9301     repetition-start    1794268800      (10.11.2026 00:00)
+              9301     repetition-end      1794355199      (10.11.2026 23:59:59)
+              9301     _cb_bookingcode     …               (und einige weitere)
+```
+
+Im Testbestand, auf dem der Booster entwickelt wurde, kommen auf 17.100 Zeitrahmen und Buchungen rund 190.000 solcher
+Meta-Zeilen, also etwa elf pro Beitrag.
+
+Dieses Speicherformat ist flexibel: Jedes Plugin kann neue Angaben speichern, ohne die Datenbank zu verändern. Es hat
+aber einen Preis, sobald man **suchen** will. Das wird im nächsten Abschnitt deutlich.
+
+#### 1.4.2 Warum es mit wachsender Historie langsam wird
+
+Fast jede Ansicht in CommonsBooking stellt im Kern dieselbe Frage: *Welche Zeitrahmen und Buchungen betreffen das
+Lastenrad 812 an der Bäckerei 455 in den nächsten zwölf Tagen?* Die Karte stellt diese Frage für jedes Paar aus Artikel
+und Standort, die Artikeltabelle ebenso, der Buchungskalender für einen Artikel, die REST-API für alle.
+
+**Problem 1: Suchen.** In `wp_postmeta` gibt es keine Spalte „Artikel“ und keine Spalte „Ende“, die die Datenbank
+geordnet vorhalten könnte. Es gibt nur die Spalten `meta_key` und `meta_value`. Um die Frage zu beantworten, verknüpft
+CommonsBooking 2.11.3 mehrere Meta-Zeilen miteinander (sinngemäß: „suche alle Beiträge, die eine Zeile `type = 6` UND
+eine Zeile `item-id = 812` UND eine Zeile `location-id = 455` haben“). Die Datumsbedingung kann die Datenbank dabei nicht
+nutzen; sie wird erst danach in PHP geprüft.
+
+Das hat eine unangenehme Folge: Wurde das Lastenrad in den letzten drei Jahren 600-mal gebucht, liefert die Abfrage alle
+600 Buchungen. CommonsBooking lädt dann jede einzelne (in 2.11.3 mit einem eigenen `get_post()`-Aufruf pro Buchung) und
+wirft anschließend 597 davon wieder weg, weil sie in der Vergangenheit liegen. Die Arbeit wächst also mit der
+**gesamten Historie**, nicht mit dem, was tatsächlich angezeigt wird. Ein Vergleich aus dem Alltag: Wer in einer
+Bibliothek ohne Katalog ein Buch sucht, muss jedes Regal ablaufen, und mit jedem neuen Buch wird der Weg länger.
+
+**Problem 2: Rechnen.** Selbst wenn die richtigen Beiträge gefunden sind, steht die Antwort „frei oder belegt?“ nirgends
+fertig. CommonsBooking berechnet sie bei jedem Aufruf neu: Für jeden Tag baut es ein Raster aus Zeitabschnitten
+(„Slots“), legt Zeitrahmen, Feiertage, Buchungen und Einschränkungen übereinander, entscheidet für jeden Abschnitt,
+welcher Eintrag gewinnt (eine Buchung schlägt den buchbaren Zeitrahmen), und fasst das Ergebnis zu einem Tageszustand
+zusammen. Das kostet pro Paar rund 7 ms für 31 Tage und gut 10 ms für 90 Tage. Das klingt wenig, aber eine Karte mit 100
+Paaren bezahlt es hundertmal, bei jedem Aufruf jedes Besuchers.
+
+Gemessen auf dem Testbestand ergab das in 2.11.3: Die Karte mit Verfügbarkeitsanzeige brauchte **15,4 Sekunden** und
+**40.800 Datenbankabfragen**, die Artikeltabelle `[cb_items_table]` 7,1 Sekunden. Bei zehnfacher Historie brachen manche
+Ansichten mit Speicherfehlern ab.
+
+#### 1.4.3 Die Idee: dieselben Daten zusätzlich in einer lesefreundlichen Form
+
+Der Booster ändert **nicht**, wo und wie CommonsBooking seine Daten speichert. `wp_posts` und `wp_postmeta` werden
+genauso geschrieben und gelesen wie vorher; sie bleiben die einzige verbindliche Quelle, die *Quelle der Wahrheit*. Der
+Booster legt nur **zusätzlich** zwei Tabellen an, die dieselben Informationen in einer Form enthalten, die für die
+häufigen Fragen schnell zu lesen ist. Man nennt solche Tabellen *abgeleitete Daten* oder *Lesemodelle*; in der
+Datenbankwelt ist auch der Begriff *materialisierte Sicht* gebräuchlich.
+
+Das Prinzip kennt jeder aus einem Sachbuch: Das **Stichwortverzeichnis** am Ende enthält keine neue Information, alles
+steht auch im Text. Aber es ist so geordnet, dass man eine Stelle in Sekunden findet, statt das Buch durchzublättern.
+Wird der Text überarbeitet, muss das Verzeichnis nachgezogen werden, und im Zweifel gilt der Text, nicht das Verzeichnis.
+Genau so verhalten sich die neuen Tabellen.
+
+Der Booster arbeitet in zwei Stufen, die jeweils eines der beiden Probleme lösen:
+
+```
+ Quelle der Wahrheit             Stufe 1: Index                    Stufe 2: Vorberechnung
+ (unverändert)                   löst „Suchen“                     löst „Rechnen“
+
+ wp_posts + wp_postmeta   ──►   cb_index (+ cb_index_rel)   ──►   cb_availability
+ 1 Beitrag =                     1 Beitrag = 1 Zeile               1 Paar (Artikel, Standort) = 1 Zeile
+ 1 Post + ~11 Meta-Zeilen        mit festen Spalten                mit dem fertigen Ergebnis
+                                 für Artikel, Standort,            „wie sieht jeder Tag aus?“
+                                 Typ, Start, Ende …                für gestern bis heute + 92 Tage
+```
+
+Die erste Stufe ist ein **Spiegel**: Sie enthält nichts, was nicht auch in den Beiträgen steht, nur besser sortiert.
+Die zweite Stufe ist ein **Ergebnis-Speicher**: Sie enthält das, was CommonsBooking bisher bei jedem Aufruf ausgerechnet
+hat, einmal ausgerechnet und abgelegt.
+
+#### 1.4.4 Stufe 1, der Index: jede Angabe hat ihre eigene Spalte
+
+Für jeden Zeitrahmen, jede Buchung und jede Einschränkung schreibt der Booster genau eine Zeile in die Tabelle
+`cb_index`. Die Angaben, die vorher auf viele Meta-Zeilen verteilt waren, stehen dort nebeneinander in eigenen Spalten.
+Die Buchung 9301 wird zu:
+
+```
+cb_index   post_id 9301 · post_type cb_booking · post_status confirmed · post_author 17 · type 6
+           item_id 812 · location_id 455 · start_ts 1794268800 · end_ts 1794355199 · …
+```
+
+Weil es jetzt echte Spalten gibt, kann die Datenbank einen **Schlüssel** (einen sortierten Suchbaum) darüber anlegen.
+Der wichtigste heißt `item_loc_range` und sortiert alle Zeilen nach Artikel, dann Standort, dann Typ, dann Ende. Man kann
+sich das wie ein Telefonbuch vorstellen, das erst nach Ort, dann nach Straße, dann nach Hausnummer geordnet ist: Wer
+„Artikel 812, Standort 455, Typ Buchung, Ende ab 06.11.2026“ sucht, schlägt direkt die richtige Stelle auf und liest
+nur die wenigen Einträge, die dort stehen. Die 597 alten Buchungen liegen im Telefonbuch an einer anderen Stelle (ihr
+Ende liegt vor dem 06.11.) und werden gar nicht erst angefasst.
+
+Die Frage aus 1.4.2 wird damit zu einer einzigen, einfachen Abfrage:
+
+```sql
+SELECT post_id FROM wp_cb_index
+ WHERE item_id = 812 AND location_id = 455
+   AND type IN (2, 3, 6)                          -- buchbar, Feiertag, Buchung
+   AND post_status IN ('publish', 'confirmed')
+   AND (end_ts IS NULL OR end_ts >= 1793923200)   -- endet nicht vor dem 06.11.2026
+   AND start_ts <= 1794959999                     -- beginnt nicht nach dem 17.11.2026
+```
+
+Angenommen, im Zeitraum liegen drei Buchungen. Dann lautet das Ergebnis: der Zeitrahmen 501 (offenes Ende, `end_ts IS NULL`) und die drei Buchungen in diesem Zeitraum, darunter 9301.
+Danach lädt `Index::loadPosts()` diese vier Beiträge samt Metadaten **gebündelt** mit zwei Abfragen statt mit vier
+einzelnen. Ab hier läuft der unveränderte Code von CommonsBooking weiter, er bekommt nur eine kleinere, schon passende
+Liste.
+
+**Beispielrechnung.** Im Testbestand dauerte die Suche für ein Paar über `postmeta` 26 ms, über den Index 0,12 ms. Bei
+fünfzigfacher Historie (867.000 Index-Zeilen) waren es 0,18 ms; die Suchzeit hängt also praktisch nicht mehr von der
+Historie ab. Die Karte stellte in 2.11.3 die Frage für 400 Paare einzeln, also 400 × 25 ms ≈ 10 s. Mit dem Index fragt sie
+alle Paare in **einer** Abfrage ab: 1,7 ms. Allein durch den Index sank die Karte mit Verfügbarkeit von 15,4 s auf
+etwa 1,2 s.
+
+Was der Index **nicht** tut: Er rechnet nichts aus und entscheidet nichts. Ob ein Zeitrahmen an einem Mittwoch gilt
+oder ob ein Nutzer ihn buchen darf, prüft weiterhin der bestehende PHP-Code, nachdem die Beiträge geladen sind. Der
+Index sorgt nur dafür, dass dieser Code nicht mehr 600 Kandidaten bekommt, wenn 4 genügen.
+
+#### 1.4.5 Stufe 2, die Vorberechnung: das Ergebnis aufbewahren statt neu rechnen
+
+Nach Stufe 1 waren die Abfragen billig, aber die Tagesberechnung aus 1.4.2 (Problem 2) blieb: Die Karte verbrachte von
+ihren 1,2 Sekunden nur noch 0,1 Sekunden in der Datenbank und den Rest mit Rechnen. Stufe 2 speichert deshalb das
+Rechenergebnis.
+
+Die Tabelle `cb_availability` hat eine Zeile **pro Paar aus Artikel und Standort**, für unser Beispiel also eine Zeile für
+(812, 455). In dieser Zeile steht für jeden Tag von gestern bis heute + 92 Tage ein kurzer Code, der den Tag beschreibt.
+Der Code ist eine Zahl aus zehn Ja/Nein-Angaben (Bits), etwa „hat der Tag überhaupt einen buchbaren Zeitrahmen?“,
+„ist alles belegt?“, „ist es ein Feiertag?“, „ist der erste Abschnitt des Tages belegt?“. Für das Beispiel, berechnet am
+Freitag, 06.11.2026, sieht der Anfang der Zeile so aus:
+
+| Tag | Datum | Was gilt | Code | gespeicherte Bytes |
+|---|---|---|---|---|
+| 0 | Do 05.11. | buchbar, frei (gestern; wird trotzdem gespeichert) | 513 | `01 02` |
+| 1 | Fr 06.11. | buchbar, frei | 513 | `01 02` |
+| 2 | Sa 07.11. | kein Zeitrahmen (nur Mo–Fr) | 60 | `3C 00` |
+| 3 | So 08.11. | kein Zeitrahmen | 60 | `3C 00` |
+| 4 | Mo 09.11. | buchbar, frei | 513 | `01 02` |
+| 5 | Di 10.11. | ganztägig gebucht (Buchung 9301) | 487 | `E7 01` |
+| 6 | Mi 11.11. | buchbar, frei | 513 | `01 02` |
+| … | … | … | … | … |
+| 93 | Fr 05.02.2027 | buchbar, frei | 513 | `01 02` |
+
+Jeder Tag belegt zwei Bytes, 94 Tage also 188 Bytes. Die Codes setzen sich aus den Bits zusammen; zum Beispiel ist 513 =
+1 („hat Abschnitte“) + 512 („genau ein ganztägiger Abschnitt“). Die genaue Bedeutung jedes Bits steht in 2.4.
+
+**Ein Tag abrufen.** Möchte die Karte wissen, wie der Dienstag, 10.11., aussieht, rechnet sie nur noch eine Position
+aus: Die Zeile beginnt am 05.11. (`days_from`), der 10.11. ist 5 Tage später, also stehen seine Bytes an Position 5 × 2 =
+10. Dort steht `E7 01`, gelesen als Zahl (niedriges Byte zuerst) 0x01E7 = 487, also „belegt“. Es wird kein einziger
+Beitrag geladen und kein Raster gebaut.
+
+**Beispielrechnung für die Karte.** Die Karte zeigt für 100 Paare je zwölf Tage. Ohne Vorberechnung heißt das 100 ×
+etwa 7 ms Rechenzeit ≈ 0,7 s, zuzüglich der Abfragen. Mit Vorberechnung lädt der Booster alle 100 Zeilen in einer
+einzigen Abfrage (100 × 188 Byte ≈ 19 KB) und liest daraus 1.200 Codes an bekannten Positionen. Gemessen: Karte mit
+Verfügbarkeit **0,11 s** statt 15,4 s in 2.11.3, Artikeltabelle **0,08 s** statt 7,1 s.
+
+**Was bewusst nicht gespeichert wird: alles, was vom heutigen Datum abhängt.** Ob ein Tag in der Vergangenheit liegt, ob
+er noch im Vorausbuchungsfenster liegt („bis zu 30 Tage im Voraus“) oder ob er vor dem frühesten Buchungstag liegt, hängt
+davon ab, welcher Tag heute ist. Würde man das mitspeichern, wäre um Mitternacht jede Zeile falsch und müsste neu
+berechnet werden. Stattdessen speichert die Zeile nur, was aus den Beiträgen folgt, und das Datum wird beim **Lesen**
+angewendet (`CalendarWindow`). Für unser Beispiel bedeutet das am Freitag, 06.11.:
+
+- Der 05.11. trägt zwar den Code „frei“, liegt aber in der Vergangenheit und wird deshalb als „gesperrt“ angezeigt.
+- Der 06.11. ist heute und frei, also „verfügbar“.
+- Ein Tag mehr als 30 Tage nach heute trägt ebenfalls „frei“, wird wegen des Vorausbuchungsfensters aber als „gesperrt“
+  angezeigt.
+
+Am Samstag, 07.11., liest die Karte **dieselbe Zeile** unverändert weiter. Der 10.11. steht immer noch an Position 10,
+nur rutscht jetzt auch der 06.11. in die Vergangenheit und das Vorausbuchungsfenster wandert einen Tag weiter. Neu
+berechnet werden muss dafür nichts. Ein stündlicher Hintergrundjob rechnet Zeilen, die älter als zwölf Stunden sind,
+ohnehin neu, damit der Zeitraum von 94 Tagen mitwandert; eine Zeile, die älter als 24 Stunden ist, wird gar nicht mehr
+verwendet.
+
+#### 1.4.6 Aktuell bleiben: der Generationszähler
+
+Gespeicherte Ergebnisse haben ein grundsätzliches Risiko: Sie können veralten. Wenn jemand das Lastenrad für Mittwoch,
+11.11., bucht, darf die Karte keine Sekunde später noch „frei“ anzeigen. Ein nächtlicher Neuaufbau würde dafür nicht
+reichen, und den kompletten Tageszustand bei jeder Buchung sofort neu zu berechnen, würde die Buchung selbst
+verlangsamen.
+
+Der Booster trennt deshalb zwei Dinge: das **Ungültig-Machen**, das sofort und billig passiert, und das **Neu-Berechnen**,
+das etwas später passieren darf. Dafür hat jede Zeile in `cb_availability` zwei Zähler:
+
+- `gen` (Generation) zählt, wie oft sich etwas am Paar geändert hat. Jede Änderung an einem Zeitrahmen, einer Buchung
+  oder einer Einschränkung des Paares erhöht ihn sofort um 1. Das ist eine einzige, winzige Datenbankanweisung, die
+  unter einer Millisekunde dauert.
+- `computed_gen` merkt sich, auf welchem Stand die gespeicherten Tagescodes berechnet wurden.
+
+Eine Zeile wird nur benutzt, wenn beide Zähler gleich sind. Man kann sich das wie einen Aushang mit Versionsnummer
+vorstellen: Hängt am Brett „Stand 41“, im Büro ist man aber schon bei Stand 42, dann weiß jeder, dass der Aushang nicht
+mehr gilt, auch wenn noch niemand einen neuen aufgehängt hat.
+
+Für die Buchung am Mittwoch läuft das so ab:
+
+| Zeitpunkt | Was passiert | `gen` | `computed_gen` | Karte zeigt den 11.11. als |
+|---|---|---|---|---|
+| vorher | Zeile ist aktuell | 41 | 41 | frei (aus der Zeile) |
+| Buchung wird gespeichert | WordPress speichert den Beitrag, der Index übernimmt ihn, der Zähler wird erhöht | **42** | 41 | – |
+| direkt danach | Zeile gilt als veraltet, weil 42 ≠ 41 | 42 | 41 | belegt (live berechnet oder Zeile frisch berechnet) |
+| einige Millisekunden später | nachdem die Antwort an den Browser gegangen ist, rechnet der Booster das Paar neu (rund 13 ms) und speichert es | 42 | **42** | belegt (aus der Zeile) |
+
+Entscheidend ist der dritte Schritt: Selbst wenn die Neuberechnung ausfällt (Fehler, abgebrochener Prozess, eine
+Feiertagsänderung betrifft auf einen Schlag 300 Paare und wird deshalb dem Hintergrundjob überlassen), wird die alte
+Zeile **nie** ausgeliefert. Wer als Nächstes die Karte öffnet, löst die Neuberechnung selbst aus oder bekommt das
+Ergebnis live gerechnet. Langsamer kann es dann einmal sein, falsch nicht.
+
+Beim Speichern einer Neuberechnung gibt es noch eine Absicherung gegen Gleichzeitigkeit: Der Booster schreibt nur, wenn
+`gen` noch denselben Wert hat wie zu Beginn der Berechnung (`… WHERE gen = 42`). Kommt während der 13 ms eine zweite
+Buchung herein und erhöht auf 43, verwirft die Datenbank das Ergebnis, das die zweite Buchung noch nicht kannte. Die
+Zeile bleibt ungültig, bis eine Berechnung auf Stand 43 fertig ist. Dafür braucht es keine Sperren, die andere Anfragen
+warten lassen würden.
+
+#### 1.4.7 Im Zweifel die Quelle: Rückfall auf den Originalweg
+
+Jede Stelle, die die neuen Tabellen liest, hat ihren bisherigen Weg behalten und fällt darauf zurück, wenn die
+abgeleiteten Daten die Frage nicht sicher beantworten können:
+
+| Situation | Was passiert |
+|---|---|
+| Booster ausgeschaltet (Standard nach dem Update) | Es wird überhaupt nichts Neues gelesen oder geschrieben; das Plugin verhält sich wie 2.11.3 |
+| Booster gerade eingeschaltet, Index noch im Aufbau | Lesen weiter über `postmeta`, bis alle Beiträge übernommen sind |
+| Zeile in `cb_availability` fehlt oder ist ungültig | Paar wird sofort berechnet und gespeichert, oder live gerechnet |
+| Anfrage reicht über den Zeitraum von 94 Tagen hinaus (z. B. Tabelle mit 180 Tagen) | live gerechnet |
+| Zeitrahmen nur für bestimmte Nutzerrollen buchbar | immer live gerechnet, weil das Ergebnis vom angemeldeten Nutzer abhängt |
+| **Prüfung einer Buchung** (Überschneidung, Buchungsregeln) | **immer** über die ursprünglichen Abfragen, ohne Index, ohne Vorberechnung, ohne Cache |
+
+Der letzte Punkt ist die wichtigste Sicherheitsgarantie: Selbst wenn der Index durch einen Fehler einmal nicht stimmen
+sollte, kann daraus höchstens eine falsche **Anzeige** entstehen (die Karte zeigt einen Tag als frei), aber nie eine
+Doppelbuchung. Die Entscheidung, ob eine Buchung angenommen wird, trifft immer der Originalcode auf Basis von
+`wp_postmeta`.
+
+Dass beide Wege dasselbe Ergebnis liefern, ist durch Tests abgesichert, die jede umgestellte Abfrage und jede Ansicht
+einmal über den Booster und einmal über den Originalweg ausführen und vergleichen. Im Betrieb vergleichen tägliche
+Stichproben gespeicherte Zeilen mit einer frischen Berechnung und reparieren Abweichungen.
+
+#### 1.4.8 Ein Abruf von Anfang bis Ende: die Karte
+
+Eine Besucherin öffnet am 06.11. die Karte, die für jeden Standort die Verfügbarkeit der nächsten zwölf Tage zeigt.
+Angenommen, es gibt 40 Standorte mit zusammen 100 Paaren.
+
+1. **Paare finden (Index).** Eine Abfrage auf `cb_index` liefert alle buchbaren Zeitrahmen der 40 Standorte
+   (`type = 2`, `post_status = publish`, Ende nicht vor heute). Daraus ergeben sich die 100 Paare, darunter (812, 455).
+2. **Zeilen laden (Vorberechnung).** Eine Abfrage lädt die 100 Zeilen aus `cb_availability`. Jede wird geprüft: Zähler
+   gleich, Rechenversion aktuell, jünger als 24 Stunden, keine Rollenbeschränkung.
+3. **Fenster bestimmen.** Für jedes Paar ermittelt `CalendarWindow` aus den buchbaren Zeitrahmen und dem heutigen Datum,
+   welche Tage überhaupt buchbar sein können (Vorausbuchung, frühester Tag).
+4. **Tage lesen.** Für die zwölf Tage vom 06.11. bis 17.11. liest der Booster die Codes an den Positionen 2, 4, …, 24
+   der Zeile und wendet das Fenster an. Für (812, 455) ergibt das: 06.11. verfügbar, 07./08.11. kein Angebot, 09.11.
+   verfügbar, **10.11. belegt**, 11.11. verfügbar, …
+5. **Ausnahmen.** Ist eine der 100 Zeilen ungültig (etwa weil vor einer Minute gebucht wurde), wird nur dieses eine Paar
+   berechnet (rund 13 ms) und gespeichert; die anderen 99 bleiben gelesen.
+
+Zusammen sind das eine Handvoll Datenbankabfragen und wenige Millisekunden Rechenzeit, unabhängig davon, wie viele
+Buchungen sich in den letzten Jahren angesammelt haben.
+
+#### 1.4.9 Eine Änderung von Anfang bis Ende: die Buchung
+
+Nutzerin 17 bucht das Lastenrad für Dienstag, 10.11. Die Buchungsprüfung läuft wie oben beschrieben ohne Booster. Wird
+die Buchung angenommen und gespeichert, passiert Folgendes, alles innerhalb derselben Anfrage:
+
+| Schritt | Tabelle | Was passiert |
+|---|---|---|
+| 1 | `wp_posts`, `wp_postmeta` | WordPress speichert die Buchung wie bisher: Beitrag 9301 mit Status `confirmed` und den Meta-Zeilen aus 1.4.1 |
+| 2 | `cb_index` | WordPress meldet „Beitrag gespeichert“ (`save_post`). Der Booster liest den Beitrag und schreibt seine Zeile neu: `post_id 9301`, `type 6`, `item_id 812`, `location_id 455`, Start und Ende |
+| 3 | `cb_availability` | Weil sich die Index-Zeile geändert hat, bestimmt der Booster die betroffenen Paare, hier nur (812, 455), und erhöht deren `gen`, zum Beispiel von 41 auf 42 |
+| 4 | – | Die Antwort („Buchung bestätigt“) geht an den Browser |
+| 5 | `cb_availability` | Danach rechnet der Booster das Paar neu: 94 Tage, rund 13 ms, und speichert die Codes mit `computed_gen = 42`. Der 10.11. trägt jetzt den Code 487 |
+| 6 | – | Der nächste Kartenaufruf liest die aktuelle Zeile |
+
+Wird eine Buchung später **verschoben** (anderer Artikel oder Standort), betrifft das zwei Paare: das alte und das neue.
+Deshalb gibt der Index bei jeder Änderung die alte **und** die neue Zeile weiter, und beide Paare werden ungültig gemacht.
+Wird eine Buchung **storniert**, setzt CommonsBooking den Status per direktem Datenbankbefehl; dort meldet der Booster die
+Änderung selbst an den Index (siehe 7.1), damit Schritt 2 bis 5 ebenfalls ablaufen.
+
+#### 1.4.10 Zusammengefasst: vier Regeln
+
+1. **Die Ableitung ist eindeutig und wiederholbar.** Aus denselben Beiträgen entstehen immer dieselben Zeilen. Deshalb
+   kann jede Zeile jederzeit gelöscht und neu erzeugt werden, und Prüfungen können eine gespeicherte Zeile mit einer
+   frischen Berechnung vergleichen.
+2. **Gespeichert wird nur, was nicht vom heutigen Datum abhängt.** Das Datum wird beim Lesen angewendet. So bleibt eine
+   Zeile über Mitternacht gültig.
+3. **Ungültig machen sofort, neu berechnen später.** Eine Änderung erhöht in derselben Anfrage den Zähler; eine Zeile mit
+   abweichendem Zähler wird nie benutzt. Wann neu berechnet wird, beeinflusst nur die Geschwindigkeit, nicht die
+   Richtigkeit.
+4. **Im Zweifel die Quelle.** Wo die abgeleiteten Daten fehlen oder nicht passen, wird über den Originalweg gerechnet.
+   Über Buchungen entscheidet immer der Originalweg.
+
+### 1.5 Architektur
+
+Ausführliche Grafik mit allen Methoden: [`booster-architektur.png`](booster-architektur.png) ([SVG](booster-architektur.svg)).
 
 ```
                          Schreibweg                                     Leseweg
@@ -76,71 +397,166 @@ Gemessen auf einem Bestand mit 17.100 Zeitrahmen/Buchungen: Karte mit Verfügbar
 
 ## 2. Neue Datenbanktabellen
 
+### 2.1 Überblick und Zusammenspiel
+
 Alle Tabellen werden pro Site über `$wpdb->prefix` angelegt (Multisite-fähig), per `dbDelta()` erzeugt und tragen eine
 eigene Schema-Versionsoption. Es gibt keine Fremdschlüssel und keine Trigger, die Pflege erfolgt in PHP über Hooks.
 Angelegt werden die Tabellen beim Einschalten des Boosters, entfernt nur mit `wp commonsbooking booster purge`.
 
-### 2.1 `{prefix}cb_index`: eine Zeile pro Beitrag
+```
+ wp_posts (cb_timeframe, cb_booking, cb_restriction)
+   │ 1 : 1   post_id
+   ▼
+ cb_index ──────────── 1 : n ────────────► cb_index_rel
+   │ item_id, location_id                    (nur Zeilen mit is_multi = 1:
+   │ (nur Zeitrahmen Typ 2, publish)          entity_type item|location, entity_id)
+   │ n : 1
+   ▼
+ cb_availability   PRIMARY (location_id, item_id)
+```
 
-Klasse: `Service\Index\Schema` (Schema-Version 3, Option `commonsbooking_index_schema_version`).
+| | `cb_index` | `cb_index_rel` | `cb_availability` |
+|---|---|---|---|
+| Eine Zeile je | Beitrag (Zeitrahmen, Buchung, Einschränkung) | Artikel bzw. Standort eines Beitrags mit Mehrfachauswahl | Artikel/Standort-Paar mit buchbarem Zeitrahmen |
+| Zeilenzahl (Beispiel 17.100 Beiträge, 300 Paare) | ≈ 17.100 | wenige hundert | ≈ 300 |
+| Inhalt | Fakten aus `wp_posts`/`postmeta`, typisiert | Zuordnungen | berechnete Tagesfakten + Slots |
+| Geschrieben von | `Index\Projector` | `Index\Projector` | `Availability\Store` (über `Calculator`, `Invalidator`, `Maintenance`) |
+| Gelesen von | `Repository\Index`, `Projector::load()` (alte Zeile für den Änderungs-Hook), `SlotReader`, `Maintenance`, `Guard`, `Verifier`, `Diagnostics` | `Repository\Index`, `Projector::load()` | `Availability\Reader`, `SlotReader`, `Maintenance` |
+| Schema-Klasse, Version | `Index\Schema`, 3 | `Index\Schema`, 3 | `Availability\Schema`, 2 |
+| Strukturänderung | `dbDelta` erweitert, Zeilen bleiben gültig | wie `cb_index` | Tabelle wird verworfen und neu angelegt (reiner Cache) |
+| Inhaltliche Änderung der Ableitung | `Projector::PROJECTOR_VERSION` erhöhen → Neuaufbau | wie `cb_index` | `Calculator::VERSION` erhöhen → alte Zeilen ungültig |
 
-Enthält eine Zeile für jeden Beitrag vom Typ `cb_timeframe`, `cb_booking` und `cb_restriction` (Status `auto-draft`
-ausgenommen). Die Werte stammen aus `wp_posts` und `wp_postmeta` und werden von `Service\Index\Projector` geschrieben.
+Datentypen folgen zwei Regeln: Was gesucht oder verglichen wird, ist eine Zahl (Typ, IDs, Zeitstempel); Text gibt es nur
+für Status, Wiederholungsart und Einschränkungsart. Und `NULL` hat in jeder Spalte eine feste Bedeutung (siehe Tabellen),
+damit die SQL-Bedingungen die Semantik des alten `postmeta`-SQL exakt nachbilden.
 
-#### Spalten
+### 2.2 `{prefix}cb_index`: eine Zeile pro Beitrag
 
-| Spalte | Typ | Bedeutung / Herkunft |
+Klasse: `Service\Index\Schema` (Option `commonsbooking_index_schema_version`), geschrieben von
+`Service\Index\Projector::buildRow()`.
+
+**Inhalt.** Eine Zeile für jeden Beitrag vom Typ `cb_timeframe`, `cb_booking` und `cb_restriction`, in **jedem**
+Status außer `auto-draft`, also auch `draft`, `trash` und `canceled`. Die Status werden erst beim Lesen gefiltert, damit
+eine Statusänderung nur eine Spalte ändert und der Wächter gelöschte oder stornierte Beiträge erkennt.
+
+**Was die Zeile nicht ist:** keine Interpretation. Der Projector berechnet keine Tage, keine Verfügbarkeit und keine
+Buchbarkeit. Er übersetzt Metawerte in Spalten und normalisiert nur dort, wo der Originalcode es beim Lesen ebenfalls
+tut (z. B. `strtotime()` für Altwerte). Was der Index nicht weiß, entscheidet weiterhin der PHP-Code nach dem Laden der
+Beiträge (Wochentage, `isBookable()`, Rollen).
+
+#### Spalten nach Gruppen
+
+**Identität und Status** (aus `wp_posts`)
+
+| Spalte | Typ | NULL / Standard | Herkunft und Bedeutung |
+|---|---|---|---|
+| `post_id` | bigint unsigned, **PK** | – | `wp_posts.ID` |
+| `post_type` | varchar(20) | – | `cb_timeframe`, `cb_booking` oder `cb_restriction` |
+| `post_status` | varchar(20) | – | `publish`, `draft`, `pending`, `private`, `trash`; bei Buchungen `confirmed`, `unconfirmed`, `canceled` |
+| `post_author` | bigint unsigned | 0 | bei Buchungen der Nutzer, **für den** gebucht wurde. Grundlage für Buchungsregeln und „Meine Buchungen“ (Schlüssel `author_type`) |
+
+**Fachlicher Typ und Zuordnung** (aus den Metas `type`, `item-id`, `location-id`, `item-id-list`, `location-id-list`,
+bei Einschränkungen `restriction-item-id`, `restriction-location-id`)
+
+| Spalte | Typ | NULL / Standard | Herkunft und Bedeutung |
+|---|---|---|---|
+| `type` | tinyint unsigned | 0 | Meta `type`: 1 Öffnungszeiten, 2 buchbar, 3 Feiertag/geschlossen, 4 Off-Holidays, 5 Reparatur, 6 Buchung, 7 stornierte Buchung. **0 bei Einschränkungen** (die haben kein `type`-Meta) |
+| `item_id` | bigint unsigned | **NULL** bei Mehrfachauswahl oder ohne Artikel | Zeitrahmen/Buchung: der einzige Artikel. Einschränkung: `restriction-item-id`, **0 = alle Artikel** |
+| `location_id` | bigint unsigned | wie `item_id` | wie `item_id`, für den Standort |
+| `is_multi` | tinyint(1) | 0 | 1, wenn nach Vereinigung von `*-id` und `*-id-list` mehr als ein Artikel **oder** mehr als ein Standort übrig bleibt. Dann sind `item_id` und `location_id` NULL und die Zuordnung steht in `cb_index_rel` |
+
+**Zeitraum** (Metas `repetition-start`, `repetition-end` bzw. `restriction-start`, `restriction-end`)
+
+| Spalte | Typ | NULL bedeutet | Regeln |
+|---|---|---|---|
+| `start_ts` | bigint (signed) | **kein Start gespeichert** | numerische Werte unverändert, Text per `strtotime()`. `0` ist ein gültiger Start. Abfragen mit `start_min`/`start_max` schließen NULL aus, wie das alte SQL, das den Meta-Schlüssel voraussetzte |
+| `end_ts` | bigint (signed) | **offenes Ende** | `''`, `0`, `'0'` und fehlendes Meta ergeben NULL (wie `Model\Timeframe::getTimeframeEndDate()`). Abfragen schreiben `(end_ts IS NULL OR end_ts >= :von)` |
+
+Die Zeitstempel sind „lokale Zeit als Unix-Zeitstempel“, so wie CommonsBooking sie speichert: 10.11.2026 00:00 Uhr
+Ortszeit wird als `1794268800` abgelegt, also als wäre es 00:00 UTC. Der Index rechnet keine Zeitzonen um, damit alle
+bestehenden Vergleiche gleich bleiben.
+
+**Wiederholung und Raster** (nur Zeitrahmen und Buchungen; für Einschränkungen leer)
+
+Diese Spalten werden nicht für die Suche gebraucht und derzeit von keinem Leseweg ausgewertet. Die Tagesberechnung
+lädt nach der Suche weiterhin die `WP_Post`-Objekte samt `postmeta` (gebündelt über `Index::loadPosts()`) und nutzt die
+bestehenden Modelle. Die Spalten werden trotzdem gepflegt und vom Verifier geprüft: Sie machen die Zeile *verdeckend*
+(covering) und sind die Grundlage, später Wochentags- oder Rasterfilter direkt in SQL auszuführen, ohne das Schema
+erneut zu ändern.
+
+| Spalte | Typ | Herkunft | Bedeutung, Beispiel |
+|---|---|---|---|
+| `repetition` | varchar(8), NULL | `timeframe-repetition` | `norep` (einmalig), `d` (täglich), `w` (wöchentlich), `m`, `y`, `manual`. NULL = nicht gesetzt |
+| `weekdays` | tinyint unsigned | `weekdays` (Array `'1'`…`'7'`, Montag = 1) | Bitmaske, Montag = Bit 0 … Sonntag = Bit 6. Mo–Fr = `0b0011111` = 31, Sa+So = 96, alle = 127 |
+| `manual_dates` | text, NULL | `timeframe_manual_date` (kommagetrennt) | JSON-Array, nur bei `repetition = manual`, z. B. `["2026-12-01","2026-12-08"]` |
+| `grid` | tinyint unsigned | `grid` | 0 = Slot (ein Zeitfenster Start–Ende), 1 = stündlich |
+| `full_day` | tinyint(1) | `full-day` | 1, wenn Meta = `on` |
+| `start_time`, `end_time` | time, NULL | `start-time`, `end-time` (`8:00 AM`, `18:00` …) | normalisiert auf `H:i:s` |
+| `grid_size` | tinyint unsigned, NULL | abgeleitet | wie `Model\Timeframe::getGridSize()`: ganztägig 24; Slot = Stunden zwischen Start- und Endzeit (gerundet, höchstens 255); sonst Wert von `grid`. NULL, wenn bei Slot eine Zeit fehlt |
+
+**Buchungsregeln** (nur Zeitrahmen)
+
+| Spalte | Typ | Herkunft | Bedeutung |
+|---|---|---|---|
+| `max_days` | smallint unsigned, NULL | `timeframe-max-days` | maximale Buchungsdauer in Tagen |
+| `advance_days` | smallint unsigned, NULL | `timeframe-advance-booking-days` | Vorausbuchungsfenster |
+| `startday_offset` | smallint unsigned, NULL | `booking-startday-offset` | frühester Buchungstag ab heute |
+| `has_role_limit` | tinyint(1) | `allowed_user_roles` | 1, wenn der Zeitrahmen nur für bestimmte Rollen buchbar ist. Solche Paare werden immer live berechnet |
+
+Numerische Werte werden auf 0…65535 begrenzt, nicht numerische ergeben NULL („nicht gesetzt“). Die Auswertung bleibt im
+PHP-Code: z. B. gelten 0 Vorausbuchungstage dort als „nicht gesetzt“.
+
+**Einschränkungen** (nur `cb_restriction`)
+
+| Spalte | Typ | Herkunft | Bedeutung |
+|---|---|---|---|
+| `restriction_type` | varchar(10), NULL | `restriction-type` | `repair` (sperrt den Artikel), `hint` (nur Hinweis) |
+| `restriction_state` | varchar(10), NULL | `restriction-state` | `none`, `active`, `solved`. `Repository\Restriction::get()` liest nur `active` |
+
+**Verwaltung** (nicht Teil des Vergleichs, ob sich eine Projektion geändert hat)
+
+| Spalte | Typ | Bedeutung |
 |---|---|---|
-| `post_id` | bigint unsigned, **PK** | `wp_posts.ID` |
-| `post_type` | varchar(20) | `cb_timeframe`, `cb_booking`, `cb_restriction` |
-| `post_status` | varchar(20) | `publish`, `draft`, `confirmed`, `unconfirmed`, `canceled`, `trash` … |
-| `post_author` | bigint unsigned | bei Buchungen der Nutzer, **für den** gebucht wurde (Buchungsregeln, „Meine Buchungen“) |
-| `type` | tinyint | Meta `type`: 1 Öffnungszeiten, 2 buchbar, 3 Feiertag, 4 (Off-Holidays), 5 Reparatur, 6 Buchung, 7 stornierte Buchung. 0 bei Einschränkungen |
-| `item_id` | bigint unsigned, NULL | Zeitrahmen/Buchung: der einzige Artikel. **NULL** bei Mehrfachauswahl (`is_multi = 1`). Einschränkung: Meta `restriction-item-id`, **0 = alle Artikel** |
-| `location_id` | bigint unsigned, NULL | wie `item_id`, für den Standort |
-| `is_multi` | tinyint(1) | 1 = mehr als ein Artikel oder Standort, Zuordnung in `cb_index_rel` |
-| `start_ts` | bigint, NULL | Meta `repetition-start` bzw. `restriction-start`. NULL = kein Start gespeichert |
-| `end_ts` | bigint, NULL | Meta `repetition-end` bzw. `restriction-end`. **NULL = offenes Ende** (auch bei `''`/`0`) |
-| `repetition` | varchar(8), NULL | `norep`, `w`, `m`, `y`, `manual` |
-| `weekdays` | tinyint unsigned | Bitmaske der Wochentage, Montag = Bit 0 … Sonntag = Bit 6 |
-| `manual_dates` | text, NULL | JSON-Array `Y-m-d`, nur bei `repetition = manual` |
-| `grid` | tinyint | 0 = Slot, 1 = stündlich |
-| `grid_size` | tinyint, NULL | abgeleitete Rastergröße in Stunden wie `Model\Timeframe::getGridSize()` (ganztägig 24, Slot = Dauer Start bis Ende) |
-| `full_day` | tinyint(1) | Meta `full-day` = `on` |
-| `start_time`, `end_time` | time, NULL | Metas `start-time`, `end-time` |
-| `max_days` | smallint, NULL | `timeframe-max-days` |
-| `advance_days` | smallint, NULL | `timeframe-advance-booking-days` |
-| `startday_offset` | smallint, NULL | `booking-startday-offset` |
-| `has_role_limit` | tinyint(1) | 1, wenn `allowed_user_roles` nicht leer ist |
-| `restriction_type` | varchar(10), NULL | `repair`, `hint` (nur Einschränkungen) |
-| `restriction_state` | varchar(10), NULL | `none`, `active`, `solved` (nur Einschränkungen) |
-| `source_modified_gmt` | datetime, NULL | `post_modified_gmt` zum Zeitpunkt der Projektion (Wächter vergleicht damit) |
-| `projector_version` | smallint | `Projector::PROJECTOR_VERSION` (derzeit 2) |
+| `source_modified_gmt` | datetime, NULL | `post_modified_gmt` zum Zeitpunkt der Projektion. Der Wächter vergleicht stündlich mit `wp_posts` und erkennt so Änderungen, die eine Version ohne Booster gemacht hat |
+| `projector_version` | smallint unsigned | `Projector::PROJECTOR_VERSION` (derzeit 2), mit der die Zeile gebaut wurde |
 
-Wichtige Details:
+#### Zuordnung Artikel/Standort im Detail
 
-- **Zeitstempel werden unverändert übernommen.** CommonsBooking speichert „lokale Zeit als Unix-Zeitstempel“. Der Index
-  rechnet keine Zeitzonen um, damit alle bestehenden Vergleiche identisch bleiben. Nicht numerische Altwerte werden wie
-  in `Model\Timeframe::getStartDate()` per `strtotime()` normalisiert.
-- **Zuordnung Artikel/Standort:** Die Projektion bildet die **Vereinigung** aus `item-id` und `item-id-list` (ebenso
-  `location-id`/`location-id-list`). Das entspricht dem bisherigen SQL in `Repository\Timeframe::getEntityQuery()`.
-- **Die Spalten ab `repetition`** werden nicht für die Suche benötigt. Sie machen die Zeile „verdeckend“: Für die
-  Berechnung der Verfügbarkeit muss kein `postmeta` nachgeladen werden.
+Der Projector bildet die **Vereinigung** aller Werte von `item-id` (auch mehrfach vorhandene Meta-Zeilen) und der Liste
+`item-id-list`, entfernt Werte ≤ 0 und Duplikate und sortiert. Ebenso für Standorte. Das entspricht dem bisherigen SQL
+in `Repository\Timeframe::getEntityQuery()`, das beide Metas per `OR` verknüpfte.
+
+| Ergebnis | `item_id` | `location_id` | `is_multi` | `cb_index_rel` |
+|---|---|---|---|---|
+| ein Artikel, ein Standort (Buchungen, buchbare Zeitrahmen, über 99 %) | ID | ID | 0 | – |
+| kein Artikel oder kein Standort (unvollständiger Entwurf) | NULL | NULL / ID | 0 | – |
+| mehr als ein Artikel **oder** Standort (Feiertage, Reparaturen mit Mehrfach-, Kategorie- oder „Alle“-Auswahl) | NULL | NULL | 1 | je Artikel und Standort eine Zeile |
+| Einschränkung | ID oder **0 = alle** | ID oder **0 = alle** | 0 | – |
+
+#### Beispielzeilen (gekürzt)
+
+| post_id | post_type | post_status | type | item_id | location_id | is_multi | start_ts | end_ts | weitere |
+|---|---|---|---|---|---|---|---|---|---|
+| 501 | cb_timeframe | publish | 2 | 812 | 455 | 0 | 1767225600 (01.01.2026) | NULL (offen) | `repetition = w`, `weekdays = 31`, `full_day = 1`, `grid_size = 24`, `advance_days = 60` |
+| 9301 | cb_booking | confirmed | 6 | 812 | 455 | 0 | 1794268800 (10.11.2026 00:00) | 1794355199 (10.11.2026 23:59:59) | `post_author = 17` |
+| 9302 | cb_booking | canceled | 6 | 812 | 455 | 0 | 1794441600 | 1794700799 | bleibt im Index, wird über `post_status` herausgefiltert |
+| 620 | cb_timeframe | publish | 3 | NULL | NULL | 1 | 1798070400 (24.12.) | 1798329599 (26.12.) | Feiertag für 3 Standorte, siehe `cb_index_rel` |
+| 7004 | cb_restriction | publish | 0 | 812 | 0 | 0 | 1794268800 | NULL | `restriction_type = repair`, `restriction_state = active` (alle Standorte des Artikels) |
 
 #### Schlüssel und wofür sie gebraucht werden
 
 | Schlüssel | Spalten | Genutzt von |
 |---|---|---|
-| `PRIMARY` | `post_id` | Projektion (`REPLACE`), Wächter |
-| `item_loc_range` | `item_id, location_id, type, end_ts, start_ts` | Paar-Abfragen (Kalender, Karte, Konfliktprüfung). `end_ts` im Schlüssel macht die Abfrage unabhängig von der Historie |
+| `PRIMARY` | `post_id` | Projektion (`REPLACE`), Wächter, Verifier |
+| `item_loc_range` | `item_id, location_id, type, end_ts, start_ts` | Paar-Abfragen (Kalender, Karte, Konfliktprüfung im Indexpfad, `SlotReader::getPairs()`). Durch `end_ts` an vierter Stelle springt MySQL direkt zu den Beiträgen, die nach dem Anfang des gesuchten Zeitraums enden: Die Laufzeit hängt von der Zahl der aktuellen, nicht aller historischen Buchungen ab |
 | `loc_range` | `location_id, type, end_ts` | Abfragen nur nach Standort |
-| `type_range` | `type, end_ts, start_ts` | Abfragen ohne Artikel/Standort (z. B. Erinnerungs-Mails: beginnende/endende Buchungen) |
-| `author_type` | `post_author, type, start_ts` | Buchungen eines Nutzers (Buchungsregeln) |
-| `multi_type` | `is_multi, type` | Teilabfrage für Mehrfachzuordnungen |
-| `ptype_item`, `ptype_location` | `post_type, item_id` / `post_type, location_id` | Zuordnung Artikel ↔ Standort (`getRelatedPosts`), Einschränkungen |
+| `type_range` | `type, end_ts, start_ts` | Abfragen ohne Artikel/Standort (z. B. Erinnerungs-Mails: beginnende/endende Buchungen eines Tages) |
+| `author_type` | `post_author, type, start_ts` | Buchungen eines Nutzers (Buchungsregeln, „Meine Buchungen“) |
+| `multi_type` | `is_multi, type` | zweiter Teil der `UNION ALL` für Mehrfachzuordnungen |
+| `ptype_item`, `ptype_location` | `post_type, item_id` / `post_type, location_id` | Zuordnung Artikel ↔ Standort (`getRelatedPosts`), Einschränkungen, Paarliste |
 | `ptype_end` | `post_type, end_ts` | Einschränkungen nach Zeitraum |
 
-### 2.2 `{prefix}cb_index_rel`: Mehrfachzuordnungen
+### 2.3 `{prefix}cb_index_rel`: Mehrfachzuordnungen
 
 | Spalte | Typ | Bedeutung |
 |---|---|---|
@@ -148,47 +564,84 @@ Wichtige Details:
 | `entity_type` | varchar(8) | `item` oder `location` |
 | `entity_id` | bigint unsigned | ID des Artikels bzw. Standorts |
 
-Schlüssel: `PRIMARY (entity_type, entity_id, post_id)`, `KEY post_id`.
+Schlüssel: `PRIMARY (entity_type, entity_id, post_id)` für die Suche „alle Beiträge zu Artikel X“, `KEY post_id` für das
+Ersetzen und Löschen der Zuordnungen eines Beitrags. Beim Schreiben werden alle Zeilen des Beitrags gelöscht und neu
+eingefügt (`INSERT IGNORE`).
 
-Mehrfach-, Kategorie- und „Alle“-Auswahl gibt es nur bei Feiertagen (Typ 3) und Reparaturen (Typ 5). Ein Kreuzprodukt
-Artikel × Standort in der Haupttabelle wäre bei „alle Artikel × alle Standorte“ (500 × 300) pro Feiertag 150.000 Zeilen.
-Die Relationstabelle braucht dafür 800 Zeilen. Buchungen und buchbare Zeitrahmen (über 99 % der Zeilen) haben genau
-einen Artikel und einen Standort und kommen ohne Join aus.
+Beispiel Feiertag 620 (alle Artikel 812, 813 an drei Standorten):
 
-Abfragen kombinieren beide Fälle mit `UNION ALL` (nicht `OR`), damit beide Teile einen Schlüssel nutzen:
+| post_id | entity_type | entity_id |
+|---|---|---|
+| 620 | item | 812 |
+| 620 | item | 813 |
+| 620 | location | 455 |
+| 620 | location | 456 |
+| 620 | location | 457 |
+
+Warum eine eigene Tabelle statt einer Zeile pro Paar: Ein Feiertag „alle Artikel × alle Standorte“ (500 × 300) bräuchte
+150.000 Zeilen in der Haupttabelle, die Relationstabelle braucht 800. Buchungen und buchbare Zeitrahmen kommen ohne Join
+aus. Abfragen kombinieren beide Fälle mit `UNION ALL` (nicht `OR`), damit jeder Teil seinen Schlüssel nutzt:
 
 ```sql
-SELECT post_id FROM cb_index
- WHERE item_id IN (:items) AND location_id IN (:locs) AND type IN (:types) AND post_status IN (:status)
-   AND (end_ts IS NULL OR end_ts >= :from) AND start_ts <= :to
+SELECT i.post_id FROM cb_index i
+ WHERE i.is_multi = 0 AND i.item_id IN (:items) AND i.location_id IN (:locs)
+   AND i.type IN (:types) AND i.post_status IN (:status)
+   AND (i.end_ts IS NULL OR i.end_ts >= :from) AND i.start_ts <= :to
 UNION ALL
-SELECT x.post_id FROM cb_index_rel ri
+SELECT i.post_id FROM cb_index_rel ri
   JOIN cb_index_rel rl ON rl.post_id = ri.post_id AND rl.entity_type = 'location' AND rl.entity_id IN (:locs)
-  JOIN cb_index x      ON x.post_id  = ri.post_id
- WHERE ri.entity_type = 'item' AND ri.entity_id IN (:items) AND x.type IN (:types) …
+  JOIN cb_index i      ON i.post_id  = ri.post_id
+ WHERE ri.entity_type = 'item' AND ri.entity_id IN (:items)
+   AND i.is_multi = 1 AND i.type IN (:types) …
 ```
 
-### 2.3 `{prefix}cb_availability`: vorberechneter Tageszustand pro Paar
+### 2.4 `{prefix}cb_availability`: vorberechneter Tageszustand pro Paar
 
-Klasse: `Service\Availability\Schema` (Schema-Version 2, Option `commonsbooking_availability_schema_version`).
-Die Tabelle ist ein reiner Cache. Bei einer Strukturänderung wird sie verworfen und neu angelegt.
+Klasse: `Service\Availability\Schema` (Option `commonsbooking_availability_schema_version`), geschrieben ausschließlich
+über `Service\Availability\Store`.
 
-Eine Zeile pro Artikel/Standort-Paar, das einen buchbaren Zeitrahmen (Typ 2) hat. Die Tage stehen gepackt in einer
-Binärspalte, Lesen und Schreiben eines Paares ist damit je eine Anweisung.
+**Inhalt.** Eine Zeile je Artikel/Standort-Paar, das einen veröffentlichten buchbaren Zeitrahmen (Typ 2) hat, der nicht
+vor dem Horizont endet (`Maintenance::getBookablePairs()`, Quelle ist `cb_index`). Die Zeile beschreibt die Tage
+**gestern bis heute + 92**, also 94 Tage (`Availability::getHorizon()`, Filter
+`commonsbooking_availability_horizon_days`), mit einem Tag Puffer nach hinten.
 
-| Spalte | Typ | Bedeutung |
-|---|---|---|
-| `item_id`, `location_id` | bigint unsigned, **PK** `(location_id, item_id)` | das Paar |
-| `gen` | int unsigned | Generation. Wird bei **jeder** Änderung, die das Paar betrifft, synchron um 1 erhöht |
-| `computed_gen` | int unsigned | Generation, aus der `days` berechnet wurde |
-| `days_from` | date, NULL | erster Tag in `days` (heute − 1 zum Berechnungszeitpunkt) |
-| `days` | varbinary(1024), NULL | 2 Byte pro Tag (unsigned short, little endian), bis 512 Tage. Geschrieben per `UNHEX()`, weil `wpdb` sonst Bytes entfernen kann, die es für ungültigen Text hält |
-| `has_role_limit` | tinyint(1) | Paar hat Zeitrahmen mit Rollenbeschränkung, wird immer live berechnet |
-| `computed_at` | datetime (UTC) | Zeitpunkt der Berechnung |
-| `calc_version` | smallint | `Calculator::VERSION` (derzeit 2) |
-| `slots` | mediumblob, NULL | freie buchbare Slots je Tag für API und GBFS (Format siehe 6.6). NULL bei Rollenbeschränkung. Wird nur von `SlotReader` und dem Verifier gelesen, `Store::preload()` lädt die Spalte nicht |
+Die Tabelle ist ein reiner Cache: Jede Zeile kann jederzeit gelöscht werden, sie entsteht beim nächsten Lesen neu.
 
-Schlüssel: `PRIMARY (location_id, item_id)`, `KEY item_id`, `KEY computed_at` (Cron sucht alte Zeilen).
+#### Spalten
+
+| Spalte | Typ | Standard | Bedeutung |
+|---|---|---|---|
+| `item_id`, `location_id` | bigint unsigned, **PK** `(location_id, item_id)` | – | das Paar. Standort zuerst, weil Karte und Tabelle standortweise laden |
+| `gen` | int unsigned | **1** | Generation. Wird bei **jeder** Änderung eines Beitrags, der das Paar betrifft, synchron um 1 erhöht (`Store::invalidate()`) |
+| `computed_gen` | int unsigned | **0** | Generation, aus der `days` und `slots` berechnet wurden. Neue Zeilen sind dadurch zunächst ungültig |
+| `days_from` | date, NULL | – | Datum des ersten Eintrags in `days` (am Berechnungstag: gestern) |
+| `days` | varbinary(1024), NULL | – | Tagesfakten, **2 Byte je Tag** ab `days_from` (unsigned short, little endian). 94 Tage = 188 Byte, Platz für 512 Tage. NULL bei Rollenbeschränkung |
+| `slots` | mediumblob, NULL | – | freie buchbare Slots je Tag für API und GBFS (`Slots::pack()`, siehe unten). NULL bei Rollenbeschränkung |
+| `has_role_limit` | tinyint(1) | 0 | 1 = mindestens ein buchbarer Zeitrahmen des Paares ist auf Rollen beschränkt. Dann werden keine Tage gespeichert, weil das Ergebnis vom Nutzer abhängt |
+| `computed_at` | datetime (UTC), NULL | – | Zeitpunkt der Berechnung (`gmdate()`) |
+| `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (derzeit 2) |
+
+Schlüssel: `PRIMARY (location_id, item_id)`, `KEY item_id` (Invalidierung nur nach Artikel, z. B. Einschränkung für alle
+Standorte), `KEY computed_at` (Cron sucht die ältesten Zeilen).
+
+`days` und `slots` werden als `UNHEX('…')` geschrieben, damit die SQL-Anweisung reiner ASCII-Text bleibt: `wpdb`
+entfernt sonst Bytes, die es für ungültigen Text hält. `Store::preload()` lädt `slots` nicht mit, weil Karte und Tabelle
+sie nicht brauchen; nur `Store::loadWithSlots()` (für `SlotReader`) liest die Spalte.
+
+#### Lebenszyklus einer Zeile
+
+| Zustand | `gen` / `computed_gen` | `days` | Wie erreicht | Beim Lesen |
+|---|---|---|---|---|
+| **angelegt** | 1 / 0 | NULL | `Maintenance::syncPairs()` (stündlich) oder `Store::getGen()` vor der ersten Berechnung, jeweils `INSERT IGNORE` | ungültig → berechnen |
+| **gültig** | n / n | gesetzt | `Store::write()` nach `Calculator::compute()` | Tagesfakten aus `days` |
+| **invalidiert** | n+1 / n | alt | `Store::invalidate()` bei einer Änderung | ungültig → berechnen |
+| **gealtert** | n / n | gesetzt, `computed_at` > 24 h | Zeit vergeht (Cron rechnet ab 12 h nach) | ungültig → berechnen |
+| **veraltete Rechenversion** | n / n | gesetzt, `calc_version` alt | Plugin-Update mit neuer `Calculator::VERSION` | ungültig → berechnen |
+| **rollenbeschränkt** | n / n | NULL, `has_role_limit = 1` | Berechnung stellt Rollenbeschränkung fest | sofort live, ohne Neuberechnung |
+| **entfernt** | – | – | `syncPairs()`: Paar hat keinen buchbaren Zeitrahmen mehr | live (meist nichts anzuzeigen) |
+
+`Store::invalidate()` erhöht nur vorhandene Zeilen. Bekommt ein Paar erstmals einen buchbaren Zeitrahmen, gibt es noch
+keine Zeile: Der erste Leser legt sie über `Calculator::recompute()` an, spätestens der stündliche `syncPairs()`.
 
 #### Gültigkeit einer Zeile (`Store::isUsable()`)
 
@@ -198,32 +651,107 @@ Eine Zeile wird nur verwendet, wenn **alle** Bedingungen gelten:
 2. `has_role_limit = 0`,
 3. `computed_gen = gen` (keine Änderung seit der Berechnung),
 4. `calc_version = Calculator::VERSION`,
-5. `computed_at` ist jünger als 24 Stunden (Filter `commonsbooking_availability_max_age`),
-6. die angefragten Tage liegen innerhalb von `days` (sonst wird live gerechnet).
+5. `computed_at` ist höchstens 24 Stunden alt (Filter `commonsbooking_availability_max_age`).
 
-Damit hängt die Korrektheit **nicht** vom Zeitpunkt der Neuberechnung ab: Eine veraltete Zeile wird nie ausgeliefert.
+Zusätzlich prüft `Store::getFlags()` je Tag, ob das Datum in `days` liegt. Liegt ein angefragter Tag davor oder dahinter,
+rechnet der `Reader` das ganze Paar live.
 
-#### Tagesfakten (Bitmaske pro Tag, `Service\Availability\DayFacts`)
+Damit hängt die Korrektheit **nicht** davon ab, wann neu berechnet wird: Eine veraltete Zeile wird nie ausgeliefert.
 
-| Bit | Wert | Konstante | Bedeutung (Herkunft im alten `processSlot()`/`mapDay()`) |
+#### Gleichzeitige Änderungen ohne Sperren
+
+`Calculator::recompute()` liest vor dem Rechnen die Generation `G` und schreibt nur, wenn sie noch gilt:
+
+```sql
+UPDATE cb_availability
+   SET computed_gen = gen, days_from = ?, days = UNHEX('…'), slots = UNHEX('…'),
+       has_role_limit = ?, computed_at = ?, calc_version = ?
+ WHERE location_id = ? AND item_id = ? AND gen = G
+```
+
+| Zeit | Anfrage A (rechnet) | Anfrage B (bucht) | Zeile |
 |---|---|---|---|
-| 0 | 1 | `HAS_SLOTS` | Der Tag hat Slots (`! $noSlots`) |
-| 1 | 2 | `SLOT_LOCKED` | mindestens ein Slot gesperrt (Feiertag, Reparatur, Buchung) |
-| 2 | 4 | `ALL_LOCKED` | alle Slots gesperrt (`$allLocked`) |
-| 3 | 8 | `HOLIDAY` | Feiertag |
-| 4 | 16 | `REPAIR` | Reparatur |
-| 5 | 32 | `BOOKED_DAY` | `bookedDay` |
-| 6 | 64 | `PARTIALLY_BOOKED` | `partiallyBookedDay` |
-| 7 | 128 | `FIRST_SLOT_BOOKED` | `firstSlotBooked` |
-| 8 | 256 | `LAST_SLOT_BOOKED` | `lastSlotBooked` |
-| 9 | 512 | `FULL_DAY` | genau ein Slot eines Ganztags-Zeitrahmens |
+| t1 | liest `gen = 42` | | 42 / 41 |
+| t2 | rechnet (ohne die neue Buchung) | speichert Buchung, `gen = gen + 1` | 43 / 41 |
+| t3 | `UPDATE … WHERE gen = 42` trifft **nichts** | | 43 / 41 (ungültig) |
+| t4 | | `shutdown`: liest `gen = 43`, rechnet, schreibt | 43 / 43 (gültig, mit Buchung) |
 
-Gespeichert wird nur, was aus den **Beiträgen** folgt. Was vom **heutigen Datum** abhängt (Vorausbuchungstage,
-Startversatz, vergangene Tage, nächster buchbarer Zeitrahmen), wird bei jedem Lesen neu angewendet
-(`CalendarWindow`). Deshalb ist beim Tageswechsel keine Neuberechnung nötig. Nicht gespeichert werden die Slots mit
-ihren Zeiten, die braucht nur der Buchungskalender der Artikelseite, der weiter live rechnet.
+Ohne die Bedingung `gen = G` hätte A in t3 ein Ergebnis ohne die neue Buchung als gültig markiert.
 
-### 2.4 Neue Optionen und Cron-Ereignisse
+#### Spalte `days`: Tagesfakten (`Service\Availability\DayFacts`)
+
+Für jeden Tag baut der Kalender wie bisher das Slot-Raster (`Day::getGrid()`): pro Zeitabschnitt der Zeitrahmen mit der
+höchsten Priorität (Buchung und Feiertag vor buchbar). `DayFacts::fromGrid()` verdichtet dieses Raster auf zehn Bits,
+genau nach den Regeln des früheren `View\Calendar::processSlot()`:
+
+| Bit | Wert | Konstante | gesetzt, wenn … |
+|---|---|---|---|
+| 0 | 1 | `HAS_SLOTS` | mindestens ein Slot einen Zeitrahmen hat |
+| 1 | 2 | `SLOT_LOCKED` | mindestens ein Slot gesperrt ist (Feiertag, Reparatur, Buchung, Einschränkung) oder für den Nutzer nicht buchbar ist |
+| 2 | 4 | `ALL_LOCKED` | kein Slot wählbar ist (auch ohne Slots) |
+| 3 | 8 | `HOLIDAY` | alle Slots Feiertage (Typ 3 oder 4) sind (auch ohne Slots) |
+| 4 | 16 | `REPAIR` | Altlast des Originals: wird durch jeden Slot zurückgesetzt, weil dort Text mit Zahl strikt verglichen wird. Praktisch nur ohne Slots gesetzt |
+| 5 | 32 | `BOOKED_DAY` | alle Slots Buchungen oder Reparaturen sind (auch ohne Slots) |
+| 6 | 64 | `PARTIALLY_BOOKED` | mindestens ein Slot eine Buchung, ein Feiertag oder eine Reparatur ist |
+| 7 | 128 | `FIRST_SLOT_BOOKED` | der erste Slot nicht buchbar ist |
+| 8 | 256 | `LAST_SLOT_BOOKED` | der letzte Slot nicht buchbar ist |
+| 9 | 512 | `FULL_DAY` | es genau einen Slot gibt und dessen Zeitrahmen ganztägig ist |
+
+Bits 10 bis 15 sind frei. Typische Werte:
+
+| Tag | Bits | Wert | Bytes in `days` |
+|---|---|---|---|
+| kein Zeitrahmen | `ALL_LOCKED`, `HOLIDAY`, `REPAIR`, `BOOKED_DAY` | 60 | `3C 00` |
+| ganztägig buchbar und frei | `HAS_SLOTS`, `FULL_DAY` | 513 | `01 02` |
+| ganztägig gebucht | `HAS_SLOTS`, `SLOT_LOCKED`, `ALL_LOCKED`, `BOOKED_DAY`, `PARTIALLY_BOOKED`, `FIRST_…`, `LAST_SLOT_BOOKED` (kein `FULL_DAY`: Buchungen haben kein Meta `full-day`) | 487 | `E7 01` |
+| Feiertag | `HAS_SLOTS`, `SLOT_LOCKED`, `ALL_LOCKED`, `HOLIDAY`, `PARTIALLY_BOOKED`, `FIRST_…`, `LAST_SLOT_BOOKED` (+ `FULL_DAY`) | 463 (975) | `CF 01` (`CF 03`) |
+
+Der Wert „kein Zeitrahmen“ zeigt, warum die Bits nicht allein gelesen werden dürfen: Ohne Slots sind `HOLIDAY` und
+`BOOKED_DAY` gesetzt. `CalendarWindow::mapDay()` setzt in diesem Fall wie das Original alles auf „gesperrt“ zurück.
+
+Ein Tag wird so gelesen: Versatz = Tage zwischen `days_from` und Datum, dann `unpack('v', $days, Versatz × 2)`.
+
+**Was nicht gespeichert wird** und beim Lesen von `CalendarWindow` angewendet wird:
+
+| Regel | Quelle beim Lesen |
+|---|---|
+| Tag liegt in der Vergangenheit | heutiges Datum |
+| Tag liegt außerhalb des Vorausbuchungsfensters (`advance_days`) | buchbare Zeitrahmen + heutiges Datum |
+| Tag liegt vor dem ersten buchbaren Tag (`startday_offset`) | buchbare Zeitrahmen + heutiges Datum |
+| Tag liegt nach dem Ende des angefragten Bereichs | Parameter der Anfrage |
+| Status für Karte/Tabelle (`no-slots`, `holiday`, `booked`, `partially-booked-start/-end`, `locked`, `available`) | `DayStatus::fromDayArray()` |
+| Slots mit Uhrzeiten für den Buchungskalender der Artikelseite | wird dort weiter live berechnet |
+
+Deshalb muss beim Tageswechsel nichts neu berechnet werden. Eine Ausnahme beschreibt 12.2 (`isBookable()`).
+
+#### Spalte `slots`: freie Slots für API und GBFS (`Service\Availability\Slots`)
+
+Aus demselben Raster sammelt `Slots::bookableSlots()` die Slots, deren höchstpriorer Zeitrahmen buchbar ist (Typ 2),
+also weder gebucht noch gesperrt. Das ist genau die Bedingung, die die Live-Methode schon immer verwendet hat.
+`Slots::pack()` speichert sie little endian:
+
+```
+Kopf     uint16  T = Anzahl der vorkommenden Zeitrahmen
+         T ×     uint32 Zeitrahmen-ID, uint32 Standort-ID, uint32 Artikel-ID   (0 = keiner)
+je Tag   uint8   S = Anzahl Slots (höchstens 255)
+         S ×     uint32 Start, uint32 Ende (Sekunden ab Tagesbeginn), uint16 Index in der Kopfliste
+```
+
+Die Tage stehen lückenlos ab `days_from`, ohne eigenes Datum. Beispiel ganztägig buchbarer Zeitrahmen 501, ein Tag frei,
+ein Tag gebucht:
+
+```
+01 00                          T = 1
+F5 01 00 00  C7 01 00 00  2C 03 00 00     Zeitrahmen 501, Standort 455, Artikel 812
+01  00 00 00 00  7F 51 01 00  00 00         Tag 1: 1 Slot, 0 … 86399 s, Zeitrahmen-Index 0
+00                                          Tag 2: 0 Slots (gebucht)
+```
+
+Größe: 14 Byte Kopf plus je Tag 1 Byte plus 10 Byte je Slot. Ganztägig über 94 Tage ≈ 1 KB, stündliches Raster mit
+10 Slots ≈ 9,5 KB. `SlotReader` entpackt, wendet `getFirstBookableDay()` (datumsabhängig) an und formt die Slots mit
+`Slots::toApiSlot()` in das API-Format um.
+
+### 2.5 Neue Optionen und Cron-Ereignisse
 
 | Option | autoload | Inhalt |
 |---|---|---|
