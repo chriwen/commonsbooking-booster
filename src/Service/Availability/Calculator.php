@@ -13,15 +13,16 @@ use CommonsBooking\Repository\Index;
 class Calculator {
 
 	/**
-	 * Version of the calculation. Increase when {@see DayFacts::fromGrid()} or the grid calculation changes,
-	 * all stored rows are recomputed then.
+	 * Version of the calculation. Increase when {@see DayFacts::fromGrid()}, {@see Slots} or the grid calculation
+	 * changes, all stored rows are recomputed then.
+	 * 2: packed availability slots for API and GBFS (column slots)
 	 */
-	public const VERSION = 1;
+	public const VERSION = 2;
 
 	/**
 	 * Result of the last computations in this request, by "locationId:itemId".
 	 *
-	 * @var array<string, array{from: string, flags: int[], roleLimited: bool}>
+	 * @var array<string, array{from: string, flags: int[], slots: ?string, roleLimited: bool}>
 	 */
 	private static array $computed = [];
 
@@ -39,13 +40,13 @@ class Calculator {
 	 * @param int $itemId
 	 * @param int $locationId
 	 *
-	 * @return array{from: string, flags: int[], roleLimited: bool}
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}
 	 * @throws \Exception
 	 */
 	public static function recompute( int $itemId, int $locationId ): array {
 		$gen    = Store::getGen( $itemId, $locationId );
 		$result = self::compute( $itemId, $locationId );
-		Store::write( $itemId, $locationId, $gen, $result['from'], $result['flags'], $result['roleLimited'] );
+		Store::write( $itemId, $locationId, $gen, $result['from'], $result['flags'], $result['roleLimited'], $result['slots'] );
 
 		self::$computed[ $locationId . ':' . $itemId ] = $result;
 
@@ -53,12 +54,13 @@ class Calculator {
 	}
 
 	/**
-	 * Computes the facts of all days of the horizon from the current database state (bypassing the cache).
+	 * Computes the facts and the bookable slots of all days of the horizon from the current database state
+	 * (bypassing the cache). Both come from the same day grid.
 	 *
 	 * @param int $itemId
 	 * @param int $locationId
 	 *
-	 * @return array{from: string, flags: int[], roleLimited: bool}
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool} slots packed with {@see Slots::pack()}
 	 * @throws \Exception
 	 */
 	public static function compute( int $itemId, int $locationId ): array {
@@ -69,38 +71,47 @@ class Calculator {
 			return [
 				'from'        => $from,
 				'flags'       => [],
+				'slots'       => null,
 				'roleLimited' => true,
 			];
 		}
 
-		$flags = Plugin::withoutCache(
+		[ $flags, $slots ] = Plugin::withoutCache(
 			function () use ( $itemId, $locationId, $from, $to ) {
 				$flags    = [];
+				$slots    = [];
 				$calendar = new Calendar( new Day( $from ), new Day( $to ), [ $locationId ], [ $itemId ] );
 				foreach ( $calendar->getWeeks() as $week ) {
 					/** @var Day $day */
 					foreach ( $week->getDays() as $day ) {
 						$date = $day->getDate();
 						if ( $date >= $from && $date <= $to ) {
-							$flags[ $date ] = DayFacts::fromGrid( $day->getGrid() )->getFlags();
+							$grid           = $day->getGrid();
+							$flags[ $date ] = DayFacts::fromGrid( $grid )->getFlags();
+							$slots[ $date ] = Slots::bookableSlots( $grid );
 						}
 					}
 				}
-				ksort( $flags );
 
-				return $flags;
+				return [ $flags, $slots ];
 			}
 		);
 
-		// the calendar contains every day of the range, make sure the list starts at $from without gaps
-		$list = [];
+		// the calendar contains every day of the range, make sure the lists start at $from without gaps
+		$list     = [];
+		$slotDays = [];
 		for ( $date = $from; $date <= $to; $date = date( 'Y-m-d', strtotime( $date . ' +1 day' ) ) ) {
-			$list[] = $flags[ $date ] ?? 0;
+			$list[]     = $flags[ $date ] ?? 0;
+			$slotDays[] = [
+				'date'  => $date,
+				'slots' => $slots[ $date ] ?? [],
+			];
 		}
 
 		return [
 			'from'        => $from,
 			'flags'       => $list,
+			'slots'       => Slots::pack( $slotDays ),
 			'roleLimited' => false,
 		];
 	}
@@ -111,7 +122,7 @@ class Calculator {
 	 * @param int $itemId
 	 * @param int $locationId
 	 *
-	 * @return array{from: string, flags: int[], roleLimited: bool}|null
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}|null
 	 */
 	public static function getComputed( int $itemId, int $locationId ): ?array {
 		return self::$computed[ $locationId . ':' . $itemId ] ?? null;

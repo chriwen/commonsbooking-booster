@@ -124,7 +124,7 @@ Umgestellt werden:
 - `MapItemAvailable::create_items_availabilities()`: berechnet nur noch die angezeigten Tage. Der Quick Win
   (60 statt 12 Tage) ist damit enthalten.
 - `View\Calendar::renderTable()` / `renderItemLocationRow()`.
-- Optional später: `getAvailabilitySlots()` für API und GBFS (braucht Slot-Zeiten, eigenes Format, siehe 10).
+- `getAvailabilitySlots()` für API und GBFS (Spalte `slots`, `SlotReader`, siehe 13, Nachtrag).
 
 **Nie** über die Tabelle: die Prüfung beim Buchen (Überschneidungen, Regeln). Sie liest weiter die Beiträge.
 Die Tabelle dient nur der Anzeige.
@@ -216,8 +216,7 @@ produktionsreif.
 
 ## 10. Nicht enthalten / später
 
-- **API und GBFS (`getAvailabilitySlots`):** Brauchen Slot-Zeiten statt Tagesstatus. Möglich wäre eine zweite Spalte
-  mit den Slot-Intervallen pro Tag. Erst angehen, wenn die Tagesfakten stabil laufen.
+- ~~API und GBFS~~: umgesetzt, Spalte `slots` (siehe Nachtrag in 13).
 - **Paare mit Rollenbeschränkung:** zunächst live. Bei Bedarf eine Variante je Rollenkombination speichern.
 - **Buchungskalender auf der Artikelseite:** weiter live (braucht Slots und ist nutzerabhängig).
 - **Bestehende Transient-Caches** (`Plugin::getCacheItem`): unverändert. Für Karte und Tabelle werden sie durch die
@@ -237,7 +236,7 @@ produktionsreif.
 
 1. Horizont: 92 Tage (vom Nutzer bestätigt).
 2. Paare mit Rollenbeschränkung werden live berechnet.
-3. API und GBFS kommen später.
+3. API und GBFS kamen später (Spalte `slots`, Calc-Version 2).
 
 ## 13. Stand der Umsetzung (2026-11-06, nicht committet)
 
@@ -336,10 +335,12 @@ MU-Plugin zum Umschalten zwischen vorberechnet, live und ohne Index (`?cb-mode=`
 
 ### Offene Punkte
 
-- API und GBFS (`getAvailabilitySlots`) auf gespeicherte Slot-Intervalle umstellen.
 - Buchungskalender der Artikelseite rechnet weiter live (ein Paar, braucht Slots).
-- Bestehende Fehler, nicht Teil von Stufe 3: Cache-Schlüssel in `renderTable`, `<span'is-locked'>`,
-  `Booking::getForUser` lädt alle Buchungen.
+- Bestehender Fehler: Cache-Schlüssel in `renderTable`.
+
+Nachtrag (2026-11-06): API und GBFS lesen die gespeicherten Slots (`Schema::SCHEMA_VERSION = 2`, Spalte `slots`,
+`Calculator::VERSION = 2`, `SlotReader`, Test `SlotsTest`); `<span'is-locked'>` und `Booking::getForUser` sind
+behoben. Details in `technische-dokumentation-booster.md` (6.6) und `booster-offene-punkte.md`.
 
 
 ## Nachtrag 06.11.2026: Performance-Booster

@@ -15,7 +15,7 @@ class Schema {
 	/**
 	 * Version of the table structure. Increase on every change of {@see self::getTableDefinition()}.
 	 */
-	public const SCHEMA_VERSION = 1;
+	public const SCHEMA_VERSION = 2;
 
 	public const SCHEMA_VERSION_OPTION = COMMONSBOOKING_PLUGIN_SLUG . '_availability_schema_version';
 
@@ -83,6 +83,8 @@ class Schema {
 	 *   A row is only used if both are equal (see {@see Store::isUsable()}).
 	 * - days holds the {@see DayFacts} flags, 2 bytes (unsigned short, little endian) per day starting at days_from.
 	 * - has_role_limit marks pairs with timeframes limited to user roles, they are always computed live.
+	 * - slots holds the bookable slots of the same days for API and GBFS, packed with {@see Slots::pack()}.
+	 *   Not loaded by {@see Store::preload()} (map and table don't need it), see {@see Store::loadWithSlots()}.
 	 *
 	 * @return string table definition in dbDelta format
 	 */
@@ -98,6 +100,7 @@ class Schema {
   computed_gen int(10) unsigned NOT NULL DEFAULT 0,
   days_from date NULL,
   days varbinary(1024) NULL,
+  slots mediumblob NULL,
   has_role_limit tinyint(1) NOT NULL DEFAULT 0,
   computed_at datetime NULL,
   calc_version smallint(5) unsigned NOT NULL DEFAULT 0,
