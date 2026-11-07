@@ -14,7 +14,6 @@ This version merges the earlier documents into one coherent text and checks them
 | [`availability-precompute.en.md`](availability-precompute.en.md) | design, decisions and measurements of the precomputation (stage 3, phases A–E) |
 | [`role-restricted-availability.en.md`](role-restricted-availability.en.md) | access profiles for role-limited pairs (8.8) |
 | [`booster-aenderungen-bestehender-dateien.en.md`](booster-aenderungen-bestehender-dateien.en.md) | every changed existing file |
-| [`technische-dokumentation-booster.en.md`](technische-dokumentation-booster.en.md) | previous overall documentation (version 1) |
 
 Where the design notes differ from the code, this document describes the code. The design notes remain as a
 historical record (design, phases, intermediate measurements).

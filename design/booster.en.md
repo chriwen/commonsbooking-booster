@@ -4,7 +4,7 @@
 
 As of 6 Nov 2026. Complements [`timeframe-index.en.md`](timeframe-index.en.md) (stage 2) and
 [`availability-precompute.en.md`](availability-precompute.en.md) (stage 3). The authoritative description of the current
-state is [`technische-dokumentation-booster.en.md`](technische-dokumentation-booster.en.md); this note records the
+state is [`technische-dokumentation-booster-02.en.md`](technische-dokumentation-booster-02.en.md); this note records the
 decisions and tests concerning the switch, the guard and downgrades.
 
 ## Goal

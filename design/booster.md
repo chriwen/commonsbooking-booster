@@ -3,7 +3,7 @@
 *English version: [booster.en.md](booster.en.md)*
 
 Stand: 06.11.2026. Ergänzt `timeframe-index.md` (Stufe 2) und `availability-precompute.md` (Stufe 3). Maßgeblich für
-den aktuellen Stand ist `technische-dokumentation-booster.md`; diese Notiz hält die Entscheidungen und Tests zu
+den aktuellen Stand ist [`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md); diese Notiz hält die Entscheidungen und Tests zu
 Schalter, Wächter und Downgrade fest.
 
 ## Ziel

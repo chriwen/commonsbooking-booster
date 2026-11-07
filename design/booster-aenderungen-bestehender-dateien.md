@@ -8,7 +8,7 @@ nach `8ade45b8`, einschließlich der Umstellung von `Item::getClosestBooking()`)
 
 Nur **geänderte** Dateien (37, davon 3 Sprachdateien). Neue Dateien – vor allem `src/Service/Index/`, `src/Service/Availability/`,
 `src/Service/Booster/`, `src/Repository/Index.php`, neue Tests und `design/` – sind hier nicht beschrieben, sondern in
-`technische-dokumentation-booster.md`.
+[`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md) (Teil G: Änderungen am bestehenden Code).
 
 ---
 
@@ -105,7 +105,7 @@ Der Index liefert nur die Buchungen mit dem spätesten Start (meist eine). Die u
 ihnen genau wie vorher unter allen, deshalb bleibt die `vehicle_id` identisch: auf dev für alle 126 Artikel, auf der
 Testumgebung für alle 41 Artikel geprüft. Ergebnis: `vehicle_availability.json` 0,65 s statt HTTP 500. Ohne Booster
 ändert sich nichts (auch nicht die Speicherlast). Test: `ItemTest::testGetClosestBooking_indexMatchesLegacy`.
-Ausführlich: `technische-dokumentation-booster.md`, Abschnitt 5.5.
+Ausführlich: [`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md), Abschnitt 15.6.
 
 ---
 

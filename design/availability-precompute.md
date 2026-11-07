@@ -7,7 +7,7 @@ Stand: 2026-11-06, umgesetzt im Branch `booster/index-availability`. Baut auf de
 
 > Diese Notiz hält den Entwurf und die Umsetzungsschritte fest (historisch). Den aktuellen Stand mit allen späteren
 > Ergänzungen (Spalte `slots` für API und GBFS, Korrekturen in der Artikeltabelle) beschreibt
-> [technische-dokumentation-booster.md](technische-dokumentation-booster.md), Abschnitte 1.4.5, 2.4 und 6.
+> [technische-dokumentation-booster-02.md](technische-dokumentation-booster-02.md), Abschnitte 8, 16 und 17.
 
 ## 1. Ziel und Ausgangslage
 
@@ -347,7 +347,7 @@ API und GBFS lesen die gespeicherten Slots (`Schema::SCHEMA_VERSION = 2`, Spalte
 `SlotReader`, Test `SlotsTest`). Gemessen auf den Entwicklungsdaten (126 Artikel): `/availability` 1.067 ms → 605 ms,
 GBFS `station_status` 194 ms → 138 ms. Ebenfalls behoben: der Cache-Schlüssel in `renderTable` und das Markup
 `<span'is-locked'>`. Einzelheiten, Abweichungen vom Live-Weg und verbleibende offene Punkte:
-`technische-dokumentation-booster.md`, Abschnitte 2.4, 6.1, 6.6 und 12.3.
+[`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md), Abschnitte 8.7, 16.5, 17 und 31.
 
 
 ## Nachtrag 06.11.2026: Performance-Booster

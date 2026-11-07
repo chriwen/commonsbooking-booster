@@ -14,7 +14,6 @@ Diese Fassung fasst die bisherigen Dokumente zu einem zusammenhängenden Text zu
 | [`availability-precompute.md`](availability-precompute.md) | Entwurf, Entscheidungen und Messreihen der Vorberechnung (Stufe 3, Phasen A–E) |
 | [`role-restricted-availability.md`](role-restricted-availability.md) | Zugriffsprofile für rollenbeschränkte Paare (8.8) |
 | [`booster-aenderungen-bestehender-dateien.md`](booster-aenderungen-bestehender-dateien.md) | jede geänderte bestehende Datei |
-| [`technische-dokumentation-booster.md`](technische-dokumentation-booster.md) | bisherige Gesamtdoku (Fassung 1) |
 
 Wo die Designnotizen vom Code abweichen, beschreibt dieses Dokument den Code. Die Designnotizen bleiben als
 historisches Protokoll erhalten (Entwurf, Phasen, Zwischenmessungen).

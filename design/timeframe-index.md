@@ -7,7 +7,7 @@ Status: umgesetzt (Phasen 1–5) im Branch `booster/index-availability` · Entwu
 
 > Diese Notiz hält Entwurf, Entscheidungen und Messreihen der einzelnen Phasen fest (historisch). Den aktuellen Stand
 > des Index, einschließlich der späteren Umstellungen von `Booking::getForUser()` und `Item::getClosestBooking()`,
-> beschreibt [technische-dokumentation-booster.md](technische-dokumentation-booster.md), Abschnitte 2 bis 5.
+> beschreibt [technische-dokumentation-booster-02.md](technische-dokumentation-booster-02.md), Abschnitte 6, 7, 10 und 15.
 
 ## 1. Ziel und Abgrenzung
 

@@ -7,7 +7,7 @@ Status: implemented (phases 1–5) in branch `booster/index-availability` · dra
 
 > This note records the draft, the decisions and the measurement series of the individual phases (historical). The
 > current state of the index, including the later changes to `Booking::getForUser()` and `Item::getClosestBooking()`,
-> is described in [technische-dokumentation-booster.en.md](technische-dokumentation-booster.en.md), sections 2 to 5.
+> is described in [technische-dokumentation-booster-02.en.md](technische-dokumentation-booster-02.en.md), sections 6, 7, 10 and 15.
 
 ## 1. Goal and scope
 
