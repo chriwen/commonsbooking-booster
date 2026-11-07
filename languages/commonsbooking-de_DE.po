@@ -8,7 +8,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: 2023-09-15T04:04:14+02:00\n"
-"PO-Revision-Date: 2026-08-26 19:05+0200\n"
+"PO-Revision-Date: 2026-11-06 09:00+0100\n"
 "Language: de_DE\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.9\n"
@@ -716,6 +716,7 @@ msgstr "Diese Erinnerungs-E-Mail wird x Tage vor Beginn der Buchung an Benutzend
 #: includes/OptionsArray.php:965
 #: includes/OptionsArray.php:1101
 #: includes/OptionsArray.php:1189
+#: src/Service/Booster/SettingsView.php:298
 msgid "Time"
 msgstr "Uhrzeit"
 
@@ -994,15 +995,15 @@ msgstr "Termin Titel"
 msgid "Event description"
 msgstr "Terminbeschreibung"
 
-#: includes/OptionsArray.php:1602
+#: includes/OptionsArray.php:1620
 msgid "Advanced caching settings"
 msgstr "Erweiterte Cachingoptionen"
 
-#: includes/OptionsArray.php:1605
+#: includes/OptionsArray.php:1623
 msgid "Allows you to change options regarding the caching system"
 msgstr "Erlaubt die Anpassung der Optionen für das Caching-System"
 
-#: includes/OptionsArray.php:1628
+#: includes/OptionsArray.php:1646
 msgid "Current connection status"
 msgstr "Aktueller Verbindungsstatus"
 
@@ -1152,26 +1153,26 @@ msgid "Could not send email because mail-template was not available. Check optio
 msgstr "E-Mail konnte nicht gesendet werden, da keine E-Mail-Vorlage verfügbar war. Optionen überprüfen -> Vorlagen"
 
 #. translators: %s = Booking code
-#: src/Model/Booking.php:142
+#: src/Model/Booking.php:148
 #, php-format
 msgid "Your booking code is: %s"
 msgstr "Dein Buchungscode lautet: %s"
 
-#: src/Model/Booking.php:574
+#: src/Model/Booking.php:580
 msgid "Please check your booking and click confirm booking"
 msgstr "Bitte überprüfe die Buchung und klicke auf „Buchung bestätigen“"
 
 #. translators: %s cancellation time as formatted date-time
-#: src/Model/Booking.php:581
+#: src/Model/Booking.php:587
 #, php-format
 msgid "Your booking has been canceled at %s."
 msgstr "Die Buchung wurde storniert am %s."
 
-#: src/Model/Booking.php:583
+#: src/Model/Booking.php:589
 msgid "Your booking has been canceled"
 msgstr "Die Buchung wurde storniert"
 
-#: src/Model/Booking.php:670
+#: src/Model/Booking.php:676
 msgid "Link to your booking"
 msgstr "Link zu deiner Buchung"
 
@@ -1189,7 +1190,7 @@ msgid "Available here"
 msgstr "Hier verfügbar"
 
 #. translators: %s = date in WordPress defined format
-#: src/Model/Booking.php:437
+#: src/Model/Booking.php:443
 #: src/Model/Timeframe.php:347
 #, php-format
 msgid "on %s"
@@ -1207,7 +1208,7 @@ msgstr "dauerhaft"
 
 #. translators: %1 = startdate, %2 = enddate in WordPress defined format
 #. translators: %1$s = startdate, second %2$s = enddate in WordPress defined format
-#: src/Model/Booking.php:440
+#: src/Model/Booking.php:446
 #: src/Model/Timeframe.php:352
 #, php-format
 msgid "from %1$s until %2$s"
@@ -1233,13 +1234,13 @@ msgstr "Enddatum liegt vor dem Startdatum. Bitte setze ein gültiges Enddatum."
 msgid "Item is already bookable at another location within the same date range. See other timeframe ID: %1$s: %2$s"
 msgstr "Artikel ist bereits an einem anderen Ort innerhalb desselben Datumsbereichs buchbar. Siehe andere Zeitrahmen ID: %1$s: %2$s"
 
-#: src/Plugin.php:385
-#: src/Plugin.php:386
+#: src/Plugin.php:389
+#: src/Plugin.php:390
 msgid "Item Categories"
 msgstr "Artikel-Kategorien"
 
-#: src/Plugin.php:395
-#: src/Plugin.php:396
+#: src/Plugin.php:399
+#: src/Plugin.php:400
 msgid "Location Categories"
 msgstr "Standort-Kategorien"
 
@@ -1264,25 +1265,25 @@ msgstr "Es konnten keine Buchungscodes erstellt werden, da der Standort nicht ge
 msgid "No booking codes could be created because the item of the timeframe could not be found."
 msgstr "Es konnten keine Buchungscodes erstellt werden, da der Artikel nicht gefunden wurde."
 
-#: src/Service/Cache.php:443
+#: src/Service/Cache.php:489
 msgid "Connection status:"
 msgstr "Aktueller Verbindungsstatus:"
 
 #. translators: %s directory path of the operating system
-#: src/Service/Cache.php:165
+#: src/Service/Cache.php:208
 #, php-format
 msgid "Directory %s could not be written to."
 msgstr "Der Ordner %s ist nicht beschreibbar."
 
 #: src/View/Admin/Filter.php:58
-#: src/Wordpress/CustomPostType/Booking.php:813
+#: src/Wordpress/CustomPostType/Booking.php:855
 #: src/Wordpress/CustomPostType/Restriction.php:433
 #: src/Wordpress/CustomPostType/Timeframe.php:678
 msgid "Start date"
 msgstr "Startdatum"
 
 #: src/View/Admin/Filter.php:62
-#: src/Wordpress/CustomPostType/Booking.php:830
+#: src/Wordpress/CustomPostType/Booking.php:872
 #: src/Wordpress/CustomPostType/Restriction.php:443
 #: src/Wordpress/CustomPostType/Timeframe.php:702
 msgid "End date"
@@ -1307,12 +1308,16 @@ msgstr "Nicht verfügbar"
 
 #: src/View/Booking.php:196
 #: src/View/MassOperations.php:38
-#: src/Wordpress/CustomPostType/Booking.php:480
+#: src/Wordpress/CustomPostType/Booking.php:522
 #: src/Wordpress/CustomPostType/Timeframe.php:97
 #: templates/shortcode-bookings.php:74
 msgid "User"
 msgstr "Nutzende*r"
 
+#: includes/OptionsArray.php:1612
+#: src/Service/Booster/SettingsView.php:113
+#: src/Service/Booster/SettingsView.php:253
+#: src/Service/Booster/SettingsView.php:298
 #: src/View/Booking.php:200
 #: src/View/MassOperations.php:42
 #: src/Wordpress/CustomPostType/Restriction.php:459
@@ -1332,9 +1337,10 @@ msgstr "Die Datei wird als .txt Datei durch Tabstopp getrennt exportiert, sodass
 msgid "Booking codes list"
 msgstr "Liste der Buchungscodes"
 
-#: src/View/Calendar.php:237
-#: src/Wordpress/CustomPostType/Booking.php:481
-#: src/Wordpress/CustomPostType/Booking.php:795
+#: src/Service/Booster/SettingsView.php:253
+#: src/View/Calendar.php:271
+#: src/Wordpress/CustomPostType/Booking.php:523
+#: src/Wordpress/CustomPostType/Booking.php:837
 #: src/Wordpress/CustomPostType/Item.php:117
 #: src/Wordpress/CustomPostType/Restriction.php:48
 #: src/Wordpress/CustomPostType/Restriction.php:420
@@ -1344,13 +1350,14 @@ msgstr "Liste der Buchungscodes"
 msgid "Item"
 msgstr "Artikel"
 
-#: src/View/Calendar.php:181
+#: src/View/Calendar.php:215
 msgid "No items found."
 msgstr "Keine Artikel gefunden."
 
-#: src/View/Calendar.php:238
-#: src/Wordpress/CustomPostType/Booking.php:482
-#: src/Wordpress/CustomPostType/Booking.php:801
+#: src/Service/Booster/SettingsView.php:253
+#: src/View/Calendar.php:272
+#: src/Wordpress/CustomPostType/Booking.php:524
+#: src/Wordpress/CustomPostType/Booking.php:843
 #: src/Wordpress/CustomPostType/Location.php:139
 #: src/Wordpress/CustomPostType/Restriction.php:49
 #: src/Wordpress/CustomPostType/Restriction.php:413
@@ -1474,7 +1481,7 @@ msgstr "CSV Herunterladen"
 msgid "Download Export"
 msgstr "Download Export"
 
-#: src/Model/Booking.php:1028
+#: src/Model/Booking.php:1034
 #: src/Service/TimeframeExport.php:580
 #: src/Service/TimeframeExport.php:590
 #: src/Service/TimeframeExport.php:596
@@ -1483,209 +1490,210 @@ msgstr "Download Export"
 msgid "Unknown"
 msgstr "Unbekannt"
 
-#: src/Wordpress/CustomPostType/Booking.php:121
+#: src/Wordpress/CustomPostType/Booking.php:126
 msgid "Admin-Booking"
 msgstr "Admin-Buchung"
 
 #. translators: $s = id of the item
-#: src/Wordpress/CustomPostType/Booking.php:273
+#: src/Wordpress/CustomPostType/Booking.php:315
 #, php-format
 msgid "Item does not exist. (%s)"
 msgstr "Artikel existiert nicht. (%s)"
 
 #. translators: $s = id of the location
-#: src/Wordpress/CustomPostType/Booking.php:278
+#: src/Wordpress/CustomPostType/Booking.php:320
 #, php-format
 msgid "Location does not exist. (%s)"
 msgstr "Standort existiert nicht. (%s)"
 
-#: src/Wordpress/CustomPostType/Booking.php:282
+#: src/Wordpress/CustomPostType/Booking.php:324
 msgid "Start- and/or end-date is missing."
 msgstr "Das Start- und/oder Enddatum fehlt."
 
-#: src/Wordpress/CustomPostType/Booking.php:337
+#: src/Wordpress/CustomPostType/Booking.php:379
 msgid "Booking canceled."
 msgstr "Buchung storniert."
 
-#: src/Wordpress/CustomPostType/Booking.php:308
-#: src/Wordpress/CustomPostType/Booking.php:353
+#: src/Wordpress/CustomPostType/Booking.php:350
+#: src/Wordpress/CustomPostType/Booking.php:395
 msgid "There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes."
 msgstr "Es gibt bereits eine Buchung in diesem Zeitraum. Dieser Hinweis kann auch erscheinen, wenn es eine unbestätigte Buchung in dem gewünschten Zeitraum gibt. Unbestätigte Buchungen werden nach etwa 10 Minuten gelöscht. Bitte versuche es in ein paar Minuten erneut."
 
-#: src/Wordpress/CustomPostType/Booking.php:361
-#: src/Wordpress/CustomPostType/Booking.php:558
-#: src/Wordpress/CustomPostType/Booking.php:746
+#: src/Service/Booster/SettingsView.php:253
+#: src/Wordpress/CustomPostType/Booking.php:403
+#: src/Wordpress/CustomPostType/Booking.php:600
+#: src/Wordpress/CustomPostType/Booking.php:788
 #: src/Wordpress/CustomPostType/Timeframe.php:132
 msgid "Booking"
 msgstr "Buchung"
 
-#: src/Wordpress/CustomPostType/Booking.php:409
+#: src/Wordpress/CustomPostType/Booking.php:451
 msgid "There was an error while saving the booking. Please try again. Thrown error:"
 msgstr "Es gab einen Fehler während der Buchung. Geworfener Fehler:"
 
-#: src/Wordpress/CustomPostType/Booking.php:426
+#: src/Wordpress/CustomPostType/Booking.php:468
 msgid "There was an error while saving the booking. Please try again. Resulting WP_ERROR: "
 msgstr "Es gab einen Fehler während der Buchung. WP_ERROR: "
 
-#: src/Wordpress/CustomPostType/Booking.php:483
+#: src/Wordpress/CustomPostType/Booking.php:525
 msgid "Bookingdate"
 msgstr "Buchungsdatum"
 
-#: src/Wordpress/CustomPostType/Booking.php:484
+#: src/Wordpress/CustomPostType/Booking.php:526
 #: src/Wordpress/CustomPostType/Restriction.php:50
 #: src/Wordpress/CustomPostType/Timeframe.php:101
 #: src/Wordpress/CustomPostType/Timeframe.php:758
 msgid "Start Date"
 msgstr "Startdatum"
 
-#: src/Wordpress/CustomPostType/Booking.php:485
+#: src/Wordpress/CustomPostType/Booking.php:527
 #: src/Wordpress/CustomPostType/Restriction.php:51
 #: src/Wordpress/CustomPostType/Timeframe.php:102
 msgid "End Date"
 msgstr "Enddatum"
 
-#: src/Wordpress/CustomPostType/Booking.php:486
+#: src/Wordpress/CustomPostType/Booking.php:528
 msgid "Booking Status"
 msgstr "Buchungsstatus"
 
-#: src/Wordpress/CustomPostType/Booking.php:487
+#: src/Wordpress/CustomPostType/Booking.php:529
 #: src/Wordpress/CustomPostType/Timeframe.php:448
 #: src/Wordpress/Service/WPPrivacyPersonalDataExporter.php:101
 msgid "Comment"
 msgstr "Kommentar"
 
-#: src/Wordpress/CustomPostType/Booking.php:557
+#: src/Wordpress/CustomPostType/Booking.php:599
 #: templates/dashboard-index.php:45
 msgid "Bookings"
 msgstr "Buchungen"
 
-#: src/Wordpress/CustomPostType/Booking.php:559
+#: src/Wordpress/CustomPostType/Booking.php:601
 #: src/Wordpress/CustomPostType/Item.php:118
 #: src/Wordpress/CustomPostType/Location.php:140
 #: src/Wordpress/CustomPostType/Restriction.php:289
-#: src/Wordpress/CustomPostType/Timeframe.php:1153
+#: src/Wordpress/CustomPostType/Timeframe.php:1154
 msgid "Add new"
 msgstr "Neu hinzufügen"
 
-#: src/Wordpress/CustomPostType/Booking.php:560
-#: src/Wordpress/CustomPostType/Booking.php:562
+#: src/Wordpress/CustomPostType/Booking.php:602
+#: src/Wordpress/CustomPostType/Booking.php:604
 msgid "Add new booking"
 msgstr "Neue Buchung hinzufügen"
 
-#: src/Wordpress/CustomPostType/Booking.php:561
-#: src/Wordpress/CustomPostType/Booking.php:777
+#: src/Wordpress/CustomPostType/Booking.php:603
+#: src/Wordpress/CustomPostType/Booking.php:819
 msgid "Edit booking"
 msgstr "Buchung bearbeiten"
 
-#: src/Wordpress/CustomPostType/Booking.php:563
+#: src/Wordpress/CustomPostType/Booking.php:605
 msgid "Show booking"
 msgstr "Buchung anzeigen"
 
-#: src/Wordpress/CustomPostType/Booking.php:564
+#: src/Wordpress/CustomPostType/Booking.php:606
 msgid "Show bookings"
 msgstr "Buchungen anzeigen"
 
-#: src/Wordpress/CustomPostType/Booking.php:565
+#: src/Wordpress/CustomPostType/Booking.php:607
 msgid "Search bookings"
 msgstr "Buchungen suchen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1160
+#: src/Wordpress/CustomPostType/Timeframe.php:1161
 msgid "Timeframes not found"
 msgstr "Zeitrahmen wurden nicht gefunden"
 
-#: src/Wordpress/CustomPostType/Booking.php:567
+#: src/Wordpress/CustomPostType/Booking.php:609
 msgid "No bookings found in trash"
 msgstr "Keine Buchungen im Papierkorb gefunden"
 
-#: src/Wordpress/CustomPostType/Booking.php:568
+#: src/Wordpress/CustomPostType/Booking.php:610
 msgid "Parent bookings:"
 msgstr "Übergeordnete Buchungen:"
 
-#: src/Wordpress/CustomPostType/Booking.php:569
+#: src/Wordpress/CustomPostType/Booking.php:611
 msgid "All bookings"
 msgstr "Alle Buchungen"
 
-#: src/Wordpress/CustomPostType/Booking.php:570
-#: src/Wordpress/CustomPostType/Timeframe.php:1164
+#: src/Wordpress/CustomPostType/Booking.php:612
+#: src/Wordpress/CustomPostType/Timeframe.php:1165
 msgid "Timeframe archive"
 msgstr "Zeitrahmenarchiv"
 
-#: src/Wordpress/CustomPostType/Booking.php:571
-#: src/Wordpress/CustomPostType/Timeframe.php:1165
+#: src/Wordpress/CustomPostType/Booking.php:613
+#: src/Wordpress/CustomPostType/Timeframe.php:1166
 msgid "Timeframe attributes"
 msgstr "Zeitrahmenattribute"
 
-#: src/Wordpress/CustomPostType/Booking.php:572
+#: src/Wordpress/CustomPostType/Booking.php:614
 msgid "Add to booking"
 msgstr "Der Buchung hinzufügen"
 
-#: src/Wordpress/CustomPostType/Booking.php:573
+#: src/Wordpress/CustomPostType/Booking.php:615
 msgid "Added to booking"
 msgstr "Zur Buchung hinzugefügt"
 
-#: src/Wordpress/CustomPostType/Booking.php:574
-#: src/Wordpress/CustomPostType/Timeframe.php:1168
+#: src/Wordpress/CustomPostType/Booking.php:616
+#: src/Wordpress/CustomPostType/Timeframe.php:1169
 msgid "Timeframe image"
 msgstr "Zeitrahmenbild"
 
-#: src/Wordpress/CustomPostType/Booking.php:575
+#: src/Wordpress/CustomPostType/Booking.php:617
 msgid "set booking image"
 msgstr "Buchungsbild festlegen"
 
-#: src/Wordpress/CustomPostType/Booking.php:576
+#: src/Wordpress/CustomPostType/Booking.php:618
 msgid "remove booking image"
 msgstr "Buchungsbild entfernen"
 
-#: src/Wordpress/CustomPostType/Booking.php:577
+#: src/Wordpress/CustomPostType/Booking.php:619
 msgid "use as booking image"
 msgstr "als Buchungsbild verwenden"
 
-#: src/Wordpress/CustomPostType/Booking.php:578
-#: src/Wordpress/CustomPostType/Timeframe.php:1151
-#: src/Wordpress/CustomPostType/Timeframe.php:1172
+#: src/Wordpress/CustomPostType/Booking.php:620
+#: src/Wordpress/CustomPostType/Timeframe.php:1152
+#: src/Wordpress/CustomPostType/Timeframe.php:1173
 #: templates/dashboard-index.php:37
 msgid "Timeframes"
 msgstr "Zeitrahmen"
 
-#: src/Wordpress/CustomPostType/Booking.php:886
+#: src/Wordpress/CustomPostType/Booking.php:928
 msgid "External comment"
 msgstr "Öffentlicher Kommentar"
 
-#: src/Wordpress/CustomPostType/Booking.php:887
+#: src/Wordpress/CustomPostType/Booking.php:929
 msgid "This comment can be seen by users in booking details. It can be set by users during the booking confirmation process if comments are enabled in settings."
 msgstr "Dieser Kommentar ist intern für Zeitrahmen wie buchbar, Reparatur, Urlaub. Wenn es sich um eine Buchung handelt, kann dieser Kommentar von den Benutzenden während des Buchungsbestätigungsprozesses eingegeben werden."
 
-#: src/Wordpress/CustomPostType/Booking.php:892
+#: src/Wordpress/CustomPostType/Booking.php:934
 #: templates/booking-single.php:131
 msgid "Internal comment"
 msgstr "Interner Kommentar"
 
-#: src/Wordpress/CustomPostType/Booking.php:893
+#: src/Wordpress/CustomPostType/Booking.php:935
 msgid "This internal comment can only be seen in the backend by privileged users like admins or cb-managers"
 msgstr "Dieser interne Kommentar kann im Backend nur von autorisierten Nutzenden wie Admins oder CB-Managern gesehen werden"
 
-#: src/Wordpress/CustomPostType/Booking.php:814
+#: src/Wordpress/CustomPostType/Booking.php:856
 msgid "Set the start date. You must set the time to 00:00 if you want to book the full day "
 msgstr "Lege das Startdatum fest. Setze die Uhrzeit auf 00:00, wenn du den ganzen Tag buchen willst "
 
-#: src/Wordpress/CustomPostType/Booking.php:831
+#: src/Wordpress/CustomPostType/Booking.php:873
 msgid "Set the end date. You must set time to 23:59 if you want to book the full day"
 msgstr "Lege das Enddatum fest. Setze die Zeit auf 23:59 Uhr, wenn du den ganzen Tag buchen willst"
 
-#: src/Wordpress/CustomPostType/Booking.php:847
+#: src/Wordpress/CustomPostType/Booking.php:889
 #: templates/booking-single.php:59
 msgid "Booking Code"
 msgstr "Buchungscode"
 
-#: src/Wordpress/CustomPostType/Booking.php:853
+#: src/Wordpress/CustomPostType/Booking.php:895
 msgid "Booking User"
 msgstr "Buchende Person"
 
-#: src/Wordpress/CustomPostType/Booking.php:868
+#: src/Wordpress/CustomPostType/Booking.php:910
 msgid "Admin Booking User"
 msgstr "Admin Booking Konto"
 
-#: src/Wordpress/CustomPostType/Booking.php:879
+#: src/Wordpress/CustomPostType/Booking.php:921
 msgid "This is the admin user who created or modified this booking."
 msgstr "Dies ist der/die Admin-Nutzende, der diese Buchung erstellt oder geändert hat."
 
@@ -2185,7 +2193,7 @@ msgid "Blocked (not overbookable)"
 msgstr "Geblockt (nicht überbuchbar)"
 
 #: src/Wordpress/CustomPostType/Timeframe.php:420
-#: src/Wordpress/CustomPostType/Timeframe.php:1152
+#: src/Wordpress/CustomPostType/Timeframe.php:1153
 msgid "Timeframe"
 msgstr "Zeitrahmen"
 
@@ -2364,56 +2372,56 @@ msgstr "Monatlich"
 msgid "Yearly"
 msgstr "Jährlich"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1154
-#: src/Wordpress/CustomPostType/Timeframe.php:1156
+#: src/Wordpress/CustomPostType/Timeframe.php:1155
+#: src/Wordpress/CustomPostType/Timeframe.php:1157
 msgid "Add new timeframe"
 msgstr "Hinzufügen eines neuen Zeitrahmens"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1155
+#: src/Wordpress/CustomPostType/Timeframe.php:1156
 msgid "Edit timeframe"
 msgstr "Zeitrahmen bearbeiten"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1157
+#: src/Wordpress/CustomPostType/Timeframe.php:1158
 msgid "Show timeframe"
 msgstr "Zeitrahmen anzeigen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1158
+#: src/Wordpress/CustomPostType/Timeframe.php:1159
 msgid "Show timeframes"
 msgstr "Zeitrahmen anzeigen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1159
+#: src/Wordpress/CustomPostType/Timeframe.php:1160
 msgid "Search timeframes"
 msgstr "Zeitrahmen suchen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1161
+#: src/Wordpress/CustomPostType/Timeframe.php:1162
 msgid "No timeframes found in trash"
 msgstr "Keine Zeitrahmen im Papierkorb gefunden"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1162
+#: src/Wordpress/CustomPostType/Timeframe.php:1163
 msgid "Parent timeframes:"
 msgstr "Übergeordnete Zeitrahmen:"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1163
+#: src/Wordpress/CustomPostType/Timeframe.php:1164
 msgid "All timeframes"
 msgstr "Alle Zeitrahmen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1166
+#: src/Wordpress/CustomPostType/Timeframe.php:1167
 msgid "Add to timeframe"
 msgstr "Zum Zeitrahmen hinzufügen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1167
+#: src/Wordpress/CustomPostType/Timeframe.php:1168
 msgid "Added to timeframe"
 msgstr "Zum Zeitrahmen hinzugefügt"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1169
+#: src/Wordpress/CustomPostType/Timeframe.php:1170
 msgid "set timeframe image"
 msgstr "Festlegen des Zeitrahmenbilds"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1170
+#: src/Wordpress/CustomPostType/Timeframe.php:1171
 msgid "remove timeframe image"
 msgstr "Zeitrahmenbild entfernen"
 
-#: src/Wordpress/CustomPostType/Timeframe.php:1171
+#: src/Wordpress/CustomPostType/Timeframe.php:1172
 msgid "use as timeframe image"
 msgstr "Verwendung als Zeitrahmenbild"
 
@@ -3021,7 +3029,7 @@ msgstr "Buchungen sind auf maximal %1$s Tage im Voraus beschränkt."
 msgid "It is not possible to access this timeframe on frontend. Please edit timeframe in backend. If you want to check the result of your timeframe settings visit the item or location in frontend to see the booking calender"
 msgstr "Es ist nicht möglich, diesen Zeitrahmen im Frontend abzurufen. Bitte bearbeite den Zeitrahmen im Backend. Wenn du das Ergebnis deiner Zeitrahmeneinstellungen überprüfen möchtest, rufe den Artikel oder Standort im Frontend auf, um den Buchungskalender zu sehen"
 
-#: src/Model/Booking.php:1026
+#: src/Model/Booking.php:1032
 msgid "Cancelled"
 msgstr "Storniert"
 
@@ -3035,7 +3043,7 @@ msgstr "Die Start- und Endzeit des Zeitrahmens dürfen nicht gleich sein. Wenn d
 msgid "CommonsBooking Bookings"
 msgstr "CommonsBooking Buchungen"
 
-#: src/Wordpress/CustomPostType/Booking.php:566
+#: src/Wordpress/CustomPostType/Booking.php:608
 msgid "Bookings not found"
 msgstr "Keine Buchungen gefunden"
 
@@ -3355,12 +3363,12 @@ msgstr "Nächste E-Mail geplant am: "
 msgid "(not planned)"
 msgstr "(nichts geplant)"
 
-#: includes/OptionsArray.php:1608
-#: src/Service/Cache.php:477
+#: includes/OptionsArray.php:1626
+#: src/Service/Cache.php:523
 msgid "Clear Cache"
 msgstr "Cache leeren"
 
-#: src/Service/Cache.php:472
+#: src/Service/Cache.php:518
 msgid "Clear all cache items"
 msgstr "Alle Cache-Elemente löschen"
 
@@ -3759,7 +3767,7 @@ msgstr "Bitte <a href=\\\"%s\\\">melde dich an </a> , um deine Buchungen zu sehe
 msgid "A WordPress plugin for the management and booking of common goods."
 msgstr "Ein WordPress-Plugin für die Verwaltung und Buchung von Gemeingütern."
 
-#: src/Wordpress/CustomPostType/Booking.php:293
+#: src/Wordpress/CustomPostType/Booking.php:335
 msgid "Your reservation has expired, please try to book again"
 msgstr "Deine Reservierung ist abgelaufen, bitte versuche erneut zu buchen"
 
@@ -3840,29 +3848,29 @@ msgstr "Buchung wurde als Entwurf gespeichert."
 msgid "Timeframe is saved as draft."
 msgstr "Zeitrahmen wurde als Entwurf gespeichert."
 
-#: src/Model/Booking.php:612
+#: src/Model/Booking.php:618
 msgid "Item not found"
 msgstr "Artikel nicht gefunden"
 
-#: src/Model/Booking.php:621
+#: src/Model/Booking.php:627
 #: src/Wordpress/CustomPostType/Location.php:147
 msgid "Location not found"
 msgstr "Standort nicht gefunden"
 
-#: src/Model/Booking.php:626
+#: src/Model/Booking.php:632
 msgid "There is no timeframe for this booking. Please create a timeframe first."
 msgstr "Es existiert kein Zeitrahmen für diese Buchung. Bitte zuerst einen Zeitrahmen erstellen."
 
-#: src/Model/Booking.php:646
+#: src/Model/Booking.php:652
 msgid "There are one ore more overlapping bookings within the chosen timerange"
 msgstr "Es gibt eine oder mehrere sich überlappende Buchungen innerhalb des gewählten Zeitraums"
 
-#: src/Model/Booking.php:647
+#: src/Model/Booking.php:653
 msgid "Please adjust the start- or end-date."
 msgstr "Bitte passe das Start- oder Enddatum an."
 
 #. translators: %s list of urls to one or more booking pages
-#: src/Model/Booking.php:649
+#: src/Model/Booking.php:655
 #, php-format
 msgid "Affected Bookings: %s"
 msgstr "Betroffene Buchungen: %s"
@@ -3888,23 +3896,23 @@ msgid "Startdate is missing. Please enter a start date to publish this timeframe
 msgstr "Das Startdatum fehlt. Ein Startdatum muss eingegeben werden, damit der Zeitrahmen veröffentlicht werden kann."
 
 #: src/View/Booking.php:579
-#: src/Wordpress/CustomPostType/Booking.php:898
+#: src/Wordpress/CustomPostType/Booking.php:940
 msgid "Submit booking"
 msgstr "Buchung abschicken"
 
-#: src/Wordpress/CustomPostType/Booking.php:807
+#: src/Wordpress/CustomPostType/Booking.php:849
 msgid "Book full day"
 msgstr "Ganztägig buchen"
 
-#: src/Wordpress/CustomPostType/Booking.php:810
+#: src/Wordpress/CustomPostType/Booking.php:852
 msgid "The booking should apply to the entire day(s)"
 msgstr "Die Buchung soll auf den gesamten Tag / die gesamten Tage angewendet werden"
 
-#: src/Wordpress/CustomPostType/Booking.php:850
+#: src/Wordpress/CustomPostType/Booking.php:892
 msgid "Valid booking code will be automatically retrieved for bookings that apply to the full day."
 msgstr "Ein gültiger Buchungscode wird automatisch für Buchungen, die sich auf den ganzen Tag beziehen, generiert."
 
-#: src/Wordpress/CustomPostType/Booking.php:859
+#: src/Wordpress/CustomPostType/Booking.php:901
 msgid ""
 "Here you must select the user for whom the booking is made.<br>\n"
 "                        If the booking was made by a user via frontend booking process, the user will be shown in this field.\n"
@@ -3914,12 +3922,12 @@ msgstr ""
 "                        Wenn die Buchung von einem/einer Nutzenden über den Frontend-Buchungsprozess vorgenommen wurde, wird der/die Nutzende in diesem Feld angezeigt.\n"
 "                        <br><strong>Hinweis: </strong>Der/die Nutzende erhält eine Buchungsbestätigung, sobald die Buchung abgeschickt wurde."
 
-#: src/Wordpress/CustomPostType/Booking.php:899
+#: src/Wordpress/CustomPostType/Booking.php:941
 msgid "This will create the specified booking and send out the booking confirmation email."
 msgstr "Dadurch wird die angegebene Buchung erstellt und die Buchungsbestätigung per E-Mail verschickt."
 
-#: src/Plugin.php:405
-#: src/Plugin.php:406
+#: src/Plugin.php:409
+#: src/Plugin.php:410
 msgid "Mass Operations"
 msgstr "Massenverarbeitung"
 
@@ -4192,59 +4200,59 @@ msgstr ""
 "{{booking:getEmailSignature}}\n"
 "                            "
 
-#: includes/OptionsArray.php:1614
+#: includes/OptionsArray.php:1632
 msgid "Cache Adapter"
 msgstr "Cache Adapter"
 
-#: includes/OptionsArray.php:1621
+#: includes/OptionsArray.php:1639
 msgid "Location of cache"
 msgstr "Cache Pfad"
 
-#: includes/OptionsArray.php:1622
+#: includes/OptionsArray.php:1640
 msgid "The location of the cache. A directory for the filesystem cache, a REDIS DSN, ..."
 msgstr "Der Pfad zu dem Cache. Kann ein Ordner sein für den Dateisystem-Cache, eine REDIS DSN, ..."
 
-#: src/Service/Cache.php:159
+#: src/Service/Cache.php:202
 msgid "Filesystem"
 msgstr "Dateisystem"
 
-#: src/Service/Cache.php:176
+#: src/Service/Cache.php:219
 msgid "Redis"
 msgstr "REDIS"
 
-#: src/Service/Cache.php:186
+#: src/Service/Cache.php:229
 msgid "Disabled"
 msgstr "Deaktiviert"
 
-#: src/Service/Cache.php:452
+#: src/Service/Cache.php:498
 msgid "Cache is disabled."
 msgstr "Cache ist deaktiviert."
 
-#: src/Service/Cache.php:455
+#: src/Service/Cache.php:501
 msgid "Cache adapter successfully connected."
 msgstr "Cache Adapter erfolgreich verbunden."
 
-#: includes/OptionsArray.php:1634
+#: includes/OptionsArray.php:1652
 msgid "Periodical warmup through cronjob"
 msgstr "Regelmäßiges Aufwärmen durch einen Cronjob"
 
-#: includes/OptionsArray.php:1635
+#: includes/OptionsArray.php:1653
 msgid "Will periodically warm up the cache through a cronjob. This can be useful, when you have a lot of timeframes / bookings but your site is rarely accessed. <br> You NEED to hook WP-Cron Into the System Task Scheduler for this to have any positive effect. <b> You probably don't want this. </b>"
 msgstr "Wärmt den Cache regelmäßig über einen Cronjob auf. Das kann praktisch sein, wenn du viele Zeitrahmen / Buchungen in deiner Instanz hast, die Seite aber selten aufgerufen wird. <br> Damit dieses Feature funktioniert, muss WP-Cron in den System Task Scheduler eingebunden sein. <b> Höchstwahrscheinlich ist diese Einstellung nicht für deine Instanz geeignet. </b>"
 
-#: includes/OptionsArray.php:1640
+#: includes/OptionsArray.php:1658
 msgid "Every 10 minutes"
 msgstr "Alle 10 Minuten"
 
-#: includes/OptionsArray.php:1641
+#: includes/OptionsArray.php:1659
 msgid "Every 30 minutes"
 msgstr "Alle 30 Minuten"
 
-#: includes/OptionsArray.php:1642
+#: includes/OptionsArray.php:1660
 msgid "Every hour"
 msgstr "Jede Stunde"
 
-#: includes/OptionsArray.php:1643
+#: includes/OptionsArray.php:1661
 msgid "Every day"
 msgstr "Jeden Tag"
 
@@ -4286,7 +4294,7 @@ msgstr ""
 "\t\t\t\twerden alle betroffenen Buchungen nach Aktivierung dieser Einschränkung und nach Anklicken des Senden-Buttons der Informations-E-Mail automatisch storniert.\r\n"
 "\t\t\t\t"
 
-#: src/Service/Cache.php:449
+#: src/Service/Cache.php:495
 msgid "Cache was disabled through external setting. Please see the documentation for more information."
 msgstr "Cache wurde durch externe Einstellungen deaktiviert. Mehr Informationen dazu findest du in der Dokumentation."
 
@@ -4447,7 +4455,7 @@ msgstr "In API verstecken"
 msgid "When this box is checked, the item will not appear in any of the API shares."
 msgstr "Wenn diese Box angewählt ist taucht der Artikel in keiner der API Freigaben auf."
 
-#: src/Wordpress/CustomPostType/Booking.php:779
+#: src/Wordpress/CustomPostType/Booking.php:821
 msgid ""
 "<h1>Notice</h1><p>In this view, you as an admin can create or modify existing bookings. Please use it with caution. <br>\n"
 "\t\t\t\t<ul>\n"
@@ -4467,7 +4475,7 @@ msgstr ""
 "                </p>\r\n"
 "\t\t\t\t"
 
-#: src/Wordpress/CustomPostType/Booking.php:922
+#: src/Wordpress/CustomPostType/Booking.php:964
 #, php-format
 msgid ""
 "Bookings should be created via frontend booking calendar. <br>\n"
@@ -4484,8 +4492,8 @@ msgstr ""
 "\t\tUm Buchungen zu filtern und durchsuchen, kann der Buchungsshortcode auf einer Frontend Seite eingefügt werden.\r\n"
 "\t\tIn der Dokumentation %1$sBuchungsliste anzeigen%2$s"
 
-#: src/Wordpress/CustomPostType/Booking.php:321
-#: src/Wordpress/CustomPostType/Booking.php:368
+#: src/Wordpress/CustomPostType/Booking.php:363
+#: src/Wordpress/CustomPostType/Booking.php:410
 msgid "Invalid booking request. Please try again."
 msgstr "Ungültige Buchungsanfrage. Bitte erneut versuchen."
 
@@ -4505,10 +4513,612 @@ msgstr "Verfügbarkeitsanzeige in der API (Wochen)"
 msgid "How many weeks of item availability should be displayed in the API. Setting high values may lead to very slow response times on availability endpoints."
 msgstr "Wie viele Wochen der Artikelverfügbarkeit sollten in der API angezeigt werden? Die Einstellung hoher Werte kann zu sehr langen Antwortzeiten bei den Verfügbarkeits-Endpunkten führen."
 
-#: src/Model/Booking.php:1024
+#: src/Model/Booking.php:1030
 #~ msgid "Unconfirmed"
 #~ msgstr "Unbestätigt"
 
-#: src/Model/Booking.php:1022
+#: src/Model/Booking.php:1028
 #~ msgid "Confirmed"
 #~ msgstr "Bestätigt"
+
+#: includes/OptionsArray.php:1602
+msgid "Performance booster"
+msgstr "Performance-Booster"
+
+#: includes/OptionsArray.php:1604
+msgid "Speeds up the map, the item lists and the availability tables on sites with many bookings. It keeps an index of all timeframes, bookings and restrictions and precomputes the availability of the next 92 days in additional database tables. Every booking updates them immediately. Booking requests are always checked with the original queries.<br>After switching on, the index is built in the background. Until it is complete, the original queries are used.<br>Switch off before downgrading to a version without the booster. After switching on again, the index is rebuilt."
+msgstr "Beschleunigt die Karte, die Artikellisten und die Verfügbarkeitstabellen auf Seiten mit vielen Buchungen. Dafür führt der Booster einen Index aller Zeitrahmen, Buchungen und Einschränkungen und berechnet die Verfügbarkeit der nächsten 92 Tage in zusätzlichen Datenbanktabellen vor. Jede Buchung aktualisiert sie sofort. Buchungsanfragen werden immer mit den ursprünglichen Abfragen geprüft.<br>Nach dem Einschalten wird der Index im Hintergrund aufgebaut. Bis er fertig ist, werden die ursprünglichen Abfragen verwendet.<br>Schalte den Booster aus, bevor du auf eine Version ohne Booster zurückgehst. Nach dem erneuten Einschalten wird der Index neu aufgebaut."
+
+#: includes/OptionsArray.php:1607
+msgid "Enable performance booster"
+msgstr "Performance-Booster aktivieren"
+
+#: src/Service/Booster/Booster.php:311
+msgid "yes"
+msgstr "ja"
+
+#: src/Service/Booster/Booster.php:313
+msgid "no"
+msgstr "nein"
+
+#: src/Service/Booster/Booster.php:314
+msgid "original queries"
+msgstr "ursprüngliche Abfragen"
+
+#: src/Service/Booster/Booster.php:320
+msgid "booster active"
+msgstr "Booster aktiv"
+
+#. translators: %d: progress of the index build in percent
+#: src/Service/Booster/Booster.php:325
+#, php-format
+msgid "building index (%d %%), original queries until finished"
+msgstr "Index wird aufgebaut (%d %%), bis dahin ursprüngliche Abfragen"
+
+#: src/Service/Booster/Booster.php:330
+msgid "waiting for index build, original queries until finished"
+msgstr "Indexaufbau steht aus, bis dahin ursprüngliche Abfragen"
+
+#: src/Service/Booster/Booster.php:334
+msgid "complete"
+msgstr "vollständig"
+
+#: src/Service/Booster/Booster.php:336
+msgid "incomplete"
+msgstr "unvollständig"
+
+#: src/Service/Booster/Booster.php:339
+msgid "precomputed"
+msgstr "vorberechnet"
+
+#: src/Service/Booster/Booster.php:341
+msgid "computed live"
+msgstr "live berechnet"
+
+#: src/Service/Booster/SettingsView.php:157
+msgid "Mode"
+msgstr "Modus"
+
+#: src/Service/Booster/SettingsView.php:175
+#: src/Service/Booster/SettingsView.php:253
+msgid "Index"
+msgstr "Index"
+
+#: src/Service/Booster/SettingsView.php:158
+msgid "Last rebuild"
+msgstr "Letzter Neuaufbau"
+
+#: src/Service/Booster/SettingsView.php:117
+#: src/Service/Booster/SettingsView.php:145
+msgid "Changes take effect with the next page load."
+msgstr "Änderungen wirken ab dem nächsten Seitenaufruf."
+
+#. translators: 1: previous plugin version, 2: plugin version written by other code
+#: src/Service/Booster/Guard.php:255
+#, php-format
+msgid "plugin version was changed by other code (%1$s → %2$s)"
+msgstr "Plugin-Version wurde von anderem Code geändert (%1$s → %2$s)"
+
+#. translators: %d: post id
+#: src/Service/Booster/Guard.php:261
+#, php-format
+msgid "post %d was created without the booster"
+msgstr "Beitrag %d wurde ohne Booster angelegt"
+
+#: src/Service/Booster/Guard.php:265
+msgid "many posts changed without the booster"
+msgstr "viele Beiträge wurden ohne Booster geändert"
+
+#: src/Service/Booster/Diagnostics.php:375
+msgid "The index is being built. Until it is complete, the original queries are used (correct, but slower)."
+msgstr "Der Index wird aufgebaut. Bis er fertig ist, werden die ursprünglichen Abfragen verwendet (korrekt, aber langsamer)."
+
+#. translators: 1: post type label, 2: number of posts in WordPress, 3: number of index rows
+#: src/Service/Booster/Diagnostics.php:383
+#, php-format
+msgid "%1$s: %2$d in WordPress, %3$d in the index. Newly saved posts appear after a few seconds; if the difference persists, run the check."
+msgstr "%1$s: %2$d in WordPress, %3$d im Index. Neu gespeicherte Beiträge erscheinen nach wenigen Sekunden. Bleibt der Unterschied bestehen, starte die Prüfung."
+
+#. translators: %d: booking id
+#: src/Service/Booster/Diagnostics.php:394
+#, php-format
+msgid "Booking %d differs between WordPress and the index. Run the check to repair it."
+msgstr "Buchung %d unterscheidet sich zwischen WordPress und Index. Starte die Prüfung, um sie zu reparieren."
+
+#: src/Service/Booster/Diagnostics.php:401
+msgid "Some precomputed rows are older than 24 hours. They are computed again when used; check that WP-Cron runs."
+msgstr "Einige vorberechnete Zeilen sind älter als 24 Stunden. Sie werden bei Bedarf neu berechnet. Prüfe, ob WP-Cron läuft."
+
+#. translators: %s: name of the cron event
+#: src/Service/Booster/Diagnostics.php:407
+#, php-format
+msgid "The scheduled task %s is missing. It is created again with the next page load."
+msgstr "Die geplante Aufgabe %s fehlt. Sie wird beim nächsten Seitenaufruf neu angelegt."
+
+#. translators: %s: name of the cron event
+#: src/Service/Booster/Diagnostics.php:410
+#, php-format
+msgid "The scheduled task %s is overdue. WP-Cron does not seem to run regularly."
+msgstr "Die geplante Aufgabe %s ist überfällig. WP-Cron scheint nicht regelmäßig zu laufen."
+
+#. translators: %d: number of repaired posts
+#: src/Service/Booster/Diagnostics.php:420
+#, php-format
+msgid "The last deep check repaired %d posts that were changed without the booster (e.g. by an older plugin version)."
+msgstr "Die letzte Tiefenprüfung hat %d Beiträge repariert, die ohne Booster geändert wurden (z. B. von einer älteren Plugin-Version)."
+
+#: src/Service/Booster/Guard.php:268
+msgid "started manually"
+msgstr "manuell gestartet"
+
+#: src/Service/Booster/SettingsView.php:88
+msgid "Performance booster: all checks passed, the index matches WordPress."
+msgstr "Performance-Booster: Alle Prüfungen ohne Befund, der Index stimmt mit WordPress überein."
+
+#. translators: %d: number of repaired entries
+#: src/Service/Booster/SettingsView.php:91
+#, php-format
+msgid "Performance booster: %d differences were found and repaired."
+msgstr "Performance-Booster: %d Abweichungen wurden gefunden und repariert."
+
+#: src/Service/Booster/SettingsView.php:94
+msgid "Performance booster: the index is being rebuilt in the background. Until then, the original queries are used."
+msgstr "Performance-Booster: Der Index wird im Hintergrund neu aufgebaut. Bis dahin werden die ursprünglichen Abfragen verwendet."
+
+#: src/Service/Booster/SettingsView.php:96
+msgid "Performance booster: the booster is switched off."
+msgstr "Performance-Booster: Der Booster ist ausgeschaltet."
+
+#: src/Service/Booster/SettingsView.php:116
+msgid "Switched off: CommonsBooking uses the original queries."
+msgstr "Ausgeschaltet: CommonsBooking verwendet die ursprünglichen Abfragen."
+
+#: src/Service/Booster/SettingsView.php:124
+msgid "Everything is fine"
+msgstr "Alles in Ordnung"
+
+#: src/Service/Booster/SettingsView.php:125
+msgid "Please note"
+msgstr "Hinweis"
+
+#: src/Service/Booster/SettingsView.php:126
+msgid "Problem found"
+msgstr "Problem gefunden"
+
+#: src/Service/Booster/SettingsView.php:176
+msgid "Every timeframe, booking and restriction is copied into the index when it is saved. The numbers on both sides should be equal."
+msgstr "Jeder Zeitrahmen, jede Buchung und jede Einschränkung wird beim Speichern in den Index übernommen. Die Zahlen auf beiden Seiten sollten gleich sein."
+
+#: src/Service/Booster/SettingsView.php:180
+msgid "Index build"
+msgstr "Indexaufbau"
+
+#. translators: 1: number of index rows, 2: number of posts in WordPress
+#: src/Service/Booster/SettingsView.php:189
+#, php-format
+msgid "%1$s of %2$s in the index"
+msgstr "%1$s von %2$s im Index"
+
+#: src/Service/Booster/SettingsView.php:194
+msgid "Newest change in WordPress"
+msgstr "Neueste Änderung in WordPress"
+
+#: src/Service/Booster/SettingsView.php:195
+msgid "Newest change in the index"
+msgstr "Neueste Änderung im Index"
+
+#: src/Service/Booster/SettingsView.php:205
+msgid "Precomputed availability"
+msgstr "Vorberechnete Verfügbarkeit"
+
+#: src/Service/Booster/SettingsView.php:207
+msgid "Not in use until the index is complete: every day is computed live."
+msgstr "Nicht in Gebrauch, bis der Index fertig ist: Jeder Tag wird live berechnet."
+
+#. translators: 1: first day, 2: last day
+#: src/Service/Booster/SettingsView.php:218
+#, php-format
+msgid "One row per item and location with the state of every day from %1$s to %2$s. A booking marks its row as changed at once; it is computed again after the response or when it is shown next."
+msgstr "Eine Zeile pro Artikel und Standort mit dem Zustand jedes Tages vom %1$s bis %2$s. Eine Buchung markiert ihre Zeile sofort als geändert. Sie wird nach der Antwort oder beim nächsten Anzeigen neu berechnet."
+
+#: src/Service/Booster/SettingsView.php:224
+msgid "Item/location pairs"
+msgstr "Artikel-Standort-Paare"
+
+#. translators: 1: usable rows, 2: all rows
+#: src/Service/Booster/SettingsView.php:228
+#, php-format
+msgid "%1$s of %2$s up to date"
+msgstr "%1$s von %2$s aktuell"
+
+#: src/Service/Booster/SettingsView.php:232
+msgid "Changed, computed with the next request"
+msgstr "Geändert, wird beim nächsten Aufruf berechnet"
+
+#: src/Service/Booster/SettingsView.php:233
+msgid "Older than 24 hours"
+msgstr "Älter als 24 Stunden"
+
+#: src/Service/Booster/SettingsView.php:234
+msgid "Limited to user roles (always computed live)"
+msgstr "Auf Benutzerrollen beschränkt (immer live berechnet)"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Limited to user roles (stored per access profile)"
+msgstr "Auf Benutzerrollen beschränkt (je Zugriffsprofil gespeichert)"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Stored access profiles (up to date)"
+msgstr "Gespeicherte Zugriffsprofile (aktuell)"
+
+#: src/Service/Booster/SettingsView.php:244
+msgid "Latest bookings"
+msgstr "Letzte Buchungen"
+
+#: src/Service/Booster/SettingsView.php:245
+msgid "The most recently created, changed or cancelled bookings. The status in the index must match the status in WordPress."
+msgstr "Die zuletzt angelegten, geänderten oder stornierten Buchungen. Der Status im Index muss mit dem Status in WordPress übereinstimmen."
+
+#: src/Service/Booster/SettingsView.php:248
+msgid "No bookings yet."
+msgstr "Noch keine Buchungen."
+
+#: src/Service/Booster/SettingsView.php:253
+msgid "Changed"
+msgstr "Geändert"
+
+#: src/Service/Booster/SettingsView.php:253
+msgid "Period"
+msgstr "Zeitraum"
+
+#: src/Service/Booster/SettingsView.php:266
+msgid "missing"
+msgstr "fehlt"
+
+#: src/Service/Booster/SettingsView.php:278
+msgid "Latest index activity"
+msgstr "Letzte Index-Aktivität"
+
+#: src/Service/Booster/SettingsView.php:279
+msgid "Every change of a timeframe, booking or restriction that the index processed, including deletions. The last column checks the current state again."
+msgstr "Jede Änderung an Zeitrahmen, Buchungen und Einschränkungen, die der Index verarbeitet hat, auch Löschungen. Die letzte Spalte prüft den aktuellen Stand erneut."
+
+#: src/Service/Booster/SettingsView.php:282
+msgid "No changes recorded since the booster was switched on."
+msgstr "Seit dem Einschalten des Boosters wurden keine Änderungen erfasst."
+
+#: src/Service/Booster/SettingsView.php:287
+msgid "added"
+msgstr "hinzugefügt"
+
+#: src/Service/Booster/SettingsView.php:288
+msgid "changed"
+msgstr "geändert"
+
+#: src/Service/Booster/SettingsView.php:289
+msgid "removed"
+msgstr "entfernt"
+
+#: src/Service/Booster/SettingsView.php:292
+msgid "website"
+msgstr "Website"
+
+#: src/Service/Booster/SettingsView.php:293
+msgid "admin"
+msgstr "Verwaltung"
+
+#: src/Service/Booster/SettingsView.php:294
+msgid "scheduled task"
+msgstr "geplante Aufgabe"
+
+#: src/Service/Booster/SettingsView.php:295
+msgid "WP-CLI"
+msgstr "WP-CLI"
+
+#: src/Service/Booster/SettingsView.php:298
+msgid "Post"
+msgstr "Beitrag"
+
+#: src/Service/Booster/SettingsView.php:298
+msgid "Action"
+msgstr "Aktion"
+
+#: src/Service/Booster/SettingsView.php:298
+msgid "Source"
+msgstr "Herkunft"
+
+#: src/Service/Booster/SettingsView.php:298
+msgid "Index now"
+msgstr "Index jetzt"
+
+#: src/Service/Booster/SettingsView.php:326
+msgid "Checks and scheduled tasks"
+msgstr "Prüfungen und geplante Aufgaben"
+
+#: src/Service/Booster/SettingsView.php:332
+msgid "Quick check for changes made without the booster"
+msgstr "Schnellprüfung auf Änderungen ohne Booster"
+
+#: src/Service/Booster/SettingsView.php:333
+msgid "on every page load"
+msgstr "bei jedem Seitenaufruf"
+
+#. translators: %d: post id
+#: src/Service/Booster/SettingsView.php:335
+#, php-format
+msgid "checked up to post %d"
+msgstr "geprüft bis Beitrag %d"
+
+#: src/Service/Booster/SettingsView.php:339
+msgid "Deep check: status and changes of all posts"
+msgstr "Tiefenprüfung: Status und Änderungen aller Beiträge"
+
+#: src/Service/Booster/SettingsView.php:345
+msgid "Index sample (200 random posts)"
+msgstr "Index-Stichprobe (200 zufällige Beiträge)"
+
+#: src/Service/Booster/SettingsView.php:351
+msgid "Availability sample (50 pairs)"
+msgstr "Verfügbarkeits-Stichprobe (50 Paare)"
+
+#: src/Service/Booster/SettingsView.php:357
+msgid "Compute changed and old availability rows"
+msgstr "Geänderte und alte Verfügbarkeitszeilen berechnen"
+
+#. translators: %d: number of computed pairs
+#: src/Service/Booster/SettingsView.php:361
+#, php-format
+msgid "%d computed"
+msgstr "%d berechnet"
+
+#: src/Service/Booster/SettingsView.php:367
+msgid "Task"
+msgstr "Aufgabe"
+
+#: src/Service/Booster/SettingsView.php:367
+msgid "Last run"
+msgstr "Letzter Lauf"
+
+#: src/Service/Booster/SettingsView.php:367
+msgid "Result"
+msgstr "Ergebnis"
+
+#: src/Service/Booster/SettingsView.php:367
+msgid "Next run"
+msgstr "Nächster Lauf"
+
+#: src/Service/Booster/SettingsView.php:386
+msgid "Run all checks now"
+msgstr "Jetzt alle Prüfungen ausführen"
+
+#: src/Service/Booster/SettingsView.php:387
+msgid "Rebuild the index? Until it is complete, the original (slower) queries are used."
+msgstr "Index neu aufbauen? Bis er fertig ist, werden die ursprünglichen (langsameren) Abfragen verwendet."
+
+#: src/Service/Booster/SettingsView.php:387
+msgid "Rebuild index"
+msgstr "Index neu aufbauen"
+
+#: src/Service/Booster/SettingsView.php:388
+msgid "The check compares all posts with the index and a sample of the availability with a fresh computation and repairs differences."
+msgstr "Die Prüfung vergleicht alle Beiträge mit dem Index und eine Stichprobe der Verfügbarkeit mit einer frischen Berechnung und repariert Abweichungen."
+
+#: src/Service/Booster/SettingsView.php:424
+msgid "matches"
+msgstr "stimmt überein"
+
+#: src/Service/Booster/SettingsView.php:425
+msgid "being processed"
+msgstr "wird verarbeitet"
+
+#: src/Service/Booster/SettingsView.php:426
+msgid "differs"
+msgstr "weicht ab"
+
+#: src/Service/Booster/SettingsView.php:475
+msgid "You are not allowed to do this."
+msgstr "Dazu bist du nicht berechtigt."
+
+#. translators: %s: human readable time difference, e.g. "5 mins"
+#: src/Service/Booster/SettingsView.php:510
+#, php-format
+msgid "%s ago"
+msgstr "vor %s"
+
+#: src/Service/Booster/SettingsView.php:547
+msgid "not yet"
+msgstr "noch nicht"
+
+#. translators: %d: number of repaired differences
+#: src/Service/Booster/SettingsView.php:559
+#, php-format
+msgid "%d difference repaired"
+msgid_plural "%d differences repaired"
+msgstr[0] "%d Abweichung repariert"
+msgstr[1] "%d Abweichungen repariert"
+
+#: src/Service/Booster/SettingsView.php:560
+msgid "no differences"
+msgstr "keine Abweichungen"
+
+#. translators: %d: number of checked entries
+#: src/Service/Booster/SettingsView.php:563
+#, php-format
+msgid "%d checked"
+msgstr "%d geprüft"
+
+#. translators: %s: human readable time difference
+#: src/Service/Booster/SettingsView.php:577
+#, php-format
+msgid "overdue for %s"
+msgstr "seit %s überfällig"
+
+#: src/Service/Booster/SettingsView.php:580
+msgid "now"
+msgstr "jetzt"
+
+#. translators: %s: human readable time difference
+#: src/Service/Booster/SettingsView.php:584
+#, php-format
+msgid "in %s"
+msgstr "in %s"
+
+#: includes/Public.php:97
+msgid "Please wait …"
+msgstr "Bitte warten …"
+
+#: src/Wordpress/CustomPostType/Booking.php:211
+msgid "Other booking requests for this item are being processed right now. Please try again in a moment."
+msgstr "Für diesen Artikel werden gerade andere Buchungsanfragen bearbeitet. Bitte versuche es gleich noch einmal."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Assigned timeframes"
+msgstr "Zugeordnete Zeitrahmen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "All timeframes and restrictions assigned to this item, whether directly, via a list, a category or \"all\". Holidays and blocked timeframes only apply at locations that are selected in the timeframe as well. The column \"Applies at\" shows where. ⚠ marks entries that are assigned but currently have no effect."
+msgstr "Alle Zeitrahmen und Einschränkungen, die diesem Artikel zugeordnet sind – direkt, über eine Liste, eine Kategorie oder „alle“. Feiertage und Blockierungen wirken nur an Standorten, die im Zeitrahmen ebenfalls ausgewählt sind. Die Spalte „Wirkt an“ zeigt, wo. ⚠ markiert Einträge, die zugeordnet sind, aber derzeit nicht wirken."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "All timeframes and restrictions assigned to this location, whether directly, via a list, a category or \"all\". Holidays and blocked timeframes only apply to items that are selected in the timeframe as well. The column \"Affects items\" shows which ones. ⚠ marks entries that are assigned but currently have no effect."
+msgstr "Alle Zeitrahmen und Einschränkungen, die diesem Standort zugeordnet sind – direkt, über eine Liste, eine Kategorie oder „alle“. Feiertage und Blockierungen wirken nur für Artikel, die im Zeitrahmen ebenfalls ausgewählt sind. Die Spalte „Betrifft Artikel“ zeigt, welche. ⚠ markiert Einträge, die zugeordnet sind, aber derzeit nicht wirken."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Applies at"
+msgstr "Wirkt an"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Affects items"
+msgstr "Betrifft Artikel"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Bookable at:"
+msgstr "Buchbar an:"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Bookable items:"
+msgstr "Buchbare Artikel:"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "Category: %1$s (%2$d)"
+msgstr "Kategorie: %1$s (%2$d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Current"
+msgstr "Aktuell"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Upcoming"
+msgstr "Zukünftig"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Expired"
+msgstr "Abgelaufen"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "%d more entries are not shown."
+msgstr "%d weitere Einträge werden nicht angezeigt."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Slot"
+msgstr "Slot"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "List (%d)"
+msgstr "Liste (%d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "No timeframes or restrictions are assigned."
+msgstr "Es sind keine Zeitrahmen oder Einschränkungen zugeordnet."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Repetition"
+msgstr "Wiederholung"
+
+#: src/Repository/AssignedTimeframes.php
+msgid "Restriction: notice"
+msgstr "Einschränkung: Hinweis"
+
+#: src/Repository/AssignedTimeframes.php
+msgid "Restriction: total breakdown"
+msgstr "Einschränkung: Totalausfall"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Save the post first to see its timeframes."
+msgstr "Speichere zuerst, um die zugeordneten Zeitrahmen zu sehen."
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Show in timeframe list"
+msgstr "In der Zeitrahmen-Liste anzeigen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "Title (status)"
+msgstr "Titel (Status)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "active"
+msgstr "aktiv"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "solved"
+msgstr "behoben"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "not active"
+msgstr "nicht aktiv"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "all"
+msgstr "alle"
+
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "all (%d)"
+msgstr "alle (%d)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "assigned, but not at a location of this item"
+msgstr "zugeordnet, aber an keinem Standort dieses Artikels"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "assigned, but not for an item of this location"
+msgstr "zugeordnet, aber für keinen Artikel dieses Standorts"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "every day"
+msgstr "jeden Tag"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "managed by an administrator"
+msgstr "verwaltet von einem Admin"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "none (no bookable timeframe)"
+msgstr "keine (kein buchbarer Zeitrahmen)"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "not published"
+msgstr "nicht veröffentlicht"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "open end"
+msgstr "offen"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "restriction not active"
+msgstr "Einschränkung nicht aktiv"
+
+#. translators: %d: number of further items or locations
+#: src/View/Admin/AssignedTimeframes.php
+#, php-format
+msgid "%d more"
+msgid_plural "%d more"
+msgstr[0] "%d weiterer"
+msgstr[1] "%d weitere"
+
+#: src/View/Admin/AssignedTimeframes.php
+msgid "No entries."
+msgstr "Keine Einträge."

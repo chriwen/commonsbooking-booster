@@ -77,6 +77,28 @@ function commonsbooking_public() {
 	}
 
 	/**
+	 * Booking forms: send only once. Checking and saving a booking can take a few seconds; a second click during
+	 * that time would send the same booking again.
+	 */
+	wp_add_inline_script(
+		'cb-scripts-public',
+		sprintf(
+			'(function(){var wait=%s;'
+			. 'document.addEventListener("submit",function(e){var f=e.target;'
+			. 'if(!f.matches||!f.matches("#booking-form,[id^=cb-booking-form-set-]"))return;'
+			. 'var b=e.submitter;if(b&&b.name==="calendar-download")return;'
+			. 'if(f.dataset.cbSent){e.preventDefault();return;}'
+			. 'f.dataset.cbSent="1";f.setAttribute("aria-busy","true");f.classList.add("cb-form-sending");'
+			. 'if(b&&b.tagName==="INPUT"){var h=document.createElement("input");h.type="hidden";h.className="cb-sent-copy";if(b.name){h.name=b.name;h.value=b.value;f.appendChild(h);}b.dataset.cbLabel=b.value;b.value=wait;}'
+			. 'f.querySelectorAll("[type=submit]").forEach(function(x){if(x.name!=="calendar-download"){x.disabled=true;}});'
+			. '});'
+			. 'window.addEventListener("pageshow",function(e){if(!e.persisted)return;document.querySelectorAll("form[data-cb-sent]").forEach(function(f){delete f.dataset.cbSent;f.removeAttribute("aria-busy");f.classList.remove("cb-form-sending");f.querySelectorAll(".cb-sent-copy").forEach(function(h){h.remove();});f.querySelectorAll("[type=submit]").forEach(function(x){x.disabled=false;if(x.dataset.cbLabel){x.value=x.dataset.cbLabel;delete x.dataset.cbLabel;}});});});'
+			. '})();',
+			wp_json_encode( __( 'Please wait …', 'commonsbooking' ) )
+		)
+	);
+
+	/**
 	 * Ajax - calendar data
 	 */
 	wp_localize_script(

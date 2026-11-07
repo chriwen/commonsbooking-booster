@@ -54,23 +54,37 @@ class Day {
 	protected bool $ignoreRestrictions = false;
 
 	/**
+	 * Post status of restrictions which are considered for availabilities.
+	 */
+	public const RESTRICTION_STATUSES = [ 'publish', 'confirmed', 'unconfirmed' ];
+
+	/**
+	 * Restrictions that might be relevant for this day (preloaded for a whole calendar range), null = query them.
+	 *
+	 * @var Restriction[]|null
+	 */
+	protected ?array $possibleRestrictions = null;
+
+	/**
 	 * Day constructor.
 	 *
-	 * @param string $date
-	 * @param array  $locations
-	 * @param array  $items
-	 * @param array  $types
-	 * @param array  $possibleTimeframes
+	 * @param string             $date
+	 * @param array              $locations
+	 * @param array              $items
+	 * @param array              $types
+	 * @param array              $possibleTimeframes
+	 * @param Restriction[]|null $possibleRestrictions active restrictions of a larger range (e.g. a calendar), filtered for this day
 	 */
-	public function __construct( string $date, array $locations = [], array $items = [], array $types = [], array $possibleTimeframes = [] ) {
-		$this->date      = $date;
-		$this->locations = array_map(
+	public function __construct( string $date, array $locations = [], array $items = [], array $types = [], array $possibleTimeframes = [], ?array $possibleRestrictions = null ) {
+		$this->date                 = $date;
+		$this->possibleRestrictions = $possibleRestrictions;
+		$this->locations            = array_map(
 			function ( $location ) {
 				return $location instanceof WP_Post ? $location->ID : $location;
 			},
 			$locations
 		);
-		$this->items     = array_map(
+		$this->items                = array_map(
 			function ( $item ) {
 				return $item instanceof WP_Post ? $item->ID : $item;
 			},
@@ -166,14 +180,43 @@ class Day {
 	 * @throws Exception
 	 */
 	public function getRestrictions(): array {
+		if ( $this->possibleRestrictions !== null ) {
+			return array_values( array_filter( $this->possibleRestrictions, fn( Restriction $restriction ) => $this->isInRestriction( $restriction ) ) );
+		}
+
 		return \CommonsBooking\Repository\Restriction::get(
 			$this->locations,
 			$this->items,
 			$this->getDate(),
 			true,
 			null,
-			[ 'publish', 'confirmed', 'unconfirmed' ]
+			self::RESTRICTION_STATUSES
 		);
+	}
+
+	/**
+	 * Same date condition as {@see \CommonsBooking\Repository\Restriction::get()} with a date:
+	 * a start is set and before the end of the day, the end is after the start of the day (or not set).
+	 *
+	 * @param Restriction $restriction
+	 *
+	 * @return bool
+	 */
+	protected function isInRestriction( Restriction $restriction ): bool {
+		$start = $restriction->getMeta( Restriction::META_START );
+		if ( $start === '' ) { // no start stored
+			return false;
+		}
+		$start = (int) $start;
+		if ( $start < 0 || $start > strtotime( $this->getDate() . 'T23:59' ) ) {
+			return false;
+		}
+		if ( ! $restriction->hasEnddate() ) {
+			return true;
+		}
+		$end = (int) $restriction->getMeta( Restriction::META_END );
+
+		return $end >= strtotime( $this->getDate() ) && $end <= Restriction::NO_END_TIMESTAMP;
 	}
 
 	/**

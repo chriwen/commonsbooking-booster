@@ -47,6 +47,19 @@ class Booking extends PostRepository {
 		$startTimestamp = self::getStartTimestamp( $timestamp );
 		$endTimestamp   = self::getEndTimestamp( $startTimestamp );
 
+		$fromIndex = self::findViaIndex(
+			[
+				'require_end' => true,
+				'end_min'     => $startTimestamp,
+				'end_max'     => $endTimestamp,
+			],
+			$customArgs,
+			[ 'confirmed', 'unconfirmed' ]
+		);
+		if ( $fromIndex !== null ) {
+			return $fromIndex;
+		}
+
 		// Default query
 		$args = array(
 			'post_type'   => \CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
@@ -92,6 +105,18 @@ class Booking extends PostRepository {
 	public static function getBeginningBookingsByDate( int $timestamp, array $customArgs = [] ): array {
 		$startTimestamp = self::getStartTimestamp( $timestamp );
 		$endTimestamp   = self::getEndTimestamp( $startTimestamp );
+
+		$fromIndex = self::findViaIndex(
+			[
+				'start_min' => $startTimestamp,
+				'start_max' => $endTimestamp,
+			],
+			$customArgs,
+			[ 'confirmed' ]
+		);
+		if ( $fromIndex !== null ) {
+			return $fromIndex;
+		}
 
 		// Default query
 		$args = array(
@@ -147,6 +172,26 @@ class Booking extends PostRepository {
 	 * @throws Exception
 	 */
 	public static function getByDate( int $startDateTimestamp, int $endDateTimestamp, int $locationId, int $itemId ): ?\CommonsBooking\Model\Booking {
+		$fromIndex = self::findViaIndex(
+			[
+				'start_min' => $startDateTimestamp,
+				'start_max' => $startDateTimestamp,
+				'end_exact' => $endDateTimestamp,
+				'items'     => [ $itemId ],
+				'locations' => [ $locationId ],
+			],
+			[],
+			[ 'confirmed', 'unconfirmed' ]
+		);
+		if ( $fromIndex !== null ) {
+			if ( count( $fromIndex ) > 1 ) {
+				// This shouldn't happen.
+				throw new Exception( __CLASS__ . '::' . __LINE__ . ': Found more than one bookings' );
+			}
+
+			return $fromIndex ? reset( $fromIndex ) : null;
+		}
+
 		// Default query
 		$args = array(
 			'post_type'   => \CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
@@ -227,6 +272,23 @@ class Booking extends PostRepository {
 		array $customArgs = [],
 		array $postStatus = [ 'confirmed', 'unconfirmed' ]
 	): array {
+		$criteria = [
+			'start_min'   => PHP_INT_MIN,
+			'start_max'   => $endDate,
+			'require_end' => true,
+			'end_min'     => $startDate,
+		];
+		if ( $locationId ) {
+			$criteria['locations'] = [ $locationId ];
+		}
+		if ( $itemId ) {
+			$criteria['items'] = [ $itemId ];
+		}
+		$fromIndex = self::findViaIndex( $criteria, $customArgs, $postStatus );
+		if ( $fromIndex !== null ) {
+			return $fromIndex;
+		}
+
 		// Default query
 		$args = array(
 			'post_type'   => \CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
@@ -297,14 +359,7 @@ class Booking extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = self::get(
-				[],
-				[],
-				null,
-				$asModel,
-				$minTimestamp,
-				$postStatus
-			);
+			$posts = self::getVisibleCandidates( $user, $asModel, $minTimestamp, $postStatus );
 			if ( $posts ) {
 				// Check if it is the main query and one of our custom post types
 				$posts = array_filter(
@@ -323,6 +378,94 @@ class Booking extends PostRepository {
 		}
 
 		return $posts;
+	}
+
+	/**
+	 * Returns a superset of the bookings the user is allowed to see ({@see commonsbooking_isUserAllowedToSee()}),
+	 * without loading all bookings for users who are not CommonsBooking admins:
+	 * - own bookings (post author)
+	 * - bookings of items the user manages (item author or listed in the item admins)
+	 * - bookings of locations the user manages (location author or listed in the location admins)
+	 * This matches {@see \CommonsBooking\Model\Timeframe::getAdmins()}, which merges item and location admins.
+	 *
+	 * @param \WP_User $user
+	 * @param bool     $asModel
+	 * @param int|null $minTimestamp
+	 * @param string[] $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|\WP_Post[] ordered by post id
+	 * @throws Exception
+	 */
+	private static function getVisibleCandidates( \WP_User $user, bool $asModel, $minTimestamp, array $postStatus ): array {
+		if ( commonsbooking_isUserAdmin( $user ) ) {
+			return self::get( [], [], null, $asModel, $minTimestamp, $postStatus );
+		}
+
+		$minTimestamp = $minTimestamp ? (int) $minTimestamp : null;
+		$candidates   = \CommonsBooking\Repository\Timeframe::getByAuthor(
+			$user->ID,
+			[ Timeframe::BOOKING_ID ],
+			$asModel,
+			$minTimestamp,
+			$postStatus
+		);
+
+		$managedItems = self::getManagedPostIds( $user, \CommonsBooking\Wordpress\CustomPostType\Item::$postType );
+		if ( $managedItems ) {
+			$candidates = array_merge( $candidates, self::get( [], $managedItems, null, $asModel, $minTimestamp, $postStatus ) );
+		}
+		$managedLocations = self::getManagedPostIds( $user, \CommonsBooking\Wordpress\CustomPostType\Location::$postType );
+		if ( $managedLocations ) {
+			$candidates = array_merge( $candidates, self::get( $managedLocations, [], null, $asModel, $minTimestamp, $postStatus ) );
+		}
+
+		$unique = [];
+		foreach ( $candidates as $candidate ) {
+			$unique[ $candidate->ID ] = $candidate;
+		}
+		ksort( $unique );
+
+		return array_values( $unique );
+	}
+
+	/**
+	 * Returns ids of the items or locations the user manages: posts the user is author of or listed in the
+	 * admins meta (`_{post type}_admins`, a serialized list or a single id, see Location::getAdmins()).
+	 * Post status is not checked, as in getAdmins().
+	 *
+	 * @param \WP_User $user
+	 * @param string   $postType cb_item or cb_location
+	 *
+	 * @return int[]
+	 */
+	private static function getManagedPostIds( \WP_User $user, string $postType ): array {
+		global $wpdb;
+
+		$ids = array_map(
+			'intval',
+			$wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = %s AND post_author = %d", $postType, $user->ID ) )
+		);
+
+		// LIKE narrows the rows down, the exact check is done in PHP on the unserialized value
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT pm.post_id, pm.meta_value FROM $wpdb->postmeta pm
+				INNER JOIN $wpdb->posts p ON p.ID = pm.post_id AND p.post_type = %s
+				WHERE pm.meta_key = %s AND pm.meta_value LIKE %s",
+				$postType,
+				'_' . $postType . '_admins',
+				'%' . $wpdb->esc_like( (string) $user->ID ) . '%'
+			)
+		);
+		foreach ( $rows as $row ) {
+			$admins = maybe_unserialize( $row->meta_value );
+			$admins = is_array( $admins ) ? $admins : [ $admins ];
+			if ( in_array( $user->ID, array_map( 'intval', $admins ), true ) ) {
+				$ids[] = (int) $row->post_id;
+			}
+		}
+
+		return array_values( array_unique( $ids ) );
 	}
 
 	/**
@@ -473,6 +616,96 @@ class Booking extends PostRepository {
 		}
 
 		return $existingBookingsInRange;
+	}
+
+	/**
+	 * Candidates for {@see \CommonsBooking\Model\Item::getClosestBooking()}: the confirmed bookings of the pair that
+	 * ended before $now and have the latest start of those. Only these can win the sort by start date in
+	 * getClosestBooking(), which then decides between them (start time, order by post id) exactly as before.
+	 *
+	 * Without the index all confirmed bookings of the pair are loaded and filtered in PHP, which grows with the whole
+	 * booking history (about 10 MB and 95 ms per item on 167,000 bookings). With the index this reads index rows only
+	 * and loads a single post in the usual case.
+	 *
+	 * Same semantics as the legacy path: Booking::isPast() compares the end meta as integer, so a missing end (index
+	 * NULL) counts as past; a missing start counts as 0.
+	 *
+	 * @param int $itemId item of the pair
+	 * @param int $locationId location of the pair
+	 * @param int $now local timestamp, as current_time( 'timestamp' )
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|null ordered by post id, null if the index is not available
+	 */
+	public static function getLatestPastConfirmed( int $itemId, int $locationId, int $now ): ?array {
+		if ( ! Index::isAvailable() ) {
+			return null;
+		}
+		\CommonsBooking\Service\Index\Indexer::flush();
+
+		global $wpdb;
+		$table = \CommonsBooking\Service\Index\Schema::table();
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery -- table name only, derived data
+		$where       = $wpdb->prepare(
+			"item_id = %d AND location_id = %d AND type = %d AND post_type = %s AND post_status = 'confirmed'
+			AND (end_ts IS NULL OR end_ts < %d)",
+			$itemId,
+			$locationId,
+			Timeframe::BOOKING_ID,
+			\CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
+			$now
+		);
+		$latestStart = $wpdb->get_var( "SELECT MAX(COALESCE(start_ts, 0)) FROM $table WHERE $where" );
+		if ( $latestStart === null ) {
+			return [];
+		}
+		$ids = $wpdb->get_col(
+			$wpdb->prepare( "SELECT post_id FROM $table WHERE $where AND COALESCE(start_ts, 0) = %d ORDER BY post_id", (int) $latestStart )
+		);
+		// phpcs:enable
+
+		return array_map( fn( $post ) => new \CommonsBooking\Model\Booking( $post ), Index::loadPosts( array_map( 'intval', $ids ) ) );
+	}
+
+	/**
+	 * Finds bookings with the index, mirroring the WP_Query based methods of this class.
+	 * Returns null if the index is not available or $customArgs contains arguments the index does not support;
+	 * the caller then runs the legacy WP_Query.
+	 *
+	 * Supported custom args (same semantics as in WP_Query): author (single id), post_status, orderby=date, order.
+	 *
+	 * @param array    $criteria see {@see Index::findPostIds()}
+	 * @param array    $customArgs WP_Query args passed by the caller
+	 * @param string[] $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|null
+	 */
+	private static function findViaIndex( array $criteria, array $customArgs, array $postStatus ): ?array {
+		if ( ! Index::isAvailable() ) {
+			return null;
+		}
+
+		$order = 'DESC'; // WP_Query default: orderby date DESC
+		foreach ( $customArgs as $key => $value ) {
+			if ( $key === 'author' && is_numeric( $value ) ) {
+				$criteria['authors'] = [ (int) $value ];
+			} elseif ( $key === 'post_status' ) {
+				$postStatus = (array) $value;
+			} elseif ( $key === 'orderby' && $value === 'date' ) {
+				continue;
+			} elseif ( $key === 'order' && in_array( strtoupper( (string) $value ), [ 'ASC', 'DESC' ], true ) ) {
+				$order = strtoupper( (string) $value );
+			} else {
+				return null;
+			}
+		}
+
+		$criteria['post_types'] = [ \CommonsBooking\Wordpress\CustomPostType\Booking::$postType ];
+		$criteria['types']      = [ Timeframe::BOOKING_ID ];
+		$criteria['statuses']   = $postStatus;
+
+		$posts = Index::sortByDate( Index::loadPosts( Index::findPostIds( $criteria ) ), $order );
+
+		return array_map( fn( $post ) => new \CommonsBooking\Model\Booking( $post ), $posts );
 	}
 
 	/**

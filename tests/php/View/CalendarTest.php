@@ -260,6 +260,36 @@ class CalendarTest extends CustomPostTypeTest {
 	}
 
 	/**
+	 * Table days without a status (after the end of the calendar data) are rendered as locked cells.
+	 * They were rendered as broken markup "<span'is-locked'>" without class attribute, so the cells were shown empty.
+	 * With the table's range (keepDaterange) the statuses usually cover all days, so the reader is replaced here.
+	 */
+	public function testRenderItemLocationRowLocksDaysWithoutStatus() {
+		// reader that returns the status of the first three days only, the calendar data ends there
+		$reader = new class() extends \CommonsBooking\Service\Availability\Reader {
+			public function getDayStatuses( int $itemId, int $locationId, string $startDate, string $endDate, bool $keepDaterange, string $rangeFrom, string $rangeTo ): array {
+				return [
+					'days'    => [
+						'2021-07-01' => \CommonsBooking\Service\Availability\DayStatus::AVAILABLE,
+						'2021-07-02' => \CommonsBooking\Service\Availability\DayStatus::AVAILABLE,
+						'2021-07-03' => \CommonsBooking\Service\Availability\DayStatus::AVAILABLE,
+					],
+					'endDate' => '2021-07-03',
+				];
+			}
+		};
+
+		$method = new \ReflectionMethod( Calendar::class, 'renderItemLocationRow' );
+		$method->setAccessible( true );
+		$row = $method->invoke( null, get_post( $this->itemId ), $this->locationId, 'Location', '2021-07-01', '2021-07-07', 7, array_fill( 0, 7, '' ), $reader );
+
+		$this->assertStringNotContainsString( "<span'", $row );
+		preg_match_all( '#<td>(<span[^>]*></span>)#', $row, $cells );
+		$this->assertCount( 7, $cells[1] );
+		$this->assertSame( array_fill( 0, 4, "<span class='is-locked'></span>" ), array_slice( $cells[1], 3 ) );
+	}
+
+	/**
 	 *
 	 * @return array
 	 */

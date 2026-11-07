@@ -376,6 +376,70 @@ class BookingTest extends CustomPostTypeTest {
 		$this->assertCount( 2, $bookings );
 	}
 
+	/**
+	 * getForUser() only loads candidate bookings (own, managed items, managed locations) instead of all bookings.
+	 * The result must be the same as filtering all bookings with commonsbooking_isUserAllowedToSee().
+	 */
+	public function testGetForUserMatchesFilteringAllBookings() {
+		$users = [];
+		foreach ( [ 'author', 'itemadmin', 'locadmin', 'locauthor', 'intadmin', 'other', 'nobody' ] as $name ) {
+			$users[ $name ] = wp_create_user( 'gfu_' . $name, 'pw', $name . '@getforuser.test' );
+		}
+		$this->createAdministrator();
+		$users['admin'] = $this->adminUserID;
+
+		// item admin as list of strings (CMB2), item admin as list of ints, location admin as single string,
+		// location managed by being its author
+		$itemA = $this->createItem( 'gfu item A', 'publish', [ (string) $users['itemadmin'] ] );
+		$itemB = $this->createItem( 'gfu item B' );
+		update_post_meta( $itemB, '_cb_item_admins', [ $users['intadmin'] ] );
+		$locC = $this->createLocation( 'gfu location C' );
+		update_post_meta( $locC, '_cb_location_admins', (string) $users['locadmin'] );
+		$locD = $this->createLocation( 'gfu location D', 'publish', [], $users['locauthor'] );
+		// user id 1 digit prefix of other ids must not match ("1" in "12")
+		$locE = $this->createLocation( 'gfu location E', 'publish', [ (string) ( $users['locadmin'] * 10 + 1 ) ] );
+
+		$day = strtotime( self::CURRENT_DATE );
+		$this->createBooking( $locC, $itemA, $day, $day + DAY_IN_SECONDS, '12:00 AM', '23:59', 'confirmed', $users['author'] );
+		$this->createBooking( $locD, $itemB, $day + 2 * DAY_IN_SECONDS, $day + 3 * DAY_IN_SECONDS, '12:00 AM', '23:59', 'confirmed', $users['other'] );
+		$this->createBooking( $locE, $itemB, $day - 5 * DAY_IN_SECONDS, $day - 4 * DAY_IN_SECONDS, '12:00 AM', '23:59', 'canceled', $users['author'] );
+		$this->createBooking( $locD, $itemA, $day + 4 * DAY_IN_SECONDS, $day + 5 * DAY_IN_SECONDS, '12:00 AM', '23:59', 'unconfirmed', $users['other'] );
+		$this->createBooking( $locE, $itemA, $day + 6 * DAY_IN_SECONDS, $day + 7 * DAY_IN_SECONDS, '12:00 AM', '23:59', 'confirmed', $users['other'] );
+
+		$variants = [
+			[ null, [ 'canceled', 'confirmed', 'unconfirmed' ] ],
+			[ $day + DAY_IN_SECONDS, [ 'canceled', 'confirmed', 'unconfirmed' ] ],
+			[ null, [ 'unconfirmed' ] ],
+		];
+		$nonEmpty = 0;
+		foreach ( $users as $name => $userId ) {
+			$user = new \WP_User( $userId );
+			foreach ( $variants as [ $minTimestamp, $postStatus ] ) {
+				$expected = array_values(
+					array_filter(
+						Booking::get( [], [], null, false, $minTimestamp, $postStatus ),
+						fn( $post ) => commonsbooking_isUserAllowedToSee( $post, $user )
+					)
+				);
+				$expected = array_map( 'intval', wp_list_pluck( $expected, 'ID' ) );
+				sort( $expected );
+
+				$actual = array_map( 'intval', wp_list_pluck( Booking::getForUser( $user, false, $minTimestamp, $postStatus ), 'ID' ) );
+				sort( $actual );
+				$this->assertSame( $expected, $actual, $name . ' ' . wp_json_encode( [ $minTimestamp, $postStatus ] ) );
+
+				$asModel = Booking::getForUser( $user, true, $minTimestamp, $postStatus );
+				$this->assertContainsOnlyInstancesOf( \CommonsBooking\Model\Booking::class, $asModel );
+				$this->assertCount( count( $expected ), $asModel );
+				$nonEmpty += $expected ? 1 : 0;
+			}
+		}
+		// the scenarios must actually find something for most users
+		$this->assertGreaterThan( 10, $nonEmpty );
+		$this->assertCount( 0, Booking::getForUser( new \WP_User( $users['nobody'] ) ) );
+		$this->assertCount( 3, Booking::getForUser( new \WP_User( $users['itemadmin'] ) ) ); // all bookings of item A
+	}
+
 	public function testCentralBookingsGetFunction() {
 		// Test without params
 		$this->assertCount( count( $this->bookingIds ), Booking::get() );
