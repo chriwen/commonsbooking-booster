@@ -349,11 +349,17 @@ Umgesetzt:
 |---|---|
 | `src/Repository/AssignedTimeframes.php` | `forItem()` / `forLocation()`, Kandidatensuche über `postmeta` oder – falls `Index::isAvailable()` – über `cb_index`/`cb_index_rel`, Zuordnungsart, „wirkt an“, Gruppen, `can_edit` |
 | `src/View/Admin/AssignedTimeframes.php` | Metabox (Anker `#cb-assigned-timeframes`), Beschriftungen für Wiederholung, Raster, Zuordnung; `assignmentHtml()` auch für die Listenspalte |
-| `Item.php`, `Location.php` | Registrierung der Metabox über `add_meta_boxes_{post_type}` |
+| `Item.php`, `Location.php` | Registrierung der Metabox über `add_meta_boxes_{post_type}`; sie steht als erste Box in der Hauptspalte (siehe unten) |
 | `CustomPostType.php` | Zeilenaktion „Timeframes“ in Artikel- und Standortliste |
 | `Timeframe.php` | Listenfilter Artikel/Standort berücksichtigt `item-id-list`/`location-id-list`; Spalte zeigt „all (N)“, „Category: …“, „List (N)“ |
 | `tests/php/Repository/AssignedTimeframesTest.php`, `tests/php/View/AssignedTimeframesViewTest.php` | 17 Tests, grün mit und ohne Booster |
 | `languages/commonsbooking-de_DE.po/.mo` | deutsche Übersetzungen der neuen Strings |
+
+**Position der Metabox (07.11.2026):** Die Metabox steht auf Artikel- und Standortseite an erster Stelle der
+Hauptspalte, damit man die Zeitrahmen direkt beim Öffnen sieht (Vorgabe des Nutzers). Sie wird mit Priorität `high`
+registriert und in `$wp_meta_boxes[…]['normal']['high']` vor die CMB2-Boxen gesetzt, die schon vorher auf
+`add_meta_boxes` registriert wurden. Hat ein Nutzer die Boxen per Drag-and-drop umsortiert, gilt weiter seine
+gespeicherte Reihenfolge.
 
 Abweichungen vom Konzept:
 

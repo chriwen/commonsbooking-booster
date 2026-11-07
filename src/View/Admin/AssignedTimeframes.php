@@ -27,13 +27,19 @@ class AssignedTimeframes {
 	private const MAX_EXPIRED = 20;
 
 	/**
-	 * Registers the metabox on item and location edit pages.
+	 * Registers the metabox on item and location edit pages as the first box of the main column.
+	 *
+	 * Runs on `add_meta_boxes_{post_type}`, i.e. after CMB2 has registered its boxes (priority "high") on
+	 * `add_meta_boxes`. Boxes of equal priority are shown in registration order, so the box is moved to the front.
+	 * An order saved by the user (drag and drop) still takes precedence.
 	 *
 	 * @param string $postType
 	 *
 	 * @return void
 	 */
 	public static function addMetaBox( string $postType ): void {
+		global $wp_meta_boxes;
+
 		if ( $postType !== Item::$postType && $postType !== Location::$postType ) {
 			return;
 		}
@@ -43,8 +49,13 @@ class AssignedTimeframes {
 			array( self::class, 'render' ),
 			$postType,
 			'normal',
-			'default'
+			'high'
 		);
+
+		$boxes = $wp_meta_boxes[ $postType ]['normal']['high'] ?? array();
+		if ( isset( $boxes[ self::METABOX_ID ] ) ) {
+			$wp_meta_boxes[ $postType ]['normal']['high'] = array( self::METABOX_ID => $boxes[ self::METABOX_ID ] ) + $boxes; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- reorder only
+		}
 	}
 
 	/**
