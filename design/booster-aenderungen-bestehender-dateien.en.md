@@ -25,6 +25,7 @@ Only **changed** files (38, 3 of them language files). New files – mainly `src
 | Booking | `Wordpress/CustomPostType/Booking.php`, `Timeframe.php`, `Model/Booking.php`, `Service/BookingRuleApplied.php`, `includes/Public.php` | validation always without booster, item lock, double-click protection | **yes** (lock, double click, rule check) |
 | Cache | `Service/Cache.php` | roles in the cache key, `withoutCache()` | **yes** |
 | Minor fixes | `templates/location-calendar-header.php`, `_lists.scss` | pickup instructions without extra whitespace | yes |
+| Dashboard | `templates/dashboard-index.php` | fourth column with the booster status (admins only) | yes (shows "switched off" and a link to the setting) |
 | Tests, CI, docs | `tests/…` (incl. `Model/ItemTest.php`), `.github/workflows/phpunit.yml`, `phpstan*.neon`, `TECHNICAL.md` | booster on in tests, three additional CI runs | – |
 | Translations | `languages/*` | new strings (settings page, lock message) | – |
 

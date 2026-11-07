@@ -156,6 +156,55 @@ Beiträge ihre korrekten GMT-Zeiten. Nur die lokale Spalte (`post_date`) ältere
 
 Tests: `tests/php/Service/Booster/DiagnosticsTest.php`, `CacheRoleContextTest.php`.
 
+## Statuskarte auf dem CommonsBooking-Dashboard
+
+Damit Admins nach einem Update auf den Booster stoßen, bekommt das Dashboard (CommonsBooking → Dashboard) für Admins
+eine **vierte Spalte „Performance-Booster“** neben „Konfiguration“ (`SettingsView::renderDashboardColumn()`, eingebunden
+in `templates/dashboard-index.php`). Vorgaben des Nutzers:
+
+- Eigene Spalte statt Karte unter „Konfiguration“ (dort sprengte sie das Layout). Die vier Spalten bleiben bei jeder
+  Breite **in einer Reihe** und werden nur schmaler (Flexbox ohne Umbruch, Gewichte 1 / 1 / 0,7 / 1,3). Die
+  Spaltenstile kommen mit der Spalte (Klasse `cb-dashboard-four-columns` am Container nur für Admins), das
+  kompilierte Admin-CSS bleibt unverändert. Der `<style>`-Block steht in der Spalte, damit sie das vierte Kind bleibt.
+- Für Anwender ohne technische Kenntnisse: keine Fachbegriffe wie Index, Originalabfragen oder Cron-Namen auf der
+  Karte. Hinweise werden nur gezählt („2 Hinweise, Details in den Einstellungen“), Einzelheiten stehen auf der
+  Einstellungsseite.
+
+Inhalt:
+
+- **Statuspunkt** mit Text: grau = ausgeschaltet, gelb = wird eingerichtet (mit Fortschrittsbalken) oder Hinweise,
+  rot = Problem, grün = aktiv und in Ordnung. Die Stufe kommt aus `Diagnostics::getHealth()`, wie auf der
+  Einstellungsseite.
+- **„Aktiv, Artikelkalender werden vorbereitet“** (gelb) statt „alles in Ordnung“, solange nicht alle
+  Artikelkalender aktuell sind, z. B. nach vielen Änderungen auf einmal oder wenn WP-Cron länger nicht lief. Bis dahin
+  wird live gerechnet. Ein Satz darunter erklärt das, damit „40 von 41“ nicht wie ein Fehler aussieht.
+- **Zwei Kennzahlen als „x von y“**, damit man sofort sieht, ob alles erfasst ist: Zeitrahmen, Buchungen und
+  Einschränkungen im Index von allen in WordPress, und aktuelle vorbereitete Artikelkalender (Artikel/Standort-Paare,
+  rollenbeschränkte wie auf der Einstellungsseite nicht mitgezählt) von allen. Ungleiche Werte werden gelb
+  hervorgehoben. Gibt es noch keine Paare, steht „–“ mit dem Hinweis, dass sie beim nächsten Aufruf der Karte
+  vorbereitet werden.
+- **„Zuletzt aktualisiert vor …“**: neueste Änderung im Index (genaue Zeit im Tooltip), als Gefühl dafür, ob alles
+  aktuell ist.
+- **Kurzbeschreibung** in einem Satz und **Link** zum Abschnitt Performance-Booster der erweiterten Einstellungen
+  (Anker `#booster-group-header`, die von CMB2 erzeugte ID; der frühere Anker `#booster_group` existierte nicht, auch
+  die Weiterleitung nach „Prüfungen ausführen“ nutzt jetzt den richtigen Anker).
+- Abzeichen **„Neu“**, solange der Booster noch nie eingeschaltet war (`activated_at` im Zustand ist 0).
+
+**Kalender direkt nach dem Indexaufbau (07.11.2026):** Nach dem Einschalten zeigte die Karte bis zu zwei Minuten
+„0 von 41“. Ursache: Der Indexaufbau markiert alle Zeilen als veraltet und fordert einen Refresh an. Dieser fiel aus,
+weil der stündliche Cron-Lauf direkt nach dem Einschalten ohnehin in 60 s fällig war, und WP-Cron startet nur bei
+Seitenaufrufen (höchstens einmal je 60 s). Seitenaufrufe rechneten in der Zwischenzeit nur die angezeigten Paare.
+Entscheidung: `Invalidator::onIndexRebuilt()` rechnet die Kalender gleich im selben Hintergrund-Request (WP-Cron,
+WP-CLI) über `Maintenance::refreshAfterRebuild()`: Paare abgleichen (`syncPairs()`, sie können sich bei
+ausgeschaltetem Booster geändert haben), dann rechnen mit dem Zeitbudget eines Cron-Laufs (20 s), Rest 30 s später.
+Das Rechnen kostet wenig (Testumgebung: 46 Paare in 1,5 s, Indexaufbau und Kalender zusammen 0,9 s im Cron-Lauf).
+Außerhalb von Hintergrund-Requests (z. B. Tests) bleibt es beim angeforderten Cron-Lauf. Schalter: Filter
+`commonsbooking_availability_refresh_after_rebuild`. Test: `AvailabilityTest::testIndexRebuildInBackgroundComputesAllPairs`.
+
+Abwägung: Die Spalte führt keine Prüfungen aus und liest nur Zählungen (dieselben Abfragen wie die Einstellungsseite),
+damit das Dashboard schnell bleibt. Sie gehört zum Booster-Branch, weil sie nur liest und nichts speichert
+(downgradebar).
+
 ## Doppelte Buchungen bei langsamer Prüfung
 
 Die Buchungsprüfung nutzt immer die ursprünglichen Abfragen. Bei 167.000 Buchungen dauert sie etwa 3 Sekunden. Ein

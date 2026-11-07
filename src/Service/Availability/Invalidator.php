@@ -66,12 +66,28 @@ class Invalidator {
 	/**
 	 * After a complete rebuild of the index nothing is known about single changes.
 	 *
+	 * The rebuild usually finishes in a background request (WP-Cron, WP-CLI). The calendars are computed there at once,
+	 * so they are ready together with the index instead of waiting for the next cron run (up to a few minutes on
+	 * sites with little traffic). Otherwise, the cron job is requested.
+	 *
 	 * @return void
 	 */
 	public static function onIndexRebuilt(): void {
-		if ( Schema::isInstalled() ) {
-			Store::invalidateAll();
-			Calculator::reset();
+		if ( ! Schema::isInstalled() ) {
+			return;
+		}
+		Store::invalidateAll();
+		Calculator::reset();
+
+		$background = wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI );
+		/**
+		 * Whether to compute the availability right after a rebuild of the index, in the same background request.
+		 *
+		 * @param bool $refresh default: true in WP-Cron and WP-CLI requests
+		 */
+		if ( apply_filters( 'commonsbooking_availability_refresh_after_rebuild', $background ) ) {
+			Maintenance::refreshAfterRebuild();
+		} else {
 			Maintenance::scheduleRefresh();
 		}
 	}

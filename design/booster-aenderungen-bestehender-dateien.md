@@ -25,6 +25,7 @@ Nur **geänderte** Dateien (38, davon 3 Sprachdateien). Neue Dateien – vor all
 | Buchen | `Wordpress/CustomPostType/Booking.php`, `Timeframe.php`, `Model/Booking.php`, `Service/BookingRuleApplied.php`, `includes/Public.php` | Prüfung immer ohne Booster, Artikelsperre, Doppelklick-Schutz | **ja** (Sperre, Doppelklick, Regelprüfung) |
 | Cache | `Service/Cache.php` | Rollen im Cache-Schlüssel, `withoutCache()` | **ja** |
 | Kleinere Fixes | `templates/location-calendar-header.php`, `_lists.scss` | Abholhinweise ohne Leerraum | ja |
+| Dashboard | `templates/dashboard-index.php` | vierte Spalte mit dem Status des Boosters (nur Admins) | ja (zeigt „ausgeschaltet“ und Link zur Einstellung) |
 | Tests, CI, Doku | `tests/…` (u. a. `Model/ItemTest.php`), `.github/workflows/phpunit.yml`, `phpstan*.neon`, `TECHNICAL.md` | Booster in Tests an, drei zusätzliche CI-Läufe | – |
 | Übersetzungen | `languages/*` | neue Texte (Einstellungsseite, Sperrmeldung) | – |
 

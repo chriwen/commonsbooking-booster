@@ -100,6 +100,30 @@ class Maintenance {
 			self::syncPairs();
 		}
 
+		self::refreshWithBudget();
+	}
+
+	/**
+	 * Called after a complete rebuild of the index (see {@see Invalidator::onIndexRebuilt()}): creates the rows of
+	 * all pairs (the pairs may have changed while the booster was off) and computes them, at most for the time
+	 * budget of a cron run. The rest is computed by a cron run 30 seconds later.
+	 *
+	 * @return void
+	 */
+	public static function refreshAfterRebuild(): void {
+		if ( ! Availability::isEnabled() ) {
+			return;
+		}
+		self::syncPairs();
+		self::refreshWithBudget();
+	}
+
+	/**
+	 * Refresh with the time budget of a cron run, schedules a follow-up run if rows remain.
+	 *
+	 * @return void
+	 */
+	private static function refreshWithBudget(): void {
 		$result = self::refresh( self::CRON_TIME_BUDGET );
 		\CommonsBooking\Service\Booster\Diagnostics::recordCheck( 'availability_refresh', [ 'recomputed' => $result['recomputed'] ] );
 		if ( $result['remaining'] ) {

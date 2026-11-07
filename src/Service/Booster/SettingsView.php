@@ -148,6 +148,156 @@ class SettingsView {
 	}
 
 	/**
+	 * Fourth column of the CommonsBooking dashboard: status dot, two key figures, a short description and a link to
+	 * the settings. Written for users without technical knowledge. Only cheap queries (counts), no checks.
+	 *
+	 * @return void
+	 */
+	public static function renderDashboardColumn(): void {
+		$enabled = Booster::isEnabled();
+		$health  = $enabled ? Diagnostics::getHealth() : [
+			'level'    => 'off',
+			'findings' => [],
+		];
+		$level   = $health['level'];
+		$url     = admin_url( 'admin.php?page=commonsbooking_options_advanced-options' ) . '#booster-group-header';
+		$isNew   = ! $enabled && ! Booster::getState()['activated_at'];
+
+		$figures = $enabled && ! Backfill::isRunning() && Availability::isEnabled();
+		if ( $figures ) {
+			$coverage = Diagnostics::getCoverage();
+			$index    = array_sum( array_column( $coverage['types'], 'index' ) );
+			$posts    = array_sum( array_column( $coverage['types'], 'posts' ) );
+			$stats    = Store::getStats();
+			$pairs    = max( 0, $stats['rows'] - $stats['role_limited'] ); // as on the settings page
+			$usable   = min( $pairs, $stats['usable'] );
+		}
+		// e.g. right after the index build: the calendars are prepared by the next WP-Cron run
+		$preparing = $figures && $pairs && $usable < $pairs;
+
+		if ( ! $enabled ) {
+			$label = __( 'Switched off', 'commonsbooking' );
+		} elseif ( ! Backfill::isDone() ) {
+			$level = 'warning';
+			$label = Backfill::isRunning()
+				/* translators: %d: progress of the setup in percent */
+				? sprintf( __( 'Being set up (%d %%)', 'commonsbooking' ), Booster::getBackfillProgress() )
+				: __( 'Waiting to be set up', 'commonsbooking' );
+		} else {
+			$labels = [
+				'ok'      => __( 'Active, everything is fine', 'commonsbooking' ),
+				'warning' => __( 'Active, please note', 'commonsbooking' ),
+				'error'   => __( 'Active, problem found', 'commonsbooking' ),
+			];
+			$label  = $labels[ $level ] ?? '';
+			if ( 'ok' === $level && $preparing ) {
+				$level = 'warning';
+				$label = __( 'Active, item calendars are being prepared', 'commonsbooking' );
+			}
+		}
+
+		// the styles inside the column, so that it stays the fourth child of the container
+		echo '<div class="cb_welcome-panel-column cb-booster-column">';
+		self::renderDashboardStyles();
+		echo '<h3 style="padding-bottom:20px">' . esc_html__( 'Performance booster', 'commonsbooking' );
+		if ( $isNew ) {
+			echo ' <span class="cb-booster-card-new">' . esc_html__( 'New', 'commonsbooking' ) . '</span>';
+		}
+		echo '</h3>';
+		echo '<div class="cb-booster-card cb-booster-card-' . esc_attr( $level ) . '">';
+		echo '<p class="cb-booster-card-head"><span class="cb-booster-dot" aria-hidden="true"></span><strong>' . esc_html( $label ) . '</strong></p>';
+
+		$notes = count( array_filter( $health['findings'], fn( $finding ) => 'info' !== $finding['level'] ) );
+		if ( $preparing && ! $notes ) {
+			echo '<p class="cb-booster-card-note">' . esc_html__( 'This happens automatically with the next page view and takes a few seconds. Until then, the calendars are computed as without the booster.', 'commonsbooking' ) . '</p>';
+		} elseif ( $notes && Backfill::isDone() ) {
+			/* translators: %d: number of notes */
+			echo '<p class="cb-booster-card-note">' . esc_html( sprintf( _n( '%d note, details in the settings', '%d notes, details in the settings', $notes, 'commonsbooking' ), $notes ) ) . '</p>';
+		}
+
+		if ( $enabled && Backfill::isRunning() ) {
+			echo '<div class="cb-booster-card-progress"><span style="width:' . esc_attr( (string) Booster::getBackfillProgress() ) . '%"></span></div>';
+		} elseif ( $figures ) {
+			echo '<div class="cb-booster-card-figures">';
+			self::renderFigure(
+				/* translators: 1: entries in the index, 2: all entries */
+				sprintf( __( '%1$s of %2$s', 'commonsbooking' ), number_format_i18n( $index ), number_format_i18n( $posts ) ),
+				__( 'timeframes, bookings and restrictions captured', 'commonsbooking' ),
+				$index === $posts
+			);
+			if ( $pairs ) {
+				self::renderFigure(
+					/* translators: 1: up-to-date calendars, 2: all calendars */
+					sprintf( __( '%1$s of %2$s', 'commonsbooking' ), number_format_i18n( $usable ), number_format_i18n( $pairs ) ),
+					__( 'item calendars prepared', 'commonsbooking' ),
+					$usable === $pairs
+				);
+			} else {
+				self::renderFigure( '–', __( 'item calendars are prepared when the map is shown next', 'commonsbooking' ), true );
+			}
+			echo '</div>';
+			if ( $coverage['newest_index'] ) {
+				$updated = (int) strtotime( $coverage['newest_index'] . ' UTC' );
+				echo '<p class="cb-booster-card-updated" title="' . esc_attr( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $updated ) ) . '">' . esc_html(
+					/* translators: %s: human readable time difference, e.g. "5 mins" */
+					sprintf( __( 'Last updated %s ago', 'commonsbooking' ), human_time_diff( $updated ) )
+				) . '</p>';
+			}
+		}
+
+		echo '<p class="cb-booster-card-desc">' . esc_html__( 'Makes the map, item lists and calendars noticeably faster on sites with many items and bookings.', 'commonsbooking' ) . '</p>';
+		echo '<a class="cb-booster-card-link" href="' . esc_url( $url ) . '">' . ( $enabled ? esc_html__( 'Status and settings', 'commonsbooking' ) : esc_html__( 'Switch on in the settings', 'commonsbooking' ) ) . ' &rarr;</a>';
+		echo '</div></div>';
+	}
+
+	/**
+	 * @param string $value    the figure, e.g. "40 of 40"
+	 * @param string $text     what is counted
+	 * @param bool   $complete false highlights the value
+	 *
+	 * @return void
+	 */
+	private static function renderFigure( string $value, string $text, bool $complete ): void {
+		echo '<div class="cb-booster-card-figure' . ( $complete ? '' : ' cb-booster-card-figure-open' ) . '"><b>' . esc_html( $value ) . '</b><span>' . esc_html( $text ) . '</span></div>';
+	}
+
+	/**
+	 * Widths of the four dashboard columns and the card.
+	 *
+	 * @return void
+	 */
+	private static function renderDashboardStyles(): void {
+		echo '<style>
+			.cb_welcome-panel .cb-dashboard-four-columns { display: flex; flex-wrap: nowrap; }
+			.cb_welcome-panel .cb-dashboard-four-columns > .cb_welcome-panel-column { float: none; box-sizing: border-box; flex: 1 1 0; width: auto; min-width: 0; padding-right: 24px; overflow-wrap: break-word; }
+			.cb_welcome-panel .cb-dashboard-four-columns > .cb_welcome-panel-column:first-child { width: auto; }
+			.cb_welcome-panel .cb-dashboard-four-columns > .cb_welcome-panel-column:nth-child(3) { flex-grow: 0.7; }
+			.cb_welcome-panel .cb-dashboard-four-columns > .cb_welcome-panel-column:nth-child(4) { flex-grow: 1.3; padding-right: 0; }
+			.cb-booster-card { margin: 0.8em 0 1.5em; padding: 12px 14px; border: 1px solid #dcdcde; border-left: 4px solid #a7aaad; border-radius: 4px; background: #fff; max-width: 420px; }
+			.cb-booster-card-ok { border-left-color: #2e9e4f; }
+			.cb-booster-card-warning { border-left-color: #dba617; }
+			.cb-booster-card-error { border-left-color: #d63638; }
+			.cb_welcome-panel .cb-booster-card p { margin: 0 0 8px; }
+			.cb_welcome-panel .cb-booster-card p.cb-booster-card-head { display: flex; align-items: center; gap: 8px; color: #1d2327; }
+			.cb-booster-card-new { margin-left: 4px; padding: 1px 7px; border-radius: 9px; background: #67b32a; color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase; vertical-align: middle; }
+			.cb-booster-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #a7aaad; }
+			.cb-booster-card-ok .cb-booster-dot { background: #2e9e4f; box-shadow: 0 0 0 3px #d1f0d8; }
+			.cb-booster-card-warning .cb-booster-dot { background: #dba617; box-shadow: 0 0 0 3px #fcf0c4; }
+			.cb-booster-card-error .cb-booster-dot { background: #d63638; box-shadow: 0 0 0 3px #f9d6d6; }
+			.cb_welcome-panel .cb-booster-card p.cb-booster-card-note { margin-left: 18px; font-size: 12px; }
+			.cb-booster-card-figures { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+			.cb-booster-card-figure { flex: 1 1 110px; padding: 6px 8px; background: #f6f7f7; border-radius: 4px; line-height: 1.4; }
+			.cb-booster-card-figure b { display: block; font-size: 16px; white-space: nowrap; }
+			.cb-booster-card-figure span { color: #50575e; font-size: 12px; }
+			.cb-booster-card-figure-open b { color: #996800; }
+			.cb-booster-card-progress { height: 8px; margin: 0 0 10px; background: #e5e5e5; border-radius: 4px; overflow: hidden; }
+			.cb-booster-card-progress span { display: block; height: 100%; background: #dba617; }
+			.cb_welcome-panel .cb-booster-card p.cb-booster-card-updated { margin-top: -4px; color: #50575e; font-size: 12px; }
+			.cb-booster-card-link { font-weight: 600; text-decoration: none; }
+		</style>';
+	}
+
+	/**
 	 * Mode and last rebuild.
 	 *
 	 * @return void
@@ -491,7 +641,7 @@ class SettingsView {
 	 * @return void
 	 */
 	private static function redirect( string $notice ): void {
-		wp_safe_redirect( add_query_arg( self::NOTICE_ARG, $notice, admin_url( 'admin.php?page=commonsbooking_options_advanced-options' ) ) . '#booster_group' );
+		wp_safe_redirect( add_query_arg( self::NOTICE_ARG, $notice, admin_url( 'admin.php?page=commonsbooking_options_advanced-options' ) ) . '#booster-group-header' );
 		exit;
 	}
 

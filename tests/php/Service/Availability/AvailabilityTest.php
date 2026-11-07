@@ -286,6 +286,14 @@ class AvailabilityTest extends CustomPostTypeTest {
 		$this->assertSame( 4, Store::getStats()['usable'] );
 	}
 
+	public function testIndexRebuildInBackgroundComputesAllPairs() {
+		add_filter( 'commonsbooking_availability_refresh_after_rebuild', '__return_true' );
+		Backfill::runAll();
+		$stats = Store::getStats();
+		$this->assertSame( 4, $stats['usable'] );
+		$this->assertSame( 0, $stats['changed'] );
+	}
+
 	public function testSyncPairs() {
 		$newItemId = $this->createItem( 'New item' );
 		$this->createTimeframe( $this->locationId, $newItemId, $this->day( -1 ), $this->day( 30, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd' );

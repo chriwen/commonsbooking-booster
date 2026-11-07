@@ -5122,3 +5122,81 @@ msgstr[1] "%d weitere"
 #: src/View/Admin/AssignedTimeframes.php
 msgid "No entries."
 msgstr "Keine Einträge."
+
+#: src/Service/Booster/SettingsView.php
+msgid "Switched off"
+msgstr "Ausgeschaltet"
+
+#. translators: %d: progress of the setup in percent
+#: src/Service/Booster/SettingsView.php
+msgid "Being set up (%d %%)"
+msgstr "Wird eingerichtet (%d %%)"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Waiting to be set up"
+msgstr "Wartet auf die Einrichtung"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Active, everything is fine"
+msgstr "Aktiv, alles in Ordnung"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Active, please note"
+msgstr "Aktiv, bitte beachten"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Active, problem found"
+msgstr "Aktiv, Problem gefunden"
+
+#: src/Service/Booster/SettingsView.php
+msgid "New"
+msgstr "Neu"
+
+#. translators: %d: number of notes
+#: src/Service/Booster/SettingsView.php
+msgid "%d note, details in the settings"
+msgid_plural "%d notes, details in the settings"
+msgstr[0] "%d Hinweis, Details in den Einstellungen"
+msgstr[1] "%d Hinweise, Details in den Einstellungen"
+
+#. translators: 1: entries in the index, 2: all entries
+#: src/Service/Booster/SettingsView.php
+msgid "%1$s of %2$s"
+msgstr "%1$s von %2$s"
+
+#: src/Service/Booster/SettingsView.php
+msgid "timeframes, bookings and restrictions captured"
+msgstr "Zeitrahmen, Buchungen und Einschränkungen erfasst"
+
+#: src/Service/Booster/SettingsView.php
+msgid "item calendars prepared"
+msgstr "Artikelkalender vorbereitet"
+
+#: src/Service/Booster/SettingsView.php
+msgid "item calendars are prepared when the map is shown next"
+msgstr "Artikelkalender werden beim nächsten Aufruf der Karte vorbereitet"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Makes the map, item lists and calendars noticeably faster on sites with many items and bookings."
+msgstr "Macht Karte, Artikellisten und Kalender auf Seiten mit vielen Artikeln und Buchungen spürbar schneller."
+
+#: src/Service/Booster/SettingsView.php
+msgid "Status and settings"
+msgstr "Status und Einstellungen"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Switch on in the settings"
+msgstr "In den Einstellungen einschalten"
+
+#. translators: %s: human readable time difference, e.g. "5 mins"
+#: src/Service/Booster/SettingsView.php
+msgid "Last updated %s ago"
+msgstr "Zuletzt aktualisiert vor %s"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Active, item calendars are being prepared"
+msgstr "Aktiv, Artikelkalender werden vorbereitet"
+
+#: src/Service/Booster/SettingsView.php
+msgid "This happens automatically with the next page view and takes a few seconds. Until then, the calendars are computed as without the booster."
+msgstr "Das geschieht automatisch beim nächsten Seitenaufruf und dauert wenige Sekunden. Bis dahin werden die Kalender wie ohne Booster berechnet."
