@@ -39,10 +39,10 @@ Grenzen:
 - Stornierungen der alten Version (direktes SQL, ohne Änderungsdatum) erkennt die stündliche Prüfung über den Status.
   Bis dahin erscheint der Tag höchstens noch als belegt, buchen lässt er sich schon.
 - Trägt die Booster-Version dieselbe Versionsnummer wie die Vorgängerversion, greift die erste Prüfung nicht; die
-  beiden anderen decken das ab. Deshalb trägt der Branch eine eigene Nummer (`2.11.4-beta.2` gegenüber 2.11.3), damit
+  beiden anderen decken das ab. Deshalb trägt der Branch eine eigene Nummer (`2.11.4-beta.3` gegenüber 2.11.3), damit
   der Wechsel zwischen beiden Versionen schon an der Versionsoption erkannt wird. Beispiel: Wird 2.11.3 eingespielt,
   setzt deren Upgrade-Routine `commonsbooking_plugin_version` auf `2.11.3`; beim Zurückwechseln sieht der Wächter
-  `2.11.3 ≠ 2.11.4-beta.2`, das die Booster-Version zuletzt selbst geschrieben hat, und baut den Index neu auf.
+  `2.11.3 ≠ 2.11.4-beta.3`, das die Booster-Version zuletzt selbst geschrieben hat, und baut den Index neu auf.
 
 ## Empfohlener Ablauf für ein Downgrade
 

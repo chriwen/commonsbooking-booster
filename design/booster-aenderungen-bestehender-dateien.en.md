@@ -6,7 +6,7 @@ As of 6 Nov 2026. Comparison of `master` (wielebenwir, `7aa75a81`, corresponds t
 `chriwen/commonsbooking-booster` branch `booster/index-availability` (working state
 after `8ade45b8`, including the change to `Item::getClosestBooking()`).
 
-Only **changed** files (37, 3 of them language files). New files – mainly `src/Service/Index/`, `src/Service/Availability/`,
+Only **changed** files (38, 3 of them language files). New files – mainly `src/Service/Index/`, `src/Service/Availability/`,
 `src/Service/Booster/`, `src/Repository/Index.php`, new tests and `design/` – are not described here but in
 [`technische-dokumentation-booster-02.en.md`](technische-dokumentation-booster-02.en.md) (part G: changes to existing code).
 
@@ -46,7 +46,7 @@ the unchanged original code runs. `wp_posts`/`wp_postmeta` are never written dif
 `Booster::SETTINGS_FIELD`, status area via `SettingsView::render` (diagnostics, buttons "Check"/"Rebuild").
 Default: off.
 
-**`commonsbooking.php`** – version `2.11.4-beta.2`. The version is part of every cache key, so old cache entries
+**`commonsbooking.php`** – version `2.11.4-beta.3`. The version is part of every cache key, so old cache entries
 expire.
 
 ---
@@ -178,6 +178,12 @@ without the booster.
   precomputation.
 - `phpstan.neon`: `WP_CLI` ignored (no stubs); `phpstan-baseline.neon`: one entry for `View/Calendar.php`
   removed (code removed).
+- `.distignore`: the plugin zip only contains runtime files (4.8 → 2.7 MB). Additionally excluded: `design/`,
+  `screenshots/`, `phpbench.json`, JS sources (`assets/*/js/src/`), admin SCSS, unused unminified variants
+  (`leaflet-src*.js`, `leaflet.markercluster-src.js`, `leaflet.spin.js`, `jquery.overscroll.js`, `vendor.min.js`),
+  source maps, `.po`/`.pot` (`.mo` is loaded) and example and tool files of the libraries. `assets/global/sass` and
+  `assets/public/sass` must stay (`View::getColorCSS()` compiles them at runtime), as must the `.js`/`.min.js` pairs
+  the debug mode chooses between, and the license files.
 - `TECHNICAL.md`: new sections "Performance booster", "Timeframe index", "Precomputed availability".
 - `languages/*`: strings of the settings page, "Please wait …", message of the item lock (de_DE translated).
 

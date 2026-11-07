@@ -6,7 +6,7 @@ Stand 2026-11-06. Vergleich `master` (wielebenwir, `7aa75a81`, entspricht 2.11.3
 `chriwen/commonsbooking-booster` Branch `booster/index-availability` (Arbeitsstand
 nach `8ade45b8`, einschließlich der Umstellung von `Item::getClosestBooking()`).
 
-Nur **geänderte** Dateien (37, davon 3 Sprachdateien). Neue Dateien – vor allem `src/Service/Index/`, `src/Service/Availability/`,
+Nur **geänderte** Dateien (38, davon 3 Sprachdateien). Neue Dateien – vor allem `src/Service/Index/`, `src/Service/Availability/`,
 `src/Service/Booster/`, `src/Repository/Index.php`, neue Tests und `design/` – sind hier nicht beschrieben, sondern in
 [`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md) (Teil G: Änderungen am bestehenden Code).
 
@@ -46,7 +46,7 @@ umgangen, läuft der unveränderte Originalcode. `wp_posts`/`wp_postmeta` werden
 `Booster::SETTINGS_FIELD`, Statusbereich über `SettingsView::render` (Diagnose, Knöpfe „Prüfen“/„Neu aufbauen“).
 Standard: aus.
 
-**`commonsbooking.php`** – Version `2.11.4-beta.2`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
+**`commonsbooking.php`** – Version `2.11.4-beta.3`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
 verfallen damit.
 
 ---
@@ -178,6 +178,12 @@ ohne Booster.
   Vorberechnung.
 - `phpstan.neon`: `WP_CLI` ignoriert (keine Stubs); `phpstan-baseline.neon`: ein Eintrag für `View/Calendar.php`
   entfällt (Code entfernt).
+- `.distignore`: Das Plugin-Zip enthält nur noch Laufzeitdateien (4,8 → 2,7 MB). Zusätzlich ausgeschlossen: `design/`,
+  `screenshots/`, `phpbench.json`, JS-Quellen (`assets/*/js/src/`), Admin-SCSS, unbenutzte unminifizierte Varianten
+  (`leaflet-src*.js`, `leaflet.markercluster-src.js`, `leaflet.spin.js`, `jquery.overscroll.js`, `vendor.min.js`),
+  Source-Maps, `.po`/`.pot` (geladen wird `.mo`) sowie Beispiel- und Werkzeugdateien der Bibliotheken. Bleiben
+  müssen `assets/global/sass` und `assets/public/sass` (`View::getColorCSS()` kompiliert sie zur Laufzeit), die
+  `.js`/`.min.js`-Paare, zwischen denen der Debug-Modus wählt, und die Lizenzdateien.
 - `TECHNICAL.md`: neue Abschnitte „Performance booster“, „Timeframe index“, „Precomputed availability“.
 - `languages/*`: Texte der Einstellungsseite, „Please wait …“, Meldung der Artikelsperre (de_DE übersetzt).
 

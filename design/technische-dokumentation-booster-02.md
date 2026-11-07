@@ -3,7 +3,7 @@
 *English version: [technische-dokumentation-booster-02.en.md](technische-dokumentation-booster-02.en.md)*
 
 Stand: 07.11.2026 · Branch `booster/index-availability` · Vergleichsbasis: CommonsBooking 2.11.3 (`master`, `7aa75a81`)
-· Plugin-Version des Branches: `2.11.4-beta.2`
+· Plugin-Version des Branches: `2.11.4-beta.3`
 
 Diese Fassung fasst die bisherigen Dokumente zu einem zusammenhängenden Text zusammen und gleicht sie mit dem Code ab:
 
@@ -1844,8 +1844,8 @@ Die Wartezeit von 2 Minuten verhindert Fehlalarme: Eine parallele Anfrage kann g
 dessen `save_post` noch nicht durchgelaufen ist. Die `watermark` wandert nur bis vor den ältesten noch zu jungen
 Beitrag.
 
-**Beispiel Versionsprüfung:** Der Branch trägt `2.11.4-beta.2`. Wird 2.11.3 eingespielt, setzt deren Upgrade-Routine
-`commonsbooking_plugin_version = 2.11.3`. Beim Zurückwechseln sieht der Wächter `2.11.3 ≠ 2.11.4-beta.2` (zuletzt
+**Beispiel Versionsprüfung:** Der Branch trägt `2.11.4-beta.3`. Wird 2.11.3 eingespielt, setzt deren Upgrade-Routine
+`commonsbooking_plugin_version = 2.11.3`. Beim Zurückwechseln sieht der Wächter `2.11.3 ≠ 2.11.4-beta.3` (zuletzt
 selbst geschrieben) und baut neu auf. Hätte der Branch dieselbe Nummer wie die Vorgängerversion, griffe diese Prüfung
 nicht – deshalb die eigene Versionsnummer. Die beiden anderen Prüfungen decken den Fall trotzdem ab.
 
@@ -2102,7 +2102,7 @@ geschrieben als vorher.
 
 - Neue Gruppe „Performance booster“ unter *Erweiterte Optionen*: Checkbox `booster_enabled` (Standard aus),
   Statusbereich über `SettingsView::render`.
-- Version `2.11.4-beta.2` (Plugin-Header und `COMMONSBOOKING_VERSION`). Sie ist Teil jedes Cache-Schlüssels (alte
+- Version `2.11.4-beta.3` (Plugin-Header und `COMMONSBOOKING_VERSION`). Sie ist Teil jedes Cache-Schlüssels (alte
   Einträge verfallen) und nötig, damit die Versionsprüfung des Wächters einen Wechsel zwischen den Versionen erkennt.
 
 ### 28.3 `src/Repository/Timeframe.php`
