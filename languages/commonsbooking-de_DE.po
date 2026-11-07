@@ -4743,6 +4743,14 @@ msgstr "Älter als 24 Stunden"
 msgid "Limited to user roles (always computed live)"
 msgstr "Auf Benutzerrollen beschränkt (immer live berechnet)"
 
+#: src/Service/Booster/SettingsView.php
+msgid "Limited to user roles (stored per access profile)"
+msgstr "Auf Benutzerrollen beschränkt (je Zugriffsprofil gespeichert)"
+
+#: src/Service/Booster/SettingsView.php
+msgid "Stored access profiles (up to date)"
+msgstr "Gespeicherte Zugriffsprofile (aktuell)"
+
 #: src/Service/Booster/SettingsView.php:244
 msgid "Latest bookings"
 msgstr "Letzte Buchungen"

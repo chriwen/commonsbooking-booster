@@ -224,7 +224,8 @@ production-ready.
 ## 10. Not included / later
 
 - ~~API and GBFS~~: implemented, column `slots` (see addendum in 13).
-- **Pairs with a role restriction:** live at first. If needed, store one variant per role combination.
+- **Pairs with a role restriction:** live at first. If needed, store one variant per role combination,
+  implemented with access profiles: [role-restricted-availability.en.md](role-restricted-availability.en.md).
 - **Booking calendar on the item page:** still live (needs clock times and is user-dependent).
 - **Existing transient caches** (`Plugin::getCacheItem`): stay switched on, largely superfluous for map and table.
   ~~Bug in the cache key in `renderTable`~~: fixed (technical documentation 6.1).

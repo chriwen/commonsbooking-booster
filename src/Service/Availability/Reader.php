@@ -13,7 +13,8 @@ use CommonsBooking\View\Calendar;
  * Gives the same result as evaluating the calendar json of {@see Calendar::getCalendarDataArray()}:
  * - the window (displayed range, booking window, start day offset) is determined at read time with {@see CalendarWindow},
  * - the facts of the days come from the stored rows ({@see Store}), or are computed and stored if the row is not usable,
- * - pairs with role limited timeframes and ranges beyond the horizon are evaluated live with the calendar json.
+ * - pairs with role limited timeframes read the row of the current user's access profile ({@see AccessStore}),
+ * - ranges beyond the horizon and access profiles beyond the maximum per pair are evaluated live with the calendar json.
  */
 class Reader {
 
@@ -51,6 +52,7 @@ class Reader {
 		}
 
 		Store::preload( $pairs );
+		self::preloadAccessProfiles( $pairs );
 
 		$itemIds     = array_values( array_unique( array_map( fn( $pair ) => (int) $pair[0], $pairs ) ) );
 		$locationIds = array_values( array_unique( array_map( fn( $pair ) => (int) $pair[1], $pairs ) ) );
@@ -70,6 +72,35 @@ class Reader {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Loads the access profile rows of the current user for the pairs with role limited timeframes.
+	 *
+	 * @param array<int, array{0:int,1:int}> $pairs list of [itemId, locationId], rows already in {@see Store}
+	 *
+	 * @return void
+	 */
+	private static function preloadAccessProfiles( array $pairs ): void {
+		if ( ! AccessProfile::isEnabled() ) {
+			return;
+		}
+		$limited = array_values(
+			array_filter(
+				$pairs,
+				function ( $pair ) {
+					$row = Store::get( (int) $pair[0], (int) $pair[1] );
+					return $row && (int) $row['has_role_limit'] === 1;
+				}
+			)
+		);
+		if ( ! $limited ) {
+			return;
+		}
+		AccessProfile::preloadRoles( $limited );
+		AccessStore::preload(
+			array_map( fn( $pair ) => [ (int) $pair[0], (int) $pair[1], AccessProfile::forCurrentUser( (int) $pair[0], (int) $pair[1] ) ], $limited )
+		);
 	}
 
 	/**
@@ -156,17 +187,70 @@ class Reader {
 			return $facts;
 		}
 
+		[ $from, $to ] = Availability::getHorizon();
+		$inHorizon     = reset( $needed ) >= $from && end( $needed ) <= $to;
+
 		if ( $row && (int) $row['has_role_limit'] === 1 && (int) $row['computed_gen'] === (int) $row['gen'] ) {
-			return null;
+			return $inHorizon ? self::getAccessProfileFacts( $itemId, $locationId, $row, $needed ) : null;
 		}
 
-		[ $from, $to ] = Availability::getHorizon();
-		if ( reset( $needed ) < $from || end( $needed ) > $to ) {
+		if ( ! $inHorizon ) {
 			return null;
 		}
 
 		$computed = Calculator::getComputed( $itemId, $locationId ) ?? Calculator::recompute( $itemId, $locationId );
-		if ( $computed['roleLimited'] || $computed['from'] !== $from ) {
+		if ( $computed['roleLimited'] ) {
+			$row = Store::get( $itemId, $locationId );
+			return $row ? self::getAccessProfileFacts( $itemId, $locationId, $row, $needed ) : null;
+		}
+
+		return self::factsFromComputed( $computed, $needed );
+	}
+
+	/**
+	 * Facts of a pair with role limited timeframes for the current user's access profile.
+	 *
+	 * @param int      $itemId
+	 * @param int      $locationId
+	 * @param array    $pairRow row of the pair ({@see Store})
+	 * @param string[] $needed dates inside the horizon
+	 *
+	 * @return array<string, DayFacts>|null null if the pair has to be evaluated live
+	 * @throws \Exception
+	 */
+	private static function getAccessProfileFacts( int $itemId, int $locationId, array $pairRow, array $needed ): ?array {
+		if ( ! AccessProfile::isEnabled() ) {
+			return null;
+		}
+		$accessProfile = AccessProfile::forCurrentUser( $itemId, $locationId );
+		$row           = AccessStore::get( $itemId, $locationId, $accessProfile );
+		if ( AccessStore::isUsable( $row, $pairRow ) ) {
+			$facts = [];
+			foreach ( $needed as $date ) {
+				$flags = Store::getFlags( $row, $date );
+				if ( $flags === null ) {
+					return null;
+				}
+				$facts[ $date ] = DayFacts::fromFlags( $flags );
+			}
+
+			return $facts;
+		}
+
+		$computed = Calculator::computeAccessProfile( $itemId, $locationId, $accessProfile );
+
+		return $computed === null ? null : self::factsFromComputed( $computed, $needed );
+	}
+
+	/**
+	 * @param array{from: string, flags: int[]} $computed result of the {@see Calculator}
+	 * @param string[]                          $needed dates
+	 *
+	 * @return array<string, DayFacts>|null null if the computation does not start at the current horizon
+	 */
+	private static function factsFromComputed( array $computed, array $needed ): ?array {
+		[ $from ] = Availability::getHorizon();
+		if ( $computed['from'] !== $from ) {
 			return null;
 		}
 

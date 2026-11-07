@@ -220,7 +220,7 @@ class AvailabilityTest extends CustomPostTypeTest {
 		$this->assertFalse( $this->isUsable( $this->itemId, $this->locationId ) );
 	}
 
-	public function testRoleLimitedPairIsEvaluatedLive() {
+	public function testRoleLimitedPairIsStoredPerAccessProfile() {
 		$timeframeId = $this->createTimeframe( $this->otherLocationId, $this->otherItemId, $this->day( 20 ), $this->day( 30, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd' );
 		update_post_meta( $timeframeId, \CommonsBooking\Model\Timeframe::META_ALLOWED_USER_ROLES, [ 'editor' ] );
 		Indexer::flush();

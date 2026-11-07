@@ -217,11 +217,15 @@ class SlotsTest extends CustomPostTypeTest {
 		update_post_meta( $timeframeId, 'allowed_user_roles', [ 'administrator' ] );
 		wp_update_post( [ 'ID' => $timeframeId ] );
 		Indexer::flush();
+		// stored per access profile (AccessProfileTest), live if switched off
+		$this->assertNotNull( SlotReader::getAvailabilitySlots( $this->date( 0 ), $this->date( 7 ), [], [ $limitedItem ], false, false ) );
+		add_filter( 'commonsbooking_availability_access_profiles', '__return_false' );
 		$this->assertNull( SlotReader::getAvailabilitySlots( $this->date( 0 ), $this->date( 7 ), [], [ $limitedItem ], false, false ) );
 
 		// the calendar still answers, live
 		$calendar = new Calendar( new Day( $this->date( 0 ) ), new Day( $this->date( 7 ) ), [], [ $limitedItem ] );
 		$this->assertEquals( $calendar->getAvailabilitySlotsLive(), $calendar->getAvailabilitySlots() );
+		remove_filter( 'commonsbooking_availability_access_profiles', '__return_false' );
 	}
 
 	public function testPackRoundTrip() {

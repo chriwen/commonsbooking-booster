@@ -2106,6 +2106,14 @@ msgstr ""
 msgid "Limited to user roles (always computed live)"
 msgstr ""
 
+#: src/Service/Booster/SettingsView.php
+msgid "Limited to user roles (stored per access profile)"
+msgstr ""
+
+#: src/Service/Booster/SettingsView.php
+msgid "Stored access profiles (up to date)"
+msgstr ""
+
 #: src/Service/Booster/SettingsView.php:244
 msgid "Latest bookings"
 msgstr ""

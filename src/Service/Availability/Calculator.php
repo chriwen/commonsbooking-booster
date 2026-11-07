@@ -27,6 +27,14 @@ class Calculator {
 	private static array $computed = [];
 
 	/**
+	 * Results of access profiles computed in this request, by "locationId:itemId:accessProfile", null if the
+	 * maximum number of access profiles of the pair is reached.
+	 *
+	 * @var array<string, array{from: string, flags: int[], slots: ?string, roleLimited: bool}|null>
+	 */
+	private static array $computedProfiles = [];
+
+	/**
 	 * Number of computations in this request (for tests and measurements).
 	 */
 	private static int $computeCount = 0;
@@ -36,6 +44,9 @@ class Calculator {
 	 *
 	 * The result is returned even if it could not be stored because the pair changed during the computation:
 	 * it reflects the database state after the change that was read, which is what the caller asked for.
+	 *
+	 * For a pair with role limited timeframes the two most common access profiles are computed and stored as well:
+	 * no matching role (guests and most users) and all roles of the pair (admins), see {@see AccessProfile}.
 	 *
 	 * @param int $itemId
 	 * @param int $locationId
@@ -50,6 +61,53 @@ class Calculator {
 
 		self::$computed[ $locationId . ':' . $itemId ] = $result;
 
+		if ( $result['roleLimited'] && AccessProfile::isEnabled() ) {
+			foreach ( array_unique( [ '', AccessProfile::forAllRoles( $itemId, $locationId ) ] ) as $accessProfile ) {
+				self::recomputeAccessProfile( $itemId, $locationId, $accessProfile, $gen );
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Computes and stores the days of a pair with role limited timeframes for one access profile.
+	 *
+	 * @param int    $itemId
+	 * @param int    $locationId
+	 * @param string $accessProfile see {@see AccessProfile}
+	 *
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}|null null if the pair already has
+	 *                                                                                  the maximum number of access profiles
+	 * @throws \Exception
+	 */
+	public static function computeAccessProfile( int $itemId, int $locationId, string $accessProfile ): ?array {
+		$key = $locationId . ':' . $itemId . ':' . $accessProfile;
+		if ( array_key_exists( $key, self::$computedProfiles ) ) {
+			return self::$computedProfiles[ $key ];
+		}
+
+		return self::recomputeAccessProfile( $itemId, $locationId, $accessProfile, Store::getGen( $itemId, $locationId ) );
+	}
+
+	/**
+	 * @param int    $itemId
+	 * @param int    $locationId
+	 * @param string $accessProfile
+	 * @param int    $gen gen of the pair read before the computation
+	 *
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}|null
+	 * @throws \Exception
+	 */
+	private static function recomputeAccessProfile( int $itemId, int $locationId, string $accessProfile, int $gen ): ?array {
+		$key    = $locationId . ':' . $itemId . ':' . $accessProfile;
+		$result = null;
+		if ( AccessStore::hasRoom( $itemId, $locationId, $accessProfile, $gen ) ) {
+			$result = self::compute( $itemId, $locationId, $accessProfile );
+			AccessStore::write( $itemId, $locationId, $accessProfile, $gen, $result['from'], $result['flags'], $result['slots'] );
+		}
+		self::$computedProfiles[ $key ] = $result;
+
 		return $result;
 	}
 
@@ -57,15 +115,23 @@ class Calculator {
 	 * Computes the facts and the bookable slots of all days of the horizon from the current database state
 	 * (bypassing the cache). Both come from the same day grid.
 	 *
-	 * @param int $itemId
-	 * @param int $locationId
+	 * Without access profile, a pair with role limited timeframes is not computed (roleLimited). With access profile
+	 * the days are computed as a user with exactly these roles ({@see AccessProfile::runAs()}).
+	 *
+	 * @param int         $itemId
+	 * @param int         $locationId
+	 * @param string|null $accessProfile
 	 *
 	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool} slots packed with {@see Slots::pack()}
 	 * @throws \Exception
 	 */
-	public static function compute( int $itemId, int $locationId ): array {
+	public static function compute( int $itemId, int $locationId, ?string $accessProfile = null ): array {
 		[ $from, $to ] = Availability::getHorizon();
 		++self::$computeCount;
+
+		if ( $accessProfile !== null ) {
+			return AccessProfile::runAs( $accessProfile, fn() => self::computeDays( $itemId, $locationId, $from, $to ) );
+		}
 
 		if ( self::hasRoleLimit( $itemId, $locationId ) ) {
 			return [
@@ -76,6 +142,19 @@ class Calculator {
 			];
 		}
 
+		return self::computeDays( $itemId, $locationId, $from, $to );
+	}
+
+	/**
+	 * @param int    $itemId
+	 * @param int    $locationId
+	 * @param string $from Y-m-d
+	 * @param string $to Y-m-d
+	 *
+	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}
+	 * @throws \Exception
+	 */
+	private static function computeDays( int $itemId, int $locationId, string $from, string $to ): array {
 		[ $flags, $slots ] = Plugin::withoutCache(
 			function () use ( $itemId, $locationId, $from, $to ) {
 				$flags    = [];
@@ -141,11 +220,13 @@ class Calculator {
 	 * @return void
 	 */
 	public static function reset(): void {
-		self::$computed = [];
+		self::$computed         = [];
+		self::$computedProfiles = [];
 	}
 
 	/**
-	 * Days of a pair with timeframes limited to user roles depend on the current user and are not stored.
+	 * Days of a pair with timeframes limited to user roles depend on the current user, they are stored per access
+	 * profile ({@see AccessProfile}).
 	 *
 	 * @param int $itemId
 	 * @param int $locationId

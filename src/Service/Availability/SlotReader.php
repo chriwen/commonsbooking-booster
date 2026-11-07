@@ -19,7 +19,8 @@ use stdClass;
  *   the timeframes overlapping the requested range there, e.g. a booking starting on such a day is missing.
  *
  * Returns null whenever the live calculation has to answer: precomputation disabled, restrictions ignored, a range
- * outside the horizon, timeframes with several items or locations, pairs limited to user roles.
+ * outside the horizon, timeframes with several items or locations, access profiles beyond the maximum per pair.
+ * Pairs with role limited timeframes are read from the current user's access profile ({@see AccessStore}).
  */
 class SlotReader {
 
@@ -63,10 +64,11 @@ class SlotReader {
 			return null;
 		}
 
-		$rows = Store::loadWithSlots( $pairs );
-		$data = [];
+		$rows       = Store::loadWithSlots( $pairs );
+		$accessRows = self::loadAccessProfileRows( $pairs, $rows );
+		$data       = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
-			$pairData = self::getPairData( $itemId, $locationId, $rows[ $locationId . ':' . $itemId ] ?? null, $from );
+			$pairData = self::getPairData( $itemId, $locationId, $rows[ $locationId . ':' . $itemId ] ?? null, $from, $accessRows );
 			if ( $pairData === null ) {
 				return null;
 			}
@@ -109,26 +111,92 @@ class SlotReader {
 	}
 
 	/**
+	 * Loads the rows of the current user's access profiles for the pairs with role limited timeframes.
+	 *
+	 * @param array<int, array{0:int,1:int}> $pairs
+	 * @param array<string, array>           $rows pair rows by "locationId:itemId"
+	 *
+	 * @return array<string, array> by "locationId:itemId:accessProfile"
+	 */
+	private static function loadAccessProfileRows( array $pairs, array $rows ): array {
+		if ( ! AccessProfile::isEnabled() ) {
+			return [];
+		}
+		$limited = array_values( array_filter( $pairs, fn( $pair ) => (int) ( $rows[ $pair[1] . ':' . $pair[0] ]['has_role_limit'] ?? 0 ) === 1 ) );
+		if ( ! $limited ) {
+			return [];
+		}
+		AccessProfile::preloadRoles( $limited );
+
+		return AccessStore::loadWithSlots(
+			array_map( fn( $pair ) => [ $pair[0], $pair[1], AccessProfile::forCurrentUser( $pair[0], $pair[1] ) ], $limited )
+		);
+	}
+
+	/**
 	 * Returns the stored row and its unpacked slots, computes the pair if the row is not usable.
 	 *
-	 * @param int        $itemId
-	 * @param int        $locationId
-	 * @param array|null $row from {@see Store::loadWithSlots()}
-	 * @param string     $from first day of the horizon
+	 * @param int                  $itemId
+	 * @param int                  $locationId
+	 * @param array|null           $row from {@see Store::loadWithSlots()}
+	 * @param string               $from first day of the horizon
+	 * @param array<string, array> $accessRows from {@see self::loadAccessProfileRows()}
 	 *
 	 * @return array{0: array, 1: array}|null [row with days_from and days, unpacked slots], null for live
 	 * @throws \Exception
 	 */
-	private static function getPairData( int $itemId, int $locationId, ?array $row, string $from ): ?array {
+	private static function getPairData( int $itemId, int $locationId, ?array $row, string $from, array $accessRows ): ?array {
 		if ( Store::isUsable( $row ) && $row['slots'] !== null ) {
 			return [ $row, Slots::unpack( $row['slots'] ) ];
 		}
 		if ( $row && (int) $row['has_role_limit'] === 1 && (int) $row['computed_gen'] === (int) $row['gen'] ) {
-			return null;
+			return self::getAccessProfileData( $itemId, $locationId, $row, $from, $accessRows );
 		}
 
 		$computed = Calculator::getComputed( $itemId, $locationId ) ?? Calculator::recompute( $itemId, $locationId );
-		if ( $computed['roleLimited'] || $computed['from'] !== $from || $computed['slots'] === null ) {
+		if ( $computed['roleLimited'] ) {
+			$row = Store::get( $itemId, $locationId );
+			return $row ? self::getAccessProfileData( $itemId, $locationId, $row, $from, [] ) : null;
+		}
+
+		return self::fromComputed( $computed, $from );
+	}
+
+	/**
+	 * Row and unpacked slots of the current user's access profile, computed if there is no usable row.
+	 *
+	 * @param int                  $itemId
+	 * @param int                  $locationId
+	 * @param array                $pairRow
+	 * @param string               $from
+	 * @param array<string, array> $accessRows
+	 *
+	 * @return array{0: array, 1: array}|null
+	 * @throws \Exception
+	 */
+	private static function getAccessProfileData( int $itemId, int $locationId, array $pairRow, string $from, array $accessRows ): ?array {
+		if ( ! AccessProfile::isEnabled() ) {
+			return null;
+		}
+		$accessProfile = AccessProfile::forCurrentUser( $itemId, $locationId );
+		$row           = $accessRows[ $locationId . ':' . $itemId . ':' . $accessProfile ] ?? null;
+		if ( AccessStore::isUsable( $row, $pairRow ) && $row['slots'] !== null ) {
+			return [ $row, Slots::unpack( $row['slots'] ) ];
+		}
+
+		$computed = Calculator::computeAccessProfile( $itemId, $locationId, $accessProfile );
+
+		return $computed === null ? null : self::fromComputed( $computed, $from );
+	}
+
+	/**
+	 * @param array{from: string, flags: int[], slots: ?string} $computed
+	 * @param string                                            $from
+	 *
+	 * @return array{0: array, 1: array}|null
+	 */
+	private static function fromComputed( array $computed, string $from ): ?array {
+		if ( $computed['from'] !== $from || $computed['slots'] === null ) {
 			return null;
 		}
 

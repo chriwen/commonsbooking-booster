@@ -10,8 +10,10 @@ use CommonsBooking\Wordpress\CustomPostType\Timeframe;
  *
  * None of it is needed for correct results (readers never use outdated rows), it keeps the rows warm:
  * - hourly: create rows for new pairs, remove rows of pairs without bookable timeframe, recompute changed rows and
- *   rows older than {@see self::REFRESH_AGE} (moves the horizon forward every day),
- * - daily: compare a sample of rows with a fresh computation ({@see self::verify()}).
+ *   rows older than {@see self::REFRESH_AGE} (moves the horizon forward every day, for pairs with role limited
+ *   timeframes including the access profiles "no matching role" and "all roles", see {@see Calculator::recompute()}),
+ * - daily: remove access profiles that are outdated or unused ({@see AccessStore::cleanup()}),
+ *   compare a sample of rows with a fresh computation ({@see self::verify()}).
  */
 class Maintenance {
 
@@ -112,6 +114,7 @@ class Maintenance {
 		if ( ! Availability::isEnabled() ) {
 			return;
 		}
+		AccessStore::cleanup();
 		$result = self::verify( self::VERIFY_SAMPLE_SIZE, true );
 		\CommonsBooking\Service\Booster\Diagnostics::recordCheck(
 			'availability_verify',
@@ -234,15 +237,75 @@ class Maintenance {
 	}
 
 	/**
-	 * Compares usable rows with a fresh computation.
+	 * Compares usable rows (pairs and access profiles) with a fresh computation.
 	 *
-	 * @param int|null $sampleSize null = all rows
+	 * @param int|null $sampleSize null = all rows, otherwise the sample size for pairs and for access profiles each
 	 * @param bool     $repair recompute rows with differences
 	 *
-	 * @return array{checked: int, mismatches: string[]} mismatches as "locationId:itemId"
+	 * @return array{checked: int, mismatches: string[]} mismatches as "locationId:itemId" or
+	 *                                                   "locationId:itemId:accessProfile"
 	 * @throws \Exception
 	 */
 	public static function verify( ?int $sampleSize = null, bool $repair = false ): array {
+		$pairs    = self::verifyPairs( $sampleSize, $repair );
+		$profiles = self::verifyAccessProfiles( $sampleSize, $repair );
+
+		return [
+			'checked'    => $pairs['checked'] + $profiles['checked'],
+			'mismatches' => array_merge( $pairs['mismatches'], $profiles['mismatches'] ),
+		];
+	}
+
+	/**
+	 * @param int|null $sampleSize
+	 * @param bool     $repair
+	 *
+	 * @return array{checked: int, mismatches: string[]}
+	 * @throws \Exception
+	 */
+	private static function verifyAccessProfiles( ?int $sampleSize, bool $repair ): array {
+		$rows = AccessStore::getAll();
+		if ( $sampleSize !== null && count( $rows ) > $sampleSize ) {
+			shuffle( $rows );
+			$rows = array_slice( $rows, 0, $sampleSize );
+		}
+
+		$checked    = 0;
+		$mismatches = [];
+		foreach ( $rows as [ $itemId, $locationId, $accessProfile ] ) {
+			Store::reset();
+			$pairRow = Store::get( $itemId, $locationId );
+			$row     = AccessStore::loadWithSlots( [ [ $itemId, $locationId, $accessProfile ] ] )[ $locationId . ':' . $itemId . ':' . $accessProfile ] ?? null;
+			if ( ! AccessStore::isUsable( $row, $pairRow ) ) {
+				continue;
+			}
+			++$checked;
+
+			$fresh = Calculator::compute( $itemId, $locationId, $accessProfile );
+			if ( ! self::matches( $row, $fresh ) ) {
+				$mismatches[] = $locationId . ':' . $itemId . ':' . $accessProfile;
+				if ( $repair ) {
+					AccessStore::delete( $itemId, $locationId, $accessProfile );
+					Calculator::reset();
+					Calculator::computeAccessProfile( $itemId, $locationId, $accessProfile );
+				}
+			}
+		}
+
+		return [
+			'checked'    => $checked,
+			'mismatches' => $mismatches,
+		];
+	}
+
+	/**
+	 * @param int|null $sampleSize
+	 * @param bool     $repair
+	 *
+	 * @return array{checked: int, mismatches: string[]}
+	 * @throws \Exception
+	 */
+	private static function verifyPairs( ?int $sampleSize, bool $repair ): array {
 		$pairs = Store::getAllPairs();
 		if ( $sampleSize !== null && count( $pairs ) > $sampleSize ) {
 			shuffle( $pairs );

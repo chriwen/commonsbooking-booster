@@ -31,7 +31,9 @@ class Cli {
 			WP_CLI::log( 'Pairs:             ' . $stats['rows'] );
 			WP_CLI::log( 'Usable:            ' . $stats['usable'] );
 			WP_CLI::log( 'Changed (pending): ' . $stats['changed'] );
-			WP_CLI::log( 'Role limited:      ' . $stats['role_limited'] . ' (always computed live)' );
+			$access = AccessStore::getStats();
+			WP_CLI::log( 'Role limited:      ' . $stats['role_limited'] . ( AccessProfile::isEnabled() ? ' (stored per access profile)' : ' (computed live)' ) );
+			WP_CLI::log( sprintf( 'Access profiles:   %d (%d usable) for %d pairs, at most %d per pair', $access['rows'], $access['usable'], $access['pairs'], AccessProfile::getMaxPerPair() ) );
 		}
 	}
 
@@ -78,19 +80,19 @@ class Cli {
 		$sample = isset( $assocArgs['sample'] ) ? (int) $assocArgs['sample'] : null;
 		$result = Maintenance::verify( $sample, isset( $assocArgs['repair'] ) );
 		if ( $result['mismatches'] ) {
-			WP_CLI::warning( sprintf( '%d of %d checked pairs differ: %s', count( $result['mismatches'] ), $result['checked'], implode( ', ', $result['mismatches'] ) ) );
+			WP_CLI::warning( sprintf( '%d of %d checked rows (pairs and access profiles) differ: %s', count( $result['mismatches'] ), $result['checked'], implode( ', ', $result['mismatches'] ) ) );
 		} else {
-			WP_CLI::success( sprintf( '%d pairs checked, no differences.', $result['checked'] ) );
+			WP_CLI::success( sprintf( '%d rows (pairs and access profiles) checked, no differences.', $result['checked'] ) );
 		}
 	}
 
 	/**
-	 * Drops the table. Map and items table compute live until the next rebuild.
+	 * Drops the tables. Map and items table compute live until the next rebuild.
 	 *
 	 * @subcommand drop
 	 */
 	public function drop( $args, $assocArgs ): void {
 		Schema::uninstall();
-		WP_CLI::success( 'Table dropped. It is recreated on the next request, run "wp commonsbooking availability rebuild" to fill it.' );
+		WP_CLI::success( 'Tables dropped. They are recreated on the next request, run "wp commonsbooking availability rebuild" to fill them.' );
 	}
 }

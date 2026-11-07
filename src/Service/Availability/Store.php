@@ -140,6 +140,8 @@ class Store {
 	 */
 	public static function reset(): void {
 		self::$rows = [];
+		AccessStore::reset();
+		AccessProfile::reset();
 	}
 
 	/**

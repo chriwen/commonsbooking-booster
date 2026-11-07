@@ -224,7 +224,8 @@ produktionsreif.
 ## 10. Nicht enthalten / später
 
 - ~~API und GBFS~~: umgesetzt, Spalte `slots` (siehe Nachtrag in 13).
-- **Paare mit Rollenbeschränkung:** zunächst live. Bei Bedarf eine Variante je Rollenkombination speichern.
+- **Paare mit Rollenbeschränkung:** zunächst live. Bei Bedarf eine Variante je Rollenkombination speichern,
+  umgesetzt mit Zugriffsprofilen: [role-restricted-availability.md](role-restricted-availability.md).
 - **Buchungskalender auf der Artikelseite:** weiter live (braucht Uhrzeiten und ist nutzerabhängig).
 - **Bestehende Transient-Caches** (`Plugin::getCacheItem`): bleiben eingeschaltet, für Karte und Tabelle weitgehend
   überflüssig. ~~Fehler beim Cache-Schlüssel in `renderTable`~~: behoben (technische Dokumentation 6.1).

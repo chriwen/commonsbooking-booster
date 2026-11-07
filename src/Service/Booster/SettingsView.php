@@ -2,6 +2,8 @@
 
 namespace CommonsBooking\Service\Booster;
 
+use CommonsBooking\Service\Availability\AccessProfile;
+use CommonsBooking\Service\Availability\AccessStore;
 use CommonsBooking\Service\Availability\Availability;
 use CommonsBooking\Service\Availability\Maintenance;
 use CommonsBooking\Service\Availability\Store;
@@ -231,7 +233,13 @@ class SettingsView {
 		echo '<table class="cb-booster-kv"><tbody>';
 		echo '<tr><th>' . esc_html__( 'Changed, computed with the next request', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $stats['changed'] ) ) . '</td></tr>';
 		echo '<tr><th>' . esc_html__( 'Older than 24 hours', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $outdated ) ) . '</td></tr>';
-		echo '<tr><th>' . esc_html__( 'Limited to user roles (always computed live)', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $live ) ) . '</td></tr>';
+		if ( AccessProfile::isEnabled() ) {
+			$access = AccessStore::getStats();
+			echo '<tr><th>' . esc_html__( 'Limited to user roles (stored per access profile)', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $live ) ) . '</td></tr>';
+			echo '<tr><th>' . esc_html__( 'Stored access profiles (up to date)', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $access['rows'] ) . ' (' . number_format_i18n( $access['usable'] ) . ')' ) . '</td></tr>';
+		} else {
+			echo '<tr><th>' . esc_html__( 'Limited to user roles (always computed live)', 'commonsbooking' ) . '</th><td>' . esc_html( number_format_i18n( $live ) ) . '</td></tr>';
+		}
 		echo '</tbody></table>';
 	}
 
