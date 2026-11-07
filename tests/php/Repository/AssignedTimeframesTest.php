@@ -153,6 +153,58 @@ class AssignedTimeframesTest extends CustomPostTypeTest {
 		$this->assertFalse( $entries[ $holiday ]['effective'] );
 	}
 
+	/**
+	 * A holiday of another location for "all items" (or by category) does not concern the item.
+	 */
+	public function testHolidayOfOtherLocationForAllItemsIsHidden() {
+		$otherLocation = $this->createLocation( 'Other location' );
+		$holiday       = $this->holiday( [ $otherLocation ], '', $this->now, strtotime( '+1 day', $this->now ) );
+		update_post_meta( $holiday, \CommonsBooking\Model\Timeframe::META_ITEM_SELECTION_TYPE, \CommonsBooking\Model\Timeframe::SELECTION_ALL_ID );
+		Timeframe::manageTimeframeMeta( $holiday );
+
+		$this->assertArrayNotHasKey( $holiday, $this->entries( AssignedTimeframes::forItem( $this->itemId, $this->now ) ) );
+		// still shown at its own location
+		$this->assertArrayHasKey( $holiday, $this->entries( AssignedTimeframes::forLocation( $otherLocation, $this->now ) ) );
+
+		// same holiday at the item's location
+		$ownHoliday = $this->holiday( [ $this->locationId ], '', $this->now, strtotime( '+1 day', $this->now ) );
+		update_post_meta( $ownHoliday, \CommonsBooking\Model\Timeframe::META_ITEM_SELECTION_TYPE, \CommonsBooking\Model\Timeframe::SELECTION_ALL_ID );
+		Timeframe::manageTimeframeMeta( $ownHoliday );
+		$entries = $this->entries( AssignedTimeframes::forItem( $this->itemId, $this->now ) );
+		$this->assertArrayHasKey( $ownHoliday, $entries );
+		$this->assertTrue( $entries[ $ownHoliday ]['effective'] );
+
+		// by category
+		$term = wp_insert_term( 'Trailers', Item::getTaxonomyName() );
+		$this->assertIsArray( $term );
+		wp_set_object_terms( $this->itemId, [ $term['term_id'] ], Item::getTaxonomyName() );
+		update_post_meta( $holiday, \CommonsBooking\Model\Timeframe::META_ITEM_SELECTION_TYPE, \CommonsBooking\Model\Timeframe::SELECTION_CATEGORY_ID );
+		update_post_meta( $holiday, \CommonsBooking\Model\Timeframe::META_ITEM_CATEGORY_IDS, [ (string) $term['term_id'] ] );
+		Timeframe::manageTimeframeMeta( $holiday );
+		$this->assertArrayNotHasKey( $holiday, $this->entries( AssignedTimeframes::forItem( $this->itemId, $this->now ) ) );
+	}
+
+	/**
+	 * A blocked timeframe for another item at "all locations" does not concern the location.
+	 */
+	public function testBlockedOtherItemAtAllLocationsIsHidden() {
+		$otherItem = $this->createItem( 'Other item' );
+		$blocked   = $this->createTimeframe( '', [ $otherItem ], $this->now, strtotime( '+1 day', $this->now ), Timeframe::REPAIR_ID );
+		update_post_meta( $blocked, \CommonsBooking\Model\Timeframe::META_LOCATION_SELECTION_TYPE, \CommonsBooking\Model\Timeframe::SELECTION_ALL_ID );
+		Timeframe::manageTimeframeMeta( $blocked );
+
+		$this->assertArrayNotHasKey( $blocked, $this->entries( AssignedTimeframes::forLocation( $this->locationId, $this->now ) ) );
+		$this->assertArrayHasKey( $blocked, $this->entries( AssignedTimeframes::forItem( $otherItem, $this->now ) ) );
+
+		// blocked for the item of the location: shown and effective
+		$ownBlocked = $this->createTimeframe( '', [ $this->itemId ], $this->now, strtotime( '+1 day', $this->now ), Timeframe::REPAIR_ID );
+		update_post_meta( $ownBlocked, \CommonsBooking\Model\Timeframe::META_LOCATION_SELECTION_TYPE, \CommonsBooking\Model\Timeframe::SELECTION_ALL_ID );
+		Timeframe::manageTimeframeMeta( $ownBlocked );
+		$entries = $this->entries( AssignedTimeframes::forLocation( $this->locationId, $this->now ) );
+		$this->assertArrayHasKey( $ownBlocked, $entries );
+		$this->assertTrue( $entries[ $ownBlocked ]['effective'] );
+	}
+
 	public function testGroups() {
 		$expired = $this->holiday( [ $this->locationId ], [ $this->itemId ], strtotime( '-20 days', $this->now ), strtotime( '-5 days', $this->now ) );
 		$future  = $this->holiday( [ $this->locationId ], [ $this->itemId ], strtotime( '+5 days', $this->now ), strtotime( '+6 days', $this->now ) );

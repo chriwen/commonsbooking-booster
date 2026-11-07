@@ -2221,6 +2221,42 @@ index is available, it uses it (`Index::findPostIds()`). It is described in
 `src/View/Admin/AssignedTimeframes.php`; changed are `CustomPostType/CustomPostType.php`, `Item.php`, `Location.php`
 and `Timeframe.php` (`filterAdminList()`, `setCustomColumnsData()`).
 
+**How holidays and blockings take effect.** A timeframe of type “Holidays or location closed” (3) or “Blocked” (5)
+applies to the pairs *selected items × selected locations*, and of those only to pairs that have a bookable timeframe on
+the day in question. `Repository\Timeframe::getPostIdsByType()` joins the item list and the location list with one
+`INNER JOIN` each (`getEntityQuery()`), and every calendar queries exactly one pair. “All” and “category” store a
+snapshot of the matching IDs in `item-id-list`/`location-id-list` (`Timeframe::manageTimeframeMeta()`). For the calendar
+this means:
+
+| Selection | Effect |
+|---|---|
+| Holiday: location X, items “All” | every item bookable at X on that day (location closed) |
+| Blocked: item A, locations “All” | A at every location where A is bookable on that day |
+| All × All | every bookable pair of the instance |
+| explicitly selected items and locations without a common bookable pair | none |
+
+So for a holiday, “All” on the item side effectively means “all items of the selected locations”, even though the stored
+list contains every item of the instance.
+
+**Display in the meta box (`Repository\AssignedTimeframes`).** The candidate search only looks at the own side
+(`timeframeCandidateIds()`: the single field or the list contains the item or location). Because of the snapshot it
+therefore finds a holiday with items “All” for *every* item of the instance. `buildTimeframeEntry()` then checks:
+
+1. *Counterparts* (`counterparts()`): the locations of the item (or items of the location) from published bookable
+   timeframes, preferably from those not yet expired, otherwise from all.
+2. “Applies at” (`effective_at`): intersection of the timeframe's other side with the counterparts. For bookable
+   timeframes it is the other side itself.
+3. **Hide:** if “Applies at” is empty, the own side is only selected implicitly (“All” or category) and the other side
+   is not “All”, `buildTimeframeEntry()` returns `null` and the entry is not shown. Example: a holiday “community
+   centre, all items” is not listed for an item that is only bookable at the landing stage. Likewise, “Blocked: item A,
+   all locations” is not listed for a location without A.
+4. **Warn:** if “Applies at” is empty but the own side is selected explicitly (single field or list), the entry stays
+   with ⚠ “assigned, but not at a location of this item”. That is a configuration error the meta box is meant to reveal.
+
+All × All stays visible, even for an item without a bookable timeframe. Restrictions follow the same rule
+(`buildRestrictionEntry()`, `0` = all). The rule only affects the display, not storage or the calendar. Tests:
+`testHolidayOfOtherLocationForAllItemsIsHidden`, `testBlockedOtherItemAtAllLocationsIsHidden`.
+
 ## 29. Removed, restructured and new methods
 
 For subclasses and third-party code:

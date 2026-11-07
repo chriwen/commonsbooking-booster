@@ -2232,6 +2232,43 @@ schnell zu finden. Liegt der Index vor, nutzt sie ihn (`Index::findPostIds()`). 
 `src/View/Admin/AssignedTimeframes.php`, geändert `CustomPostType/CustomPostType.php`, `Item.php`, `Location.php` und
 `Timeframe.php` (`filterAdminList()`, `setCustomColumnsData()`).
 
+**Wie Feiertage und Blockierungen wirken.** Ein Zeitrahmen vom Typ „Feiertage oder Station geschlossen“ (3) oder
+„Geblockt“ (5) gilt für die Paare *gewählte Artikel × gewählte Standorte*, und davon nur für Paare, die am jeweiligen
+Tag einen buchbaren Zeitrahmen haben. `Repository\Timeframe::getPostIdsByType()` verknüpft dazu die Artikel- und die
+Standortliste mit je einem `INNER JOIN` (`getEntityQuery()`), und jeder Kalender fragt mit genau einem Paar ab. „Alle“
+und „Kategorie“ speichern in `item-id-list`/`location-id-list` eine Momentaufnahme der passenden IDs
+(`Timeframe::manageTimeframeMeta()`). Für den Kalender heißt das:
+
+| Auswahl | Wirkung |
+|---|---|
+| Feiertag: Standort X, Artikel „Alle“ | alle Artikel, die am Tag an X buchbar sind (Station geschlossen) |
+| Geblockt: Artikel A, Standorte „Alle“ | A an jedem Standort, an dem A am Tag buchbar ist |
+| Alle × Alle | jedes buchbare Paar der Instanz |
+| ausdrücklich gewählte Artikel und Standorte ohne gemeinsames buchbares Paar | keine |
+
+„Alle“ auf der Artikelseite bedeutet bei einem Feiertag also praktisch „alle Artikel der gewählten Standorte“, auch
+wenn die gespeicherte Liste alle Artikel der Instanz enthält.
+
+**Anzeige in der Metabox (`Repository\AssignedTimeframes`).** Die Kandidatensuche läuft nur über die eigene Seite
+(`timeframeCandidateIds()`: Einzelfeld oder Liste enthält den Artikel bzw. Standort). Wegen der Momentaufnahme findet sie
+deshalb einen Feiertag mit Artikel „Alle“ bei *jedem* Artikel der Instanz. `buildTimeframeEntry()` prüft danach:
+
+1. *Gegenstücke* (`counterparts()`): die Standorte des Artikels (bzw. Artikel des Standorts) aus veröffentlichten
+   buchbaren Zeitrahmen, bevorzugt aus nicht abgelaufenen, sonst aus allen.
+2. „Wirkt an“ (`effective_at`): Schnittmenge der Gegenseite des Zeitrahmens mit den Gegenstücken. Bei buchbaren
+   Zeitrahmen ist es die Gegenseite selbst.
+3. **Ausblenden:** Ist „Wirkt an“ leer, ist die eigene Seite nur implizit gewählt („Alle“ oder Kategorie) und steht die
+   Gegenseite nicht auf „Alle“, liefert `buildTimeframeEntry()` `null`. Der Eintrag erscheint dann nicht. Beispiel: Ein
+   Feiertag „Bürgerzentrum, alle Artikel“ steht nicht bei einem Artikel, der nur an der Anlegestelle buchbar ist.
+   Ebenso ein Eintrag „Geblockt: Artikel A, alle Standorte“ nicht bei einem Standort ohne A.
+4. **Warnen:** Ist „Wirkt an“ leer, die eigene Seite aber ausdrücklich gewählt (Einzelfeld oder Liste), bleibt der
+   Eintrag mit ⚠ „zugeordnet, aber an keinem Standort dieses Artikels“ stehen. Das ist ein Konfigurationsfehler, den die
+   Metabox sichtbar machen soll.
+
+Alle × Alle bleibt sichtbar, auch bei einem Artikel ohne buchbaren Zeitrahmen. Einschränkungen folgen derselben Regel
+(`buildRestrictionEntry()`, `0` = alle). Die Regel betrifft nur die Anzeige, nicht Speicherung oder Kalender. Tests:
+`testHolidayOfOtherLocationForAllItemsIsHidden`, `testBlockedOtherItemAtAllLocationsIsHidden`.
+
 ## 29. Entfernte, umgebaute und neue Methoden
 
 Für Unterklassen und Code Dritter:

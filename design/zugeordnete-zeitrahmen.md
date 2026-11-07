@@ -141,7 +141,9 @@ Legende:
 - „Zuordnung“: `direkt` (Einzelfeld) · `Liste (N Artikel)` · `Kategorie „…“` · `alle`, getrennt für Artikel und Standort.
 - „wirkt an“: Schnittmenge aus den Standorten des Zeitrahmens und den Standorten, an denen der Artikel buchbar ist.
   Ist sie leer, wird die Zeile mit ⚠ markiert („zugeordnet, aber an keinem Standort dieses Artikels wirksam“).
-  Genau dieser Fall führt in der Praxis oft zu Verwirrung.
+  Genau dieser Fall führt in der Praxis oft zu Verwirrung. Die Warnung gibt es nur bei ausdrücklicher Zuordnung
+  (Einzelfeld, Liste). Ist der Artikel nur über „alle“ oder eine Kategorie zugeordnet und die Gegenseite nicht „alle“,
+  wird ein nicht wirksamer Eintrag ausgeblendet (z. B. Feiertag eines anderen Standorts für „alle Artikel“), siehe 10.
 - Einschränkungen vom Typ `hint` werden grau angezeigt („nur Hinweis, sperrt nicht“), `solved` unter „abgelaufen“.
 - Abgelaufene Einträge sind eingeklappt und auf 20 begrenzt, mit Link „alle in der Liste anzeigen“.
 
@@ -300,6 +302,8 @@ für `item-id`/`location-id`, wenn das Einzelfeld leer, die Liste aber gesetzt i
 2. Feiertag mit `item-id-list` [X, Y] → erscheint bei X und Y, nicht bei Z; Zuordnung „Liste (2)“.
 3. Feiertag „alle Artikel“ → erscheint bei jedem Artikel; nach Anlegen eines neuen Artikels (Hook
    `updateAllTimeframes`) auch bei diesem.
+3a. Feiertag eines anderen Standorts für „alle Artikel“ oder eine Kategorie → erscheint nicht beim Artikel, wohl aber
+   beim eigenen Standort. „Geblockt“ für einen anderen Artikel an „allen Standorten“ → erscheint nicht beim Standort.
 4. Feiertag per Kategorie → Artikel aus der Kategorie entfernen → verschwindet; hinzufügen → erscheint.
 5. Feiertag nur mit anderem Standort → erscheint mit ⚠ „wirkt an keinem Standort“.
 6. Gruppen: vergangenes Ende → abgelaufen; Start in Zukunft → zukünftig; offenes Ende → aktuell.
@@ -354,6 +358,14 @@ Umgesetzt:
 | `Timeframe.php` | Listenfilter Artikel/Standort berücksichtigt `item-id-list`/`location-id-list`; Spalte zeigt „all (N)“, „Category: …“, „List (N)“ |
 | `tests/php/Repository/AssignedTimeframesTest.php`, `tests/php/View/AssignedTimeframesViewTest.php` | 17 Tests, grün mit und ohne Booster |
 | `languages/commonsbooking-de_DE.po/.mo` | deutsche Übersetzungen der neuen Strings |
+
+**Nicht wirksame Einträge bei „alle“/Kategorie (07.11.2026):** Weil „alle“ eine Momentaufnahme aller Artikel speichert,
+fand die Kandidatensuche einen Feiertag „Standort X, alle Artikel“ bei jedem Artikel der Instanz, auch bei Artikeln, die
+nur an anderen Standorten buchbar sind, dort mit ⚠. Im Kalender wirkt so ein Feiertag aber nur an X (Artikel ×
+Standort, nur buchbare Paare). Seitdem blendet `buildTimeframeEntry()` einen Eintrag aus, wenn er nicht wirkt, die eigene
+Seite nur implizit gewählt ist („alle“ oder Kategorie) und die Gegenseite nicht „alle“ ist, wie schon bei
+Einschränkungen. Ausdrücklich zugeordnete, nicht wirksame Einträge bleiben mit ⚠. Details:
+[`technische-dokumentation-booster-02.md`](technische-dokumentation-booster-02.md), Abschnitt 28.13.
 
 **Position der Metabox (07.11.2026):** Die Metabox steht auf Artikel- und Standortseite an erster Stelle der
 Hauptspalte, damit man die Zeitrahmen direkt beim Öffnen sieht (Vorgabe des Nutzers). Sie wird mit Priorität `high`

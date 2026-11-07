@@ -104,7 +104,10 @@ class AssignedTimeframes {
 
 		$entries = [];
 		foreach ( $timeframes as $timeframe ) {
-			$entries[] = self::buildTimeframeEntry( $timeframe, $entity, $entityId, $counterparts, $todayStart, $todayEnd );
+			$entry = self::buildTimeframeEntry( $timeframe, $entity, $entityId, $counterparts, $todayStart, $todayEnd );
+			if ( $entry ) {
+				$entries[] = $entry;
+			}
 		}
 		foreach ( $restrictionIds as $id ) {
 			$post = get_post( $id );
@@ -283,9 +286,9 @@ class AssignedTimeframes {
 	 * @param int            $todayStart
 	 * @param int            $todayEnd
 	 *
-	 * @return array
+	 * @return array|null null if the timeframe does not concern the entity
 	 */
-	private static function buildTimeframeEntry( TimeframeModel $timeframe, string $entity, int $entityId, array $counterparts, int $todayStart, int $todayEnd ): array {
+	private static function buildTimeframeEntry( TimeframeModel $timeframe, string $entity, int $entityId, array $counterparts, int $todayStart, int $todayEnd ): ?array {
 		$type  = $timeframe->getType();
 		$start = $timeframe->getStartDate() ?: null;
 		$end   = self::endTimestamp( $timeframe );
@@ -296,6 +299,14 @@ class AssignedTimeframes {
 		// A timeframe controls an item only at the locations that are selected as well (and vice versa).
 		$otherIds    = $entity === 'item' ? $locations['ids'] : $items['ids'];
 		$effectiveAt = $type === TimeframeCPT::BOOKABLE_ID ? $otherIds : array_values( array_intersect( $otherIds, $counterparts ) );
+
+		// Our side only implicitly selected ("all" or by category), e.g. a holiday of another location for all items:
+		// only relevant if it applies to one of our counterparts or the other side is "all" too (like restrictions).
+		$own   = $entity === 'item' ? $items : $locations;
+		$other = $entity === 'item' ? $locations : $items;
+		if ( $effectiveAt === [] && in_array( $own['mode'], [ self::ASSIGNMENT_ALL, self::ASSIGNMENT_CATEGORY ], true ) && $other['mode'] !== self::ASSIGNMENT_ALL ) {
+			return null;
+		}
 
 		$weekdays = $timeframe->getWeekDays();
 
