@@ -12,6 +12,7 @@ Diese Fassung fasst die bisherigen Dokumente zu einem zusammenhängenden Text zu
 | [`booster.md`](booster.md) | Schalter, Wächter, Downgrade, Diagnose, Cache-Messung, Doppelbuchungsschutz |
 | [`timeframe-index.md`](timeframe-index.md) | Entwurf, Entscheidungen und Messreihen des Index (Stufe 2, Phasen 1–5) |
 | [`availability-precompute.md`](availability-precompute.md) | Entwurf, Entscheidungen und Messreihen der Vorberechnung (Stufe 3, Phasen A–E) |
+| [`role-restricted-availability.md`](role-restricted-availability.md) | Zugriffsprofile für rollenbeschränkte Paare (8.8) |
 | [`booster-aenderungen-bestehender-dateien.md`](booster-aenderungen-bestehender-dateien.md) | jede geänderte bestehende Datei |
 | [`technische-dokumentation-booster.md`](technische-dokumentation-booster.md) | bisherige Gesamtdoku (Fassung 1) |
 
@@ -38,7 +39,7 @@ Teil E behandelt Sicherheit und Konsistenz, Teil F den Betrieb, Teil G alle Änd
 - **Teil B – Datenmodell**
   6. `cb_index`
   7. `cb_index_rel`
-  8. `cb_availability`
+  8. `cb_availability` und `cb_availability_access`
   9. Optionen, Cron-Ereignisse, Filter und Actions
 - **Teil C – Schreibprozesse**
   10. Index pflegen: Indexer und Projector
@@ -327,6 +328,7 @@ Ausführliche Grafik mit allen Methoden: [`booster-architektur.png`](booster-arc
                                    ▲              (≤ 25 Paare am Request-Ende, sonst Cron; oder beim Lesen)
                                    │ Store::isUsable()?  ja → days / slots
                                    │                     nein → berechnen und speichern, oder live
+                                   │ rollenbeschränkt? → cb_availability_access je Zugriffsprofil (8.8)
                 ┌──────────────────┴───────────────────────┐
      Service\Availability\Reader                 Service\Availability\SlotReader
      ◄── MapItemAvailable (Karte)                ◄── Model\Calendar::getAvailabilitySlots()
@@ -351,11 +353,13 @@ Ausführliche Grafik mit allen Methoden: [`booster-architektur.png`](booster-arc
 | `Service\Index\Verifier` | Stichprobe Index ↔ frische Projektion, repariert | E |
 | `Repository\Index` | Lesezugriff: `isAvailable()`, `findPostIds()`, `loadPosts()`, `sortByDate()` | D |
 | `Service\Availability\Availability` | Schalter der Vorberechnung, Horizont, Altersgrenze | D |
-| `Service\Availability\Schema` | Tabelle `cb_availability` | B |
+| `Service\Availability\Schema` | Tabellen `cb_availability` und `cb_availability_access` | B |
 | `Service\Availability\Store` | einziger Zugriff auf `cb_availability`: laden, prüfen, schreiben, invalidieren | B/C |
 | `Service\Availability\Invalidator` | betroffene Paare bestimmen, `gen` erhöhen, Neuberechnung einplanen | C |
-| `Service\Availability\Calculator` | ein Paar über den Horizont berechnen (Tagesfakten + Slots) | C |
-| `Service\Availability\Maintenance` | Cron: neue Paare, veraltete Zeilen, Stichprobe | C/E |
+| `Service\Availability\Calculator` | ein Paar über den Horizont berechnen (Tagesfakten + Slots), bei Rollenbeschränkung je Zugriffsprofil | C |
+| `Service\Availability\AccessProfile` | Zugriffsprofil des Nutzers für ein Paar, erlaubte Rollen je Paar, Rechnen als Profil (`runAs()`) | B/D |
+| `Service\Availability\AccessStore` | einziger Zugriff auf `cb_availability_access`: laden, prüfen, schreiben, aufräumen | B/C |
+| `Service\Availability\Maintenance` | Cron: neue Paare, veraltete Zeilen, Aufräumen der Zugriffsprofile, Stichprobe | C/E |
 | `Service\Availability\DayFacts` | Rechenkern: Slot-Raster → 10 Bits | B |
 | `Service\Availability\CalendarWindow` | Rechenkern: datumsabhängiges Fenster beim Lesen | D |
 | `Service\Availability\DayStatus` | Rechenkern: Status eines Tages für Karte und Tabelle | D |
@@ -385,18 +389,21 @@ nur mit `wp commonsbooking booster purge`.
    │ n : 1
    ▼
  cb_availability   PRIMARY (location_id, item_id)
+   │ 1 : n   (nur Paare mit has_role_limit = 1)
+   ▼
+ cb_availability_access   PRIMARY (location_id, item_id, access_profile)
 ```
 
-| | `cb_index` | `cb_index_rel` | `cb_availability` |
-|---|---|---|---|
-| eine Zeile je | Beitrag | Artikel bzw. Standort eines Beitrags mit Mehrfachauswahl | Paar mit buchbarem Zeitrahmen |
-| Größenordnung (17.100 Beiträge, 300 Paare) | ≈ 17.100 | wenige hundert | ≈ 300 |
-| Inhalt | Fakten aus `wp_posts`/`postmeta`, typisiert | Zuordnungen | berechnete Tagesfakten + freie Slots |
-| geschrieben von | `Index\Projector` | `Index\Projector` | `Availability\Store` |
-| Schema-Klasse, Version | `Index\Schema`, 3 | `Index\Schema`, 3 | `Availability\Schema`, 2 |
-| Versionsoption | `commonsbooking_index_schema_version` | (dieselbe) | `commonsbooking_availability_schema_version` |
-| bei Strukturänderung | `dbDelta` erweitert, Zeilen bleiben gültig | wie `cb_index` | Tabelle wird verworfen und neu angelegt (reiner Cache) |
-| bei geänderter Ableitungslogik | `Projector::PROJECTOR_VERSION` (2) erhöhen → Neuaufbau | wie `cb_index` | `Calculator::VERSION` (2) erhöhen → alte Zeilen ungültig |
+| | `cb_index` | `cb_index_rel` | `cb_availability` | `cb_availability_access` |
+|---|---|---|---|---|
+| eine Zeile je | Beitrag | Artikel bzw. Standort eines Beitrags mit Mehrfachauswahl | Paar mit buchbarem Zeitrahmen | rollenbeschränktes Paar und Zugriffsprofil |
+| Größenordnung (17.100 Beiträge, 300 Paare) | ≈ 17.100 | wenige hundert | ≈ 300 | 2 je rollenbeschränktem Paar, höchstens 8 |
+| Inhalt | Fakten aus `wp_posts`/`postmeta`, typisiert | Zuordnungen | berechnete Tagesfakten + freie Slots | dasselbe für ein Zugriffsprofil |
+| geschrieben von | `Index\Projector` | `Index\Projector` | `Availability\Store` | `Availability\AccessStore` |
+| Schema-Klasse, Version | `Index\Schema`, 3 | `Index\Schema`, 3 | `Availability\Schema`, 3 | (dieselbe) |
+| Versionsoption | `commonsbooking_index_schema_version` | (dieselbe) | `commonsbooking_availability_schema_version` | (dieselbe) |
+| bei Strukturänderung | `dbDelta` erweitert, Zeilen bleiben gültig | wie `cb_index` | Tabelle wird verworfen und neu angelegt (reiner Cache) | wie `cb_availability` (beide zusammen) |
+| bei geänderter Ableitungslogik | `Projector::PROJECTOR_VERSION` (2) erhöhen → Neuaufbau | wie `cb_index` | `Calculator::VERSION` (2) erhöhen → alte Zeilen ungültig | wie `cb_availability` |
 
 Zwei Regeln für Datentypen: Was gesucht oder verglichen wird, ist eine Zahl (Typ, IDs, Zeitstempel). Und `NULL` hat in
 jeder Spalte eine feste Bedeutung, damit die SQL-Bedingungen das alte `postmeta`-SQL exakt nachbilden.
@@ -468,7 +475,7 @@ erneut zu ändern und ohne zweiten Backfill.
 | `max_days` | smallint unsigned, NULL | `timeframe-max-days` | maximale Buchungsdauer |
 | `advance_days` | smallint unsigned, NULL | `timeframe-advance-booking-days` | Vorausbuchungsfenster |
 | `startday_offset` | smallint unsigned, NULL | `booking-startday-offset` | frühester Buchungstag ab heute |
-| `has_role_limit` | tinyint(1) | `allowed_user_roles` | 1 = nur für bestimmte Rollen buchbar; solche Paare werden immer live berechnet |
+| `has_role_limit` | tinyint(1) | `allowed_user_roles` | 1 = nur für bestimmte Rollen buchbar; solche Paare werden je Zugriffsprofil gespeichert (8.8) |
 
 Zahlen werden auf 0…65535 begrenzt, nicht numerische Werte ergeben NULL („nicht gesetzt“). Die Auswertung bleibt im
 PHP-Code (z. B. gelten 0 Vorausbuchungstage dort als „nicht gesetzt“).
@@ -603,8 +610,8 @@ Die Tabelle ist ein **reiner Cache**: Jede Zeile kann jederzeit gelöscht werden
 | `gen` | int unsigned | **1** | Generation; bei **jeder** Änderung eines Beitrags, der das Paar betrifft, synchron +1 |
 | `computed_gen` | int unsigned | **0** | Generation, aus der `days` und `slots` berechnet wurden; neue Zeilen sind dadurch zunächst ungültig |
 | `days_from` | date, NULL | – | Datum des ersten Eintrags in `days` (am Berechnungstag: gestern) |
-| `days` | varbinary(1024), NULL | – | Tagesfakten, **2 Byte je Tag** ab `days_from` (unsigned short, little endian); 94 Tage = 188 Byte, Platz für 512 Tage; NULL bei Rollenbeschränkung |
-| `slots` | mediumblob, NULL | – | freie buchbare Slots je Tag für API und GBFS (8.7); NULL bei Rollenbeschränkung |
+| `days` | varbinary(1024), NULL | – | Tagesfakten, **2 Byte je Tag** ab `days_from` (unsigned short, little endian); 94 Tage = 188 Byte, Platz für 512 Tage; NULL bei Rollenbeschränkung (dann je Zugriffsprofil in 8.8) |
+| `slots` | mediumblob, NULL | – | freie buchbare Slots je Tag für API und GBFS (8.7); NULL bei Rollenbeschränkung (8.8) |
 | `has_role_limit` | tinyint(1) | 0 | 1 = mindestens ein buchbarer Zeitrahmen des Paares ist rollenbeschränkt |
 | `computed_at` | datetime (UTC), NULL | – | Zeitpunkt der Berechnung (`gmdate()`) |
 | `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (derzeit 2) |
@@ -680,7 +687,7 @@ Alles, was vom heutigen Datum oder vom angemeldeten Nutzer abhängt, wird beim *
 | Tag liegt vor dem ersten buchbaren Tag (`startday_offset`) | `CalendarWindow` (`firstBookableDay`) | buchbare Zeitrahmen + heute |
 | Tag liegt nach dem Ende des angefragten Bereichs | `CalendarWindow` | Parameter der Anfrage |
 | Status für Karte/Tabelle | `DayStatus::fromDayArray()` | Tagesfakten nach dem Fenster |
-| Rollenbeschränkung | Paar wird nicht gespeichert, immer live | angemeldeter Nutzer |
+| Rollenbeschränkung | Zeile je Zugriffsprofil in `cb_availability_access` (8.8), Auswahl beim Lesen | Rollen des angemeldeten Nutzers |
 | Slots mit Uhrzeiten für den Buchungskalender der Artikelseite | dort live | – |
 
 Geprüft wurde, dass `Day::getGrid()`, `mapTimeFrames()`, `mapRestrictions()`, `getHigherPrioFrame()` und `isLocked()`
@@ -689,7 +696,8 @@ nur von den Beiträgen abhängen, nicht von `time()`. Alle datumsabhängigen Tei
 31.2 (`Timeframe::isBookable()`).
 
 Ohne Rollenbeschränkung ist das Ergebnis für alle Nutzer gleich, auch für Admins:
-`commonsbooking_isCurrentUserAllowedToBook()` liefert bei leerer Rollenliste immer `true`.
+`commonsbooking_isCurrentUserAllowedToBook()` liefert bei leerer Rollenliste immer `true`. Mit Rollenbeschränkung
+hängt es nur vom Zugriffsprofil ab (8.8).
 
 ### 8.5 Lebenszyklus einer Zeile
 
@@ -700,7 +708,7 @@ Ohne Rollenbeschränkung ist das Ergebnis für alle Nutzer gleich, auch für Adm
 | **invalidiert** | n+1 / n | alt | `Store::invalidate()` bei einer Änderung | ungültig → berechnen |
 | **gealtert** | n / n | gesetzt, `computed_at` > 24 h | Zeit vergeht (Cron rechnet ab 12 h nach) | ungültig → berechnen |
 | **veraltete Rechenversion** | n / n | gesetzt, `calc_version` alt | Update mit neuer `Calculator::VERSION` | ungültig → berechnen |
-| **rollenbeschränkt** | n / n | NULL, `has_role_limit = 1` | Berechnung stellt Rollenbeschränkung fest | sofort live, ohne Neuberechnung |
+| **rollenbeschränkt** | n / n | NULL, `has_role_limit = 1` | Berechnung stellt Rollenbeschränkung fest | Tage aus der Zeile des Zugriffsprofils (8.8) |
 | **entfernt** | – | – | `syncPairs()`: kein buchbarer Zeitrahmen mehr | live (meist nichts anzuzeigen) |
 
 `Store::invalidate()` erhöht nur **vorhandene** Zeilen. Bekommt ein Paar erstmals einen buchbaren Zeitrahmen, gibt es
@@ -778,6 +786,74 @@ Begründungen:
 Die Spalte kam nachträglich hinzu (`Availability\Schema::SCHEMA_VERSION = 2`, `Calculator::VERSION = 2`). Wer eine
 frühere Beta hatte, bekommt die Tabelle beim Update verworfen und neu angelegt.
 
+### 8.8 `{prefix}cb_availability_access`: rollenbeschränkte Paare je Zugriffsprofil
+
+Hat ein Paar einen rollenbeschränkten Zeitrahmen, sehen nicht alle Nutzer dieselben Tage: Ein Gast sieht „gesperrt“,
+ein Mitglied „frei“. Der einzige nutzerabhängige Schritt der Tagesberechnung ist
+`commonsbooking_isCurrentUserAllowedToBook()` (in `Day`, `DayFacts`, `Repository\Timeframe`). Er hängt nur davon ab,
+welche der erlaubten Rollen der Nutzer hat, und ob er Admin ist. Daraus folgt das **Zugriffsprofil**
+(`AccessProfile::forCurrentUser()`):
+
+```
+R      = sortierte Vereinigung der allowed_user_roles aller rollenbeschränkten Zeitrahmen des Paares
+         (publish/confirmed, aus cb_index mit has_role_limit = 1, Mehrfach-Zeitrahmen über cb_index_rel)
+Profil = R                                    für Admins (commonsbooking_isCurrentUserAdmin)
+       = sortiert( Rollen des Nutzers ∩ R )   sonst, mit Kommas verbunden; '' = keine passende Rolle
+```
+
+Alle Nutzer mit gleichem Profil sehen dieselben Tage. Ein Admin bekommt das Profil eines Nutzers mit allen Rollen
+aus R: Beide dürfen jeden Zeitrahmen des Paares buchen. Bei Paula @ Repair-Café (504, nur „Mitglied“) gibt es also
+genau zwei Profile: `''` (Gäste, Abonnenten, alle ohne „Mitglied“) und `cb_member` (Mitglieder und Admins;
+`cb_member` steht hier als Rollenname für „Mitglied“).
+
+Spalten (Primärschlüssel `(location_id, item_id, access_profile)`, `KEY last_read`):
+
+| Spalte | Typ | Bedeutung |
+|---|---|---|
+| `item_id`, `location_id` | bigint unsigned | das Paar |
+| `access_profile` | varchar(191) | Zugriffsprofil wie oben |
+| `computed_gen` | int unsigned | `gen` der Paarzeile in `cb_availability` zur Zeit der Berechnung |
+| `days_from`, `days` | date, varbinary(1024) | Tagesfakten im Format von 8.3 |
+| `slots` | mediumblob, NULL | freie Slots im Format von 8.7 |
+| `computed_at`, `calc_version` | datetime (UTC), smallint | wie in 8.2 |
+| `last_read` | date, NULL | letzter Lesezugriff, höchstens einmal am Tag aktualisiert |
+
+**Gültigkeit** (`AccessStore::isUsable()`): Die Paarzeile ist rollenbeschränkt, `computed_gen` gleich ihrer `gen`,
+`calc_version` aktuell, `computed_at` höchstens 24 Stunden alt, der Tag liegt in `days`. Das Profil hat keine eigene
+Generation: Jede Änderung am Paar erhöht die `gen` der Paarzeile (11.1) und macht damit alle Profile des Paares
+ungültig, ohne diese Tabelle anzufassen.
+
+**Berechnen** (`Calculator::compute( item, location, profil )`): `AccessProfile::runAs()` setzt für die Dauer der
+Berechnung `$current_user` auf einen nicht angemeldeten `WP_User` (ID 0, also kein Admin) mit genau den Rollen des
+Profils und stellt den echten Nutzer im `finally` wieder her. Dann läuft derselbe Rechenkern wie für jedes Paar.
+Geschrieben wird mit Generationsprüfung in einer Anweisung:
+
+```sql
+INSERT INTO wp_cb_availability_access (item_id, location_id, access_profile, computed_gen, days_from, days, slots, …)
+SELECT 813, 457, '', 42, '2026-11-05', UNHEX('…'), UNHEX('…'), …
+  FROM wp_cb_availability WHERE location_id = 457 AND item_id = 813 AND gen = 42
+ON DUPLICATE KEY UPDATE computed_gen = VALUES(computed_gen), days = VALUES(days), …
+```
+
+Hat sich `gen` inzwischen erhöht, schreibt die Anweisung nichts (wie 11.4).
+
+**Wann gerechnet wird:** `Calculator::recompute()` stellt für ein rollenbeschränktes Paar die Paarzeile fertig und
+berechnet sofort die beiden häufigsten Profile `''` und `R`. Weitere Profile (z. B. Nutzer mit nur einer von zwei
+erlaubten Rollen) entstehen beim ersten Lesen. Je Paar werden höchstens **8** Profile gespeichert (Filter
+`commonsbooking_availability_access_profiles_max`, mindestens 2); jedes weitere Profil rechnet der Leser live, wie vor
+den Zugriffsprofilen.
+
+**Aufräumen** (`AccessStore::cleanup()`, täglich vor der Stichprobe): Zeilen ohne Paarzeile, Zeilen von Paaren ohne
+Rollenbeschränkung, Zeilen mit alter `computed_gen` und Zeilen, die 30 Tage nicht gelesen wurden
+(`AccessStore::UNUSED_DAYS`), werden gelöscht.
+
+**Schalter:** Filter `commonsbooking_availability_access_profiles` (Standard `true`). Mit `false` rechnet der Leser
+rollenbeschränkte Paare wieder immer live.
+
+**Schema und Downgrade:** Die Tabelle kam mit `Availability\Schema::SCHEMA_VERSION = 3`. Beim Update werden beide
+Tabellen einmal verworfen und neu angelegt (reiner Cache). Eine ältere Version kennt die Tabelle nicht und lässt sie
+liegen; sie wird nie gelesen, `wp commonsbooking booster purge` und die Deinstallation entfernen sie.
+
 ---
 
 ## 9. Optionen, Cron-Ereignisse, Filter und Actions
@@ -804,7 +880,7 @@ frühere Beta hatte, bekommt die Tabelle beim Update verworfen und neu angelegt.
 | `commonsbooking_index_verify` | täglich 04:00 | `Index\Verifier` | Stichprobe von 200 Beiträgen gegen frische Projektion, repariert |
 | `commonsbooking_booster_guard` | stündlich | `Booster\Guard` | Tiefenprüfung Status/Änderungsdatum |
 | `commonsbooking_availability_refresh` | stündlich, bei Bedarf zusätzlich | `Availability\Maintenance` | neue Paare, geänderte und über 12 h alte Zeilen neu berechnen (20 s Budget) |
-| `commonsbooking_availability_verify` | täglich 04:30 | `Availability\Maintenance` | Stichprobe von 50 Paaren gegen frische Berechnung, repariert |
+| `commonsbooking_availability_verify` | täglich 04:30 | `Availability\Maintenance` | Zugriffsprofile aufräumen, Stichprobe von 50 Paaren und 50 Zugriffsprofilen gegen frische Berechnung, repariert |
 
 Ausschalten des Boosters und Deaktivieren des Plugins entfernen alle Ereignisse.
 
@@ -819,6 +895,8 @@ Ausschalten des Boosters und Deaktivieren des Plugins entfernen alle Ereignisse.
 | `commonsbooking_availability_max_age` | 86400 | maximales Alter einer Zeile in Sekunden |
 | `commonsbooking_availability_sync_limit` | 25 | Paare, die am Request-Ende neu berechnet werden |
 | `commonsbooking_availability_finish_request` | `true` | `fastcgi_finish_request()` vor der Neuberechnung |
+| `commonsbooking_availability_access_profiles` | `true` | `false`: rollenbeschränkte Paare immer live statt je Zugriffsprofil |
+| `commonsbooking_availability_access_profiles_max` | 8 | höchstens gespeicherte Zugriffsprofile je Paar (mindestens 2) |
 
 ### 9.4 Actions
 
@@ -998,6 +1076,7 @@ recompute( item, location ):
 compute( item, location ):
   [from, to] = Horizont (gestern … heute + 92)
   Rollenbeschränkung (hasRoleLimit über cb_index) → { roleLimited: true }, keine Tage
+      (recompute rechnet dann die Profile '' und R über compute( item, location, profil ), 8.8)
   Plugin::withoutCache( {
       calendar = new Model\Calendar( from, to, [location], [item] )
       für jeden Tag: grid = Day::getGrid()
@@ -1077,7 +1156,8 @@ der Plugin-Version und werden bei Neuinstallationen ignoriert).
 |---|---|---|
 | `syncPairs()` | stündlich (Entfernen einmal am Tag) | Paare aus `cb_index` (Typ 2, `publish`, nicht vor dem Horizont endend) ermitteln; fehlende Zeilen anlegen, Zeilen ohne buchbaren Zeitrahmen löschen |
 | `refresh()` | stündlich, nach Überlauf oder Neuaufbau sofort | `Store::getStalePairs()`: `computed_gen ≠ gen`, alte `calc_version`, nie berechnet oder älter als 12 h; älteste zuerst; 20 s Budget, danach in 30 s neu eingeplant |
-| `verify()` | täglich 04:30 | 50 zufällige Paare frisch berechnen und mit der Zeile vergleichen (Tagesfakten **und** Slots, `matches()`); Abweichung → neu schreiben |
+| `AccessStore::cleanup()` | täglich 04:30, vor `verify()` | verwaiste, veraltete und 30 Tage ungelesene Zugriffsprofile löschen (8.8) |
+| `verify()` | täglich 04:30 | 50 zufällige Paare und 50 zufällige Zugriffsprofile frisch berechnen und mit der Zeile vergleichen (Tagesfakten **und** Slots, `matches()`); Abweichung → neu schreiben |
 
 Die 12-Stunden-Regel lässt den Horizont mitwandern: Eine am Montag 10 Uhr berechnete Zeile beginnt bei Sonntag und
 endet bei Montag + 92. Ab Montag 22 Uhr wird sie neu berechnet, spätestens nach 24 h ist sie ungültig.
@@ -1486,7 +1566,8 @@ Timeframe::getBookableForCurrentUser( alle Standorte, alle Artikel, …, letzte 
 3. Fakten für die Tage im Buchungsfenster (getFacts):
      a) Zeile gültig (Store::isUsable)          → DayFacts::fromFlags( Store::getFlags( zeile, datum ) )
                                                    ein Tag nicht abgedeckt → ganzes Paar live
-     b) Zeile rollenbeschränkt und aktuell      → live
+     b) Zeile rollenbeschränkt und aktuell      → Zeile des Zugriffsprofils (8.8), sonst
+                                                   Calculator::computeAccessProfile(); Grenze erreicht → live
      c) Tage außerhalb des Horizonts            → live
      d) sonst                                   → Calculator::getComputed() ?? Calculator::recompute()
                                                    (berechnet, speichert, nutzt das Ergebnis)
@@ -1589,9 +1670,9 @@ Zeitrahmen 502 (2 Tage Vorlauf) und am Repair-Café (457) Zeitrahmen 504 mit Rol
 |---|---|
 | Kalendertage | 06.11. bis So 22.11. |
 | Paare | (813, 455), (813, 457) |
-| Zeile (813, 457) | `has_role_limit = 1` → **ganze Anfrage live** (Rückfall) |
+| Zeile (813, 457) | `has_role_limit = 1` → Zeile des Zugriffsprofils aus `cb_availability_access` (8.8), z. B. `''` für Gäste |
 
-Ohne Zeitrahmen 504 sähe es so aus:
+Für die Paarzeile (813, 455) sieht es so aus:
 
 | Schritt | Ergebnis |
 |---|---|
@@ -1611,7 +1692,7 @@ Für GBFS (`ignoreStartDayOffset = true`) entfällt die Vorlauf-Prüfung; diesel
 | kein Artikelfilter | wäre eine Vollabfrage; der Live-Kalender verhält sich ohne Filter anders | nur eigener Code |
 | Kalendertage außerhalb des Horizonts | keine Zeile | `api_future_availability_weeks` > 12 |
 | Zeitrahmen mit mehreren Artikeln/Standorten im Bereich | nicht vorberechnet | Mehrfach-Zeitrahmen |
-| Paar mit Rollenbeschränkung | nutzerabhängig | Zeitrahmen mit Rollen |
+| Paar mit Rollenbeschränkung, Grenze von 8 Zugriffsprofilen erreicht oder Zugriffsprofile abgeschaltet | nutzerabhängig | sehr viele Rollenkombinationen |
 | berechnete Zeile passt nicht zum Horizont / Tag nicht abgedeckt | Tageswechsel während des Requests | selten |
 
 ### 17.4 Abweichungen vom Live-Weg (Fehler in 2.11.3)
@@ -1675,8 +1756,19 @@ rechnet das Paar komplett live (`evaluateLive()`), so schnell wie mit „nur Ind
 ### 18.5 Szenario O: rollenbeschränktes Paar
 
 Paula @ Repair-Café (813, 457) ist nur für „Mitglieder“ buchbar. `Calculator::compute()` erkennt das über
-`has_role_limit` im Index und speichert `has_role_limit = 1`, `days = NULL`. Der Reader rechnet dieses Paar **immer
-live**, weil ein Gast „gesperrt“ und ein Mitglied „frei“ sehen muss. Der Plugin-Cache trennt nach Rollen (22).
+`has_role_limit` im Index und speichert in `cb_availability` `has_role_limit = 1`, `days = NULL`. `recompute()`
+berechnet gleich danach die Profile `''` und `cb_member` und legt sie in `cb_availability_access` ab (8.8).
+
+| Besucher | Zugriffsprofil | gelesen aus | sieht |
+|---|---|---|---|
+| Gast | `''` | Zeile `(457, 813, '')` | gesperrt |
+| Abonnent (`subscriber`) | `''` (Rolle nicht in R) | dieselbe Zeile | gesperrt |
+| Mitglied (`cb_member`) | `cb_member` | Zeile `(457, 813, 'cb_member')` | frei |
+| Admin | `cb_member` (= R) | dieselbe Zeile | frei |
+
+Kommt ein zweiter rollenbeschränkter Zeitrahmen für „Schule“ hinzu, ist R = `cb_member,cb_school`. Die `gen` des
+Paares steigt, alle Profile werden ungültig, `''` und `cb_member,cb_school` werden neu berechnet; `cb_member` und
+`cb_school` entstehen beim ersten Aufruf eines solchen Nutzers. Der Plugin-Cache trennt ohnehin nach Rollen (22).
 
 ### 18.6 Szenario P: Booster gerade eingeschaltet
 
@@ -1790,7 +1882,8 @@ In keinem Fall entsteht eine Doppelbuchung, weil die Buchungsprüfung nie über 
 ### 21.1 Empfohlener Ablauf
 
 1. Booster ausschalten (Einstellungen oder `wp commonsbooking booster disable`).
-2. Ältere Version einspielen. Sie ignoriert die Tabellen `cb_index`, `cb_index_rel`, `cb_availability`, die Optionen
+2. Ältere Version einspielen. Sie ignoriert die Tabellen `cb_index`, `cb_index_rel`, `cb_availability`,
+   `cb_availability_access` (Versionen vor den Zugriffsprofilen kennen sie nicht, lassen sie aber unberührt), die Optionen
    und die Cron-Ereignisse (ohne zugehörigen Code führt WordPress sie nicht aus).
 3. Später neue Version einspielen und Booster wieder einschalten. Der Index wird **immer** komplett neu aufgebaut.
 
@@ -1871,6 +1964,9 @@ wp commonsbooking index status|rebuild|verify [--repair] [--sample=<n>]|drop    
 wp commonsbooking availability status|rebuild|verify [--repair] [--sample=<n>]|drop      # nur bei eingeschaltetem Booster
 ```
 
+`availability status` zeigt die rollenbeschränkten Paare und die Zugriffsprofile („Access profiles: 36 (36 usable) for
+18 pairs, at most 8 per pair“). `verify` prüft Paare und Zugriffsprofile; `--sample` gilt für beide getrennt.
+
 ### 24.2 Diagnose in den Einstellungen
 
 Einstellungen → Erweitert → „Performance booster“ (`SettingsView`, Daten aus `Diagnostics`):
@@ -1878,7 +1974,8 @@ Einstellungen → Erweitert → „Performance booster“ (`SettingsView`, Daten
 - **Zustand** grün/gelb/rot mit konkreten Hinweisen: Index im Aufbau, Anzahl Beiträge ≠ Indexzeilen, Buchung mit
   abweichendem Status, alte Zeilen, fehlende oder überfällige Cron-Aufgaben, Reparaturen der letzten Tiefenprüfung.
 - **Index:** Balken je Typ (Zeitrahmen, Buchungen, Einschränkungen), neueste Änderung in WordPress und im Index.
-- **Vorberechnete Verfügbarkeit:** aktuelle, geänderte, alte und rollenbeschränkte Paare (`Store::getStats()`).
+- **Vorberechnete Verfügbarkeit:** aktuelle, geänderte, alte und rollenbeschränkte Paare (`Store::getStats()`) sowie
+  gespeicherte und gültige Zugriffsprofile (`AccessStore::getStats()`).
 - **Letzte Buchungen:** zuletzt angelegt, geändert oder storniert, Status in WordPress und im Index nebeneinander.
 - **Letzte Index-Aktivität:** Ringpuffer der letzten 30 Änderungen, auch Löschungen, mit Herkunft (Website,
   Verwaltung, Cron, WP-CLI) und erneuter Prüfung des aktuellen Stands.
@@ -1920,6 +2017,16 @@ PHPBench (Fixture des Projekts, 100 Artikel × 110 Buchungen):
 | GBFS Vehicle Availability / Status / Station Status | 22,5 / 20,8 / 7,36 s | 1,81 / 1,02 / 0,58 s | – |
 | gesamter Lauf | 16:43 min | 2:52 min | – |
 
+Rollenbeschränkte Paare (DEV, 102 Paare, Kartenabfrage als Admin, Median ohne Plugin-Cache):
+
+| Datenstand | 2.11.3 | live je Paar | je Zugriffsprofil |
+|---|---|---|---|
+| 18 Paare beschränkt | – | 150 ms | **62 ms** |
+| alle 102 Paare beschränkt | ≈ 1.900 ms | 936 ms | **62 ms** |
+
+Ein beschränktes Paar kostet aus dem Zugriffsprofil 0,5–1,0 ms statt 1,6–3,7 ms (Messung
+`dev-bench/rollentest/perf-roles.php`, `perf-roles-live.php`).
+
 Testumgebung (15 Paare, Browser): Kartenabfrage 39 ms vorberechnet, 153 ms live, 264 ms ohne Index; „Klassische
 Ansichten“ ausgeschaltet 213 ms mit 1.190 Abfragen, eingeschaltet 116 ms mit 48. Ausgabe in allen Modi byte-gleich.
 
@@ -1932,6 +2039,7 @@ Ansichten“ ausgeschaltet 213 ms mit 1.190 Abfragen, eingeschaltet 116 ms mit 4
 | `View/CalendarSnapshotTest.php` + `snapshots/calendar-core.json` (1,3 MB) | Kalender-JSON, Kartenstatus, Tabellenzeilen für 11 Szenarien × 4 Nutzer, **vor** dem Umbau aufgezeichnet; gespeichert, live und frisch berechnet identisch |
 | `Service/Availability/AvailabilityTest.php` | Schreibweg: Buchen, Bestätigen, Stornieren, Löschen, Umbuchen, Feiertag, Platzhalter, Horizont, Gleichzeitigkeit, Rollen, Alter, Rechenversion, Überlauf, Neuaufbau |
 | `Service/Availability/SlotsTest.php` | API/GBFS-Slots gespeichert vs. live, bekannte Abweichungen, Rückfälle, Verifier |
+| `Service/Availability/AccessProfileTest.php` (14 Tests) | Zugriffsprofil je Rolle und Admin, gespeichert = live für Karte und Slots, sofort berechnete Profile, Grenze je Paar, Invalidierung, Aufräumen, Verifier, Schalter |
 | `Service/Booster/BoosterTest.php` (13 Tests) | Schalter, Umgehung bei der Buchungsprüfung (auch mit fehlender Indexzeile), alle drei Wächter-Prüfungen, Wartezeit, `purge` |
 | `Service/Booster/DiagnosticsTest.php`, `CacheRoleContextTest.php` | Diagnose, Rollen im Cache-Schlüssel |
 | `Service/Booster/TimeframeVariantsParityTest.php` + `Fixtures/TimeframeVariants.php` | 31 Zeitrahmen-Konfigurationen, Vergleich mit dem Originalcode für Gast, Abonnent, Redakteur, zwei cb_manager, Admin |
@@ -1942,7 +2050,8 @@ Ansichten“ ausgeschaltet 213 ms mit 1.190 Abfragen, eingeschaltet 116 ms mit 4
 | `View/CalendarTest.php::testRenderItemLocationRowLocksDaysWithoutStatus` | `is-locked`-Markup |
 
 Die Suite läuft standardmäßig mit eingeschaltetem Booster (`tests/php/bootstrap.php` baut den Index auf). Stand:
-555 Tests in jedem der vier Modi; ohne Index werden Index- und Verfügbarkeitstests übersprungen.
+586 Tests im Standardmodus (07.11.2026, mit Zugriffsprofilen), zuvor 555 Tests in jedem der vier Modi; ohne Index
+werden Index- und Verfügbarkeitstests übersprungen.
 
 | Variable | Wirkung | CI-Lauf (`.github/workflows/phpunit.yml`) |
 |---|---|---|
@@ -2181,7 +2290,7 @@ Neu öffentlich in bestehenden Klassen: `Calendar::getAvailabilitySlotsLive()`, 
 
 - Schreibvorgänge an den Hooks vorbei sieht der Index erst über Wächter oder Verifier (20.2); Verfügbarkeitszeilen
   verfallen spätestens nach 24 h. Buchungen bleiben in jedem Fall korrekt geprüft.
-- Paare mit Rollenbeschränkung und Anfragen über den Horizont hinaus werden live berechnet.
+- Anfragen über den Horizont hinaus und rollenbeschränkte Paare jenseits von 8 Zugriffsprofilen werden live berechnet.
 - `Timeframe::isBookable()` (Vorausbuchungsfenster) hängt vom heutigen Datum ab und fließt beim Berechnen in die Auswahl
   der Zeitrahmen ein. Rückt ein Zeitrahmen ins Vorausbuchungsfenster, kann eine Zeile bis zur nächsten Neuberechnung
   (ab 12 h, höchstens 24 h) veraltet sein.
@@ -2197,7 +2306,6 @@ Neu öffentlich in bestehenden Klassen: `Calendar::getAvailabilitySlotsLive()`, 
 | `Repository\Item::getByCloakedId()` | berechnet `getCloakedId()` je Artikel (mit Booster ≈ 7 ms je Artikel) | Zuordnung Hash → Artikel zwischenspeichern |
 | Fehler im Live-Weg der API (17.4) | ohne Booster falsche freie Tage | an das Hauptprojekt melden |
 | `vehicle_status` mit `ignoreRestrictions` | bleibt live | zweite Slot-Variante ohne Einschränkungen |
-| Paare mit Rollenbeschränkung | immer live | Variante je Rollenkombination speichern |
 | Admin-Listen | weiter über `postmeta` | `posts_clauses` auf den Index umstellen |
 
 ## 32. Checkliste für Entwickler
@@ -2229,4 +2337,5 @@ Neu öffentlich in bestehenden Klassen: `Calendar::getAvailabilitySlotsLive()`, 
 | `withoutBooster()` | Ausführung mit Originalabfragen und ohne Plugin-Cache |
 | Wächter | Prüfungen, die Änderungen ohne Booster erkennen |
 | Verifier | tägliche Stichproben gegen frische Projektion bzw. Berechnung |
+| Zugriffsprofil | die für ein rollenbeschränktes Paar wirksamen Rollen eines Nutzers (Admins: alle Rollen des Paares); Nutzer mit gleichem Profil sehen dieselben Tage (8.8) |
 | Read your writes | Änderungen des laufenden Requests sind beim Lesen im selben Request sichtbar (`Indexer::flush()` vor dem Lesen) |
