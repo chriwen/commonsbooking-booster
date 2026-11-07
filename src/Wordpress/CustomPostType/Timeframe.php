@@ -357,7 +357,7 @@ class Timeframe extends CustomPostType {
 				\CommonsBooking\Model\Timeframe::META_ITEM_ID     => 'admin_filter_item',
 				\CommonsBooking\Model\Timeframe::META_LOCATION_ID => 'admin_filter_location',
 			];
-			$list_keys = [
+			$list_keys                       = [
 				\CommonsBooking\Model\Timeframe::META_ITEM_ID     => \CommonsBooking\Model\Timeframe::META_ITEM_ID_LIST,
 				\CommonsBooking\Model\Timeframe::META_LOCATION_ID => \CommonsBooking\Model\Timeframe::META_LOCATION_ID_LIST,
 			];

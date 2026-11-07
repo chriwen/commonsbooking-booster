@@ -281,7 +281,10 @@ class AssignedTimeframesTest extends CustomPostTypeTest {
 		$this->createRestriction( Restriction::TYPE_REPAIR, 0, 0, $this->now, null );
 		$this->createRestriction( Restriction::TYPE_REPAIR, $this->locationId, $otherItem, $this->now, null );
 
-		foreach ( [ 'item' => [ $this->itemId, $otherItem ], 'location' => [ $this->locationId ] ] as $entity => $ids ) {
+		foreach ( [
+			'item' => [ $this->itemId, $otherItem ],
+			'location' => [ $this->locationId ],
+		] as $entity => $ids ) {
 			foreach ( $ids as $id ) {
 				$fast   = [ AssignedTimeframes::timeframeCandidateIds( $entity, $id ), AssignedTimeframes::restrictionCandidateIds( $entity, $id ) ];
 				$legacy = Booster::withoutBooster(

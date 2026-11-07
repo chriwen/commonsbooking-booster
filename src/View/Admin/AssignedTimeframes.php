@@ -242,7 +242,7 @@ class AssignedTimeframes {
 		} else {
 			$titleHtml = '<span class="cb-at-title">' . esc_html( $title ) . '</span>';
 		}
-		$active = $entry['kind'] === 'restriction' ? $entry['status'] === 'active' : $entry['status'] === 'publish';
+		$active     = $entry['kind'] === 'restriction' ? $entry['status'] === 'active' : $entry['status'] === 'publish';
 		$titleHtml .= sprintf( ' <span class="cb-at-pill cb-at-pill--%s">%s</span>', $active ? 'ok' : 'off', esc_html( self::statusLabel( $entry ) ) );
 		if ( ! $entry['can_edit'] ) {
 			$titleHtml .= ' <span class="cb-at-pill cb-at-pill--readonly"><span class="dashicons dashicons-lock" aria-hidden="true"></span>' . esc_html__( 'managed by an administrator', 'commonsbooking' ) . '</span>';
@@ -327,7 +327,7 @@ class AssignedTimeframes {
 			$label .= ': ' . self::weekdaysLabel( $entry['weekdays'] );
 		}
 		if ( $entry['repetition'] === 'manual' && $entry['manual_dates'] ) {
-			$dates = array_map(
+			$dates  = array_map(
 				fn( $date ) => date_i18n( get_option( 'date_format' ), strtotime( $date ) ),
 				array_slice( $entry['manual_dates'], 0, 5 )
 			);

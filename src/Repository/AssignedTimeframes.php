@@ -160,14 +160,17 @@ class AssignedTimeframes {
 		}
 
 		if ( Index::isAvailable() ) {
-			return Index::findPostIds(
-				[
-					'post_types'        => [ TimeframeCPT::$postType ],
-					'types'             => self::TIMEFRAME_TYPES,
-					'statuses'          => self::STATUSES,
-					$entity . 's'       => [ $entityId ],
-				]
-			);
+			$criteria = [
+				'post_types' => [ TimeframeCPT::$postType ],
+				'types'      => self::TIMEFRAME_TYPES,
+				'statuses'   => self::STATUSES,
+			];
+			if ( $entity === 'item' ) {
+				$criteria['items'] = [ $entityId ];
+			} else {
+				$criteria['locations'] = [ $entityId ];
+			}
+			return Index::findPostIds( $criteria );
 		}
 
 		global $wpdb;
@@ -297,30 +300,30 @@ class AssignedTimeframes {
 		$weekdays = $timeframe->getWeekDays();
 
 		return [
-				'kind'         => 'timeframe',
-				'post_id'      => $timeframe->ID,
-				'title'        => get_the_title( $timeframe->ID ),
-				'status'       => $timeframe->post_status,
-				'type'         => $type,
-				'type_label'   => TimeframeCPT::getTypes()[ $type ] ?? (string) $type,
-				'sort_type'    => $type,
-				'blocking'     => $type !== TimeframeCPT::BOOKABLE_ID,
-				'start'        => $start,
-				'end'          => $end,
-				'repetition'   => $timeframe->getRepetition(),
-				'weekdays'     => is_array( $weekdays ) ? array_values( array_map( 'intval', $weekdays ) ) : [],
-				'manual_dates' => $timeframe->getRepetition() === 'manual' ? $timeframe->getManualSelectionDates() : [],
-				'grid'         => $timeframe->isFullDay() ? 'full' : ( $timeframe->getGrid() === 0 ? 'slot' : 'hourly' ),
-				'start_time'   => $timeframe->isFullDay() ? null : self::formatTime( $timeframe->getStartTime() ),
-				'end_time'     => $timeframe->isFullDay() ? null : self::formatTime( $timeframe->getEndTime() ),
-				'items'        => $items,
-				'locations'    => $locations,
-				'effective_at' => $effectiveAt,
-				'effective'    => $timeframe->post_status === 'publish' && $effectiveAt !== [],
-				'group'        => self::group( $start, $end, $todayStart, $todayEnd ),
-				'can_edit'     => self::canEdit( $timeframe->getPost() ),
-				'hint'         => null,
-			];
+			'kind'         => 'timeframe',
+			'post_id'      => $timeframe->ID,
+			'title'        => get_the_title( $timeframe->ID ),
+			'status'       => $timeframe->post_status,
+			'type'         => $type,
+			'type_label'   => TimeframeCPT::getTypes()[ $type ] ?? (string) $type,
+			'sort_type'    => $type,
+			'blocking'     => $type !== TimeframeCPT::BOOKABLE_ID,
+			'start'        => $start,
+			'end'          => $end,
+			'repetition'   => $timeframe->getRepetition(),
+			'weekdays'     => is_array( $weekdays ) ? array_values( array_map( 'intval', $weekdays ) ) : [],
+			'manual_dates' => $timeframe->getRepetition() === 'manual' ? $timeframe->getManualSelectionDates() : [],
+			'grid'         => $timeframe->isFullDay() ? 'full' : ( $timeframe->getGrid() === 0 ? 'slot' : 'hourly' ),
+			'start_time'   => $timeframe->isFullDay() ? null : self::formatTime( $timeframe->getStartTime() ),
+			'end_time'     => $timeframe->isFullDay() ? null : self::formatTime( $timeframe->getEndTime() ),
+			'items'        => $items,
+			'locations'    => $locations,
+			'effective_at' => $effectiveAt,
+			'effective'    => $timeframe->post_status === 'publish' && $effectiveAt !== [],
+			'group'        => self::group( $start, $end, $todayStart, $todayEnd ),
+			'can_edit'     => self::canEdit( $timeframe->getPost() ),
+			'hint'         => null,
+		];
 	}
 
 	/**
@@ -365,30 +368,30 @@ class AssignedTimeframes {
 		}
 
 		return [
-				'kind'         => 'restriction',
-				'post_id'      => $restriction->ID,
-				'title'        => get_the_title( $restriction->ID ),
-				'status'       => $state !== '' ? $state : RestrictionModel::STATE_NONE,
-				'type'         => $type,
-				'type_label'   => $type === RestrictionModel::TYPE_REPAIR ? __( 'Restriction: total breakdown', 'commonsbooking' ) : __( 'Restriction: notice', 'commonsbooking' ),
-				'sort_type'    => 10,
-				'blocking'     => $type === RestrictionModel::TYPE_REPAIR && $state === RestrictionModel::STATE_ACTIVE,
-				'start'        => $start,
-				'end'          => $end,
-				'repetition'   => null,
-				'weekdays'     => [],
-				'manual_dates' => [],
-				'grid'         => null,
-				'start_time'   => null,
-				'end_time'     => null,
-				'items'        => self::restrictionAssignment( $itemId ),
-				'locations'    => self::restrictionAssignment( $locationId ),
-				'effective_at' => $effectiveAt,
-				'effective'    => $effective && $state === RestrictionModel::STATE_ACTIVE,
-				'group'        => $group,
-				'can_edit'     => self::canEdit( $restriction->getPost() ),
-				'hint'         => (string) $restriction->getHint(),
-			];
+			'kind'         => 'restriction',
+			'post_id'      => $restriction->ID,
+			'title'        => get_the_title( $restriction->ID ),
+			'status'       => $state !== '' ? $state : RestrictionModel::STATE_NONE,
+			'type'         => $type,
+			'type_label'   => $type === RestrictionModel::TYPE_REPAIR ? __( 'Restriction: total breakdown', 'commonsbooking' ) : __( 'Restriction: notice', 'commonsbooking' ),
+			'sort_type'    => 10,
+			'blocking'     => $type === RestrictionModel::TYPE_REPAIR && $state === RestrictionModel::STATE_ACTIVE,
+			'start'        => $start,
+			'end'          => $end,
+			'repetition'   => null,
+			'weekdays'     => [],
+			'manual_dates' => [],
+			'grid'         => null,
+			'start_time'   => null,
+			'end_time'     => null,
+			'items'        => self::restrictionAssignment( $itemId ),
+			'locations'    => self::restrictionAssignment( $locationId ),
+			'effective_at' => $effectiveAt,
+			'effective'    => $effective && $state === RestrictionModel::STATE_ACTIVE,
+			'group'        => $group,
+			'can_edit'     => self::canEdit( $restriction->getPost() ),
+			'hint'         => (string) $restriction->getHint(),
+		];
 	}
 
 	/**

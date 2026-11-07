@@ -80,9 +80,9 @@ class AssignedTimeframesViewTest extends CustomPostTypeTest {
 		$other     = $this->createTimeframe( $this->locationId, $otherItem, strtotime( '-1 day' ), strtotime( '+1 day' ) );
 
 		set_current_screen( 'edit-' . Timeframe::$postType );
-		$pagenow                       = 'edit.php';
-		$_GET['post_type']             = Timeframe::$postType;
-		$_GET['admin_filter_item']     = (string) $this->itemId;
+		$pagenow                   = 'edit.php';
+		$_GET['post_type']         = Timeframe::$postType;
+		$_GET['admin_filter_item'] = (string) $this->itemId;
 
 		$query                   = new \WP_Query();
 		$GLOBALS['wp_the_query'] = $query;
