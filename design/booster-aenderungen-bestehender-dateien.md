@@ -47,7 +47,7 @@ umgangen, läuft der unveränderte Originalcode. `wp_posts`/`wp_postmeta` werden
 `Booster::SETTINGS_FIELD`, Statusbereich über `SettingsView::render` (Diagnose, Knöpfe „Prüfen“/„Neu aufbauen“).
 Standard: aus.
 
-**`commonsbooking.php`** – Version `2.11.4-beta.3`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
+**`commonsbooking.php`** – Version `2.11.4-beta.4`. Die Version ist Teil jedes Cache-Schlüssels, alte Cache-Einträge
 verfallen damit.
 
 ---

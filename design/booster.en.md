@@ -41,10 +41,10 @@ Limits:
 - Cancellations by the old version (direct SQL, without modification date) are detected by the hourly check via the
   status. Until then the day at most still appears as taken; it can already be booked.
 - If the booster version carries the same version number as the previous version, the first check does not apply; the
-  other two cover that. That is why the branch carries its own number (`2.11.4-beta.3` versus 2.11.3), so that
+  other two cover that. That is why the branch carries its own number (`2.11.4-beta.4` versus 2.11.3), so that
   switching between the two versions is already detected via the version option. Example: when 2.11.3 is installed,
   its upgrade routine sets `commonsbooking_plugin_version` to `2.11.3`; when switching back, the guard sees
-  `2.11.3 ≠ 2.11.4-beta.3`, which the booster version last wrote itself, and rebuilds the index.
+  `2.11.3 ≠ 2.11.4-beta.4`, which the booster version last wrote itself, and rebuilds the index.
 
 ## Recommended procedure for a downgrade
 
