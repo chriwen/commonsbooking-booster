@@ -43,6 +43,7 @@ class Booster {
 		self::STATE_OPTION,
 		Backfill::READY_OPTION,
 		Backfill::CURSOR_OPTION,
+		Backfill::LOCK_OPTION,
 		IndexSchema::SCHEMA_VERSION_OPTION,
 		AvailabilitySchema::SCHEMA_VERSION_OPTION,
 		Maintenance::SYNC_OPTION,
@@ -50,7 +51,18 @@ class Booster {
 		Diagnostics::CHECKS_OPTION,
 	];
 
+	/**
+	 * Seconds of index build in the request that switched the booster on or started a rebuild from the settings page.
+	 * Small sites are done at once, larger ones continue on the settings page or via WP-Cron.
+	 */
+	public const REQUEST_BUDGET = 5;
+
 	private static bool $initialized = false;
+
+	/**
+	 * True if this request switched the booster on (the settings page then continues the setup in the browser).
+	 */
+	private static bool $activatedInRequest = false;
 
 	/**
 	 * > 0 while {@see self::withoutBooster()} runs.
@@ -156,6 +168,9 @@ class Booster {
 
 		if ( ! $state['active'] ) {
 			self::activate();
+			self::$activatedInRequest = true;
+			// after init: the index and availability hooks (e.g. after a complete rebuild) are registered then
+			add_action( 'admin_init', array( self::class, 'workInRequest' ) );
 
 			return;
 		}
@@ -170,10 +185,11 @@ class Booster {
 	 * @return void
 	 */
 	public static function activate(): void {
-		if ( ! IndexSchema::isInstalled() ) {
+		// the options may say "installed" although the tables are missing, e.g. after a database import without them
+		if ( ! IndexSchema::isInstalled() || ! IndexSchema::tablesExist() ) {
 			IndexSchema::install();
 		}
-		if ( ! AvailabilitySchema::isInstalled() ) {
+		if ( ! AvailabilitySchema::isInstalled() || ! AvailabilitySchema::tablesExist() ) {
 			AvailabilitySchema::install();
 		}
 
@@ -188,6 +204,44 @@ class Booster {
 				'watermark'      => Guard::getMaxPostId(),
 			]
 		);
+	}
+
+	/**
+	 * Works on the index build for {@see self::REQUEST_BUDGET} seconds, if this is a request of an administrator in
+	 * the backend (not in the frontend, WP-Cron, AJAX or WP-CLI). Makes the setup independent of WP-Cron for small
+	 * sites.
+	 *
+	 * @return void
+	 */
+	public static function workInRequest(): void {
+		$background = wp_doing_cron() || wp_doing_ajax() || ( defined( 'WP_CLI' ) && WP_CLI );
+		if ( $background || ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		Backfill::runFor( self::REQUEST_BUDGET );
+	}
+
+	/**
+	 * Returns true if this request has used more than 60 % of the PHP memory limit. Work in slices (index build,
+	 * calendars) stops then and continues in the next request. Needed with plugins that keep every query of the
+	 * request in memory, e.g. Query Monitor for administrators.
+	 *
+	 * @return bool
+	 */
+	public static function isMemoryLow(): bool {
+		$limit = wp_convert_hr_to_bytes( (string) ini_get( 'memory_limit' ) );
+		if ( $limit <= 0 ) {
+			return false;
+		}
+
+		return memory_get_usage() > 0.6 * $limit;
+	}
+
+	/**
+	 * @return bool true if this request switched the booster on
+	 */
+	public static function wasActivatedInRequest(): bool {
+		return self::$activatedInRequest;
 	}
 
 	/**

@@ -31,6 +31,7 @@ Doppelbuchungen möglich werden.
 | Plugin-Version | jede Anfrage (autoloaded Option) | Die Upgrade-Routine einer anderen Version hat `commonsbooking_plugin_version` geändert. Eigene Änderungen merkt sich der Booster über `update_option_…`. | Neuaufbau |
 | Neue Beiträge ohne Indexzeile | jede Anfrage, nur Beiträge oberhalb der zuletzt geprüften ID (Primärschlüssel, billig). Erst nach 2 Minuten, damit parallele Anfragen ihre Beiträge noch eintragen können. | Buchungen, Zeitrahmen, Einschränkungen, die eine andere Version angelegt hat | Neuaufbau |
 | Status und Änderungsdatum | stündlich und `wp commonsbooking booster check --deep` (Join über alle Beiträge der drei Typen) | Stornierungen und Änderungen durch eine andere Version, gelöschte Beiträge | einzelne Beiträge reparieren, ab 200 Neuaufbau |
+| Tabellen vorhanden | stündlich (`SHOW TABLES LIKE`) | Datenbank ohne die Booster-Tabellen eingespielt | Tabellen anlegen, Neuaufbau |
 
 Grenzen:
 
@@ -146,6 +147,8 @@ Unter Einstellungen → Erweitert → Performance-Booster (`SettingsView`, Daten
   autoload), auch Löschungen, mit Herkunft (Website, Verwaltung, Cron, WP-CLI) und erneuter Prüfung des aktuellen
   Stands.
 - **Prüfungen und geplante Aufgaben:** letzter Lauf, Ergebnis und nächster Lauf (Option `commonsbooking_booster_checks`).
+- **Einrichtung jetzt abschließen** mit Fortschritt, solange der Index nicht fertig ist oder Artikelkalender fehlen
+  (siehe „Einrichtung ohne WP-Cron“).
 - Knöpfe **Jetzt alle Prüfungen ausführen** (Wächter, Tiefenprüfung, Stichproben, repariert Abweichungen) und
   **Index neu aufbauen**.
 
@@ -204,6 +207,37 @@ Außerhalb von Hintergrund-Requests (z. B. Tests) bleibt es beim angeforderten C
 Abwägung: Die Spalte führt keine Prüfungen aus und liest nur Zählungen (dieselben Abfragen wie die Einstellungsseite),
 damit das Dashboard schnell bleibt. Sie gehört zum Booster-Branch, weil sie nur liest und nichts speichert
 (downgradebar).
+
+## Einrichtung ohne WP-Cron (07.11.2026)
+
+**Anlass:** Auf der gehosteten Testinstanz (all-inkl, 100.000 Buchungen) blieb die Einrichtung nach Aus/An des
+Boosters ohne Hinweis bei 0 %. Der Neuaufbau lief nur über WP-Cron (`Backfill::start()` plant ein Ereignis). WP-Cron
+startet sich bei Seitenaufrufen per Loopback-Anfrage an die eigene Domain; ein Verzeichnisschutz (HTTP-Passwort)
+beantwortet sie mit 401, ohne dass es jemand merkt. Bis zum Ende liefen die Originalabfragen, das CB-Dashboard blieb
+weiß. Auch „Index neu aufbauen“ hing an WP-Cron, und „geplante Aufgabe überfällig“ erschien erst nach 30 Minuten.
+
+Entscheidungen:
+
+| Frage | Entscheidung | Grund |
+|---|---|---|
+| Arbeit ohne WP-Cron | `Backfill::runFor( $sekunden )`: Stapel bis zum Zeitbudget. WP-Cron (20 s), WP-CLI und die Einstellungsseite nutzen denselben Weg. | Ein Weg, den jede Stelle in Scheiben aufrufen kann. |
+| Gleichzeitige Läufe | Sperre `commonsbooking_index_backfill_lock` (Ablaufzeit, `INSERT IGNORE` auf den eindeutigen Optionsnamen, `add_option` ist nicht atomar). Belegt: `runFor` gibt `busy` zurück, WP-Cron versucht es 60 s später wieder. Verfällt nach Budget + 60 s, falls der Prozess abbricht. | WP-Cron und Browser (oder zwei Tabs) sollen nicht dieselben Beiträge doppelt bearbeiten und `finish()` nicht doppelt auslösen. |
+| Sofort ein Stück | Nach dem Einschalten (`admin_init` der ersten Admin-Seite danach) und nach „Index neu aufbauen“ 5 s im selben Request, nur für Admins im Backend (nicht Frontend, AJAX, Cron, WP-CLI). | Kleine Instanzen sind damit sofort fertig. Nicht bei `init` Priorität 0, weil die Hooks für Index und Verfügbarkeit erst danach registriert sind. |
+| Button | **„Einrichtung jetzt abschließen“** im Status der Einstellungsseite, solange der Index nicht fertig ist oder Artikelkalender fehlen. Das Skript ruft `wp_ajax_commonsbooking_booster_setup` in Schritten von 8 s auf (`SettingsView::runSetupStep()`): erst Index, dann Kalender (`syncPairs()`, `Maintenance::refresh(8)`), am Ende Neuladen. Fehler (z. B. Zeitlimit) werden zweimal wiederholt, dann mit Text gestoppt. Ohne JavaScript: derselbe Button ist ein Link an `admin-post` mit Nonce, ein Schritt je Klick. Kein eigenes `<form>`: der Status steht im Einstellungsformular von CMB2, ein verschachteltes Formular verwirft der Browser (Skriptfehler, ohne JavaScript hätte der Button die Einstellungen gespeichert). | Läuft im Browser des Admins und hängt weder an WP-Cron noch am Loopback; der Browser kennt das Passwort eines Verzeichnisschutzes. 8 s liegen sicher unter üblichen Zeitlimits (30 s). |
+| Wording | „Einrichtung jetzt abschließen“, nicht „im Browser aufbauen“; Fortschritt „Einrichtung läuft … 42 %“, „Artikelkalender werden vorbereitet …“, „Fertig, der Booster ist aktiv.“ Technische Details (Cron-Name, WP-CLI-Befehl) klein darunter. | Vorgabe des Nutzers: verständlich für Anwender ohne technische Kenntnisse, passend zu „Wird eingerichtet“ auf dem Dashboard. |
+| Automatischer Start | direkt nach dem Einschalten, nach „Index neu aufbauen“ und über den Link aus Hinweis oder Dashboard (`?cb-booster-setup=1`) | Der Admin steht dann ohnehin auf der Seite. |
+| Hängt die Einrichtung? | `Backfill::isStalled()`: läuft, und das Ereignis fehlt oder ist mehr als 5 Minuten überfällig. Dann Befund **Fehler** im Status, Hinweis mit Button auf dem WP-Dashboard und den CommonsBooking-Seiten (nur `manage_options`), Hinweis und Button auf der Dashboard-Karte. | Früher Hinweis statt 30 Minuten. Bei externem Cron mit `DISABLE_WP_CRON` alle 15 Minuten erscheint er ebenfalls; dort kommt die Einrichtung tatsächlich nur mit 20 s je 15 Minuten voran. |
+| Speicher | `runFor()` und `Maintenance::refresh()` hören zusätzlich auf, sobald mehr als 60 % von `memory_limit` belegt sind (`Booster::isMemoryLow()`), der nächste Schritt macht weiter. | Im Browsertest brach die erste Admin-Seite nach dem Einschalten mit „Allowed memory size exhausted“ ab: Query Monitor (`db.php`-Drop-in) behält jede Abfrage samt Backtrace. Solche Plugins sind auf Live-Seiten selten, aber nicht ausgeschlossen. |
+| Fehlende Tabellen | `Schema::tablesExist()` (`SHOW TABLES LIKE`) in `Booster::activate()`, im stündlichen Wächter (dann Neuaufbau, Grund `tables_missing`) und als Fehler im Status. Nicht bei jeder Anfrage. | Nach einem Datenbank-Import ohne die Booster-Tabellen meldeten die Optionen „installiert“, `rebuild` legte nichts an, Lesezugriffe liefen in SQL-Fehler. |
+
+Verworfen: **Index bei Aus/An behalten und nur per Tiefenprüfung reparieren.** Während der Booster aus ist, laufen
+keine Hooks; Änderungen nur an Metadaten (ohne neues Änderungsdatum) fände die Tiefenprüfung nicht. Das widerspricht
+„jedes Einschalten baut neu auf“. Mit Button und Sofort-Stück ist der Neuaufbau ohnehin schnell fertig.
+
+Für Hoster mit Verzeichnisschutz: `wp-cron.php` vom Schutz ausnehmen (`<Files "wp-cron.php"> Require all granted
+</Files>` in der `.htaccess`), dann laufen WP-Cron und ein externer Cronjob ohne Zugangsdaten.
+
+Tests: `tests/php/Service/Booster/SetupTest.php`.
 
 ## Doppelte Buchungen bei langsamer Prüfung
 

@@ -8,6 +8,7 @@ use CommonsBooking\Service\Availability\Store;
 use CommonsBooking\Service\Index\Backfill;
 use CommonsBooking\Service\Index\Projector;
 use CommonsBooking\Service\Index\Schema as IndexSchema;
+use CommonsBooking\Service\Availability\Schema as AvailabilitySchema;
 use CommonsBooking\Service\Index\Verifier;
 
 /**
@@ -351,6 +352,15 @@ class Diagnostics {
 	}
 
 	/**
+	 * Text for a stalled setup, for users without technical knowledge.
+	 *
+	 * @return string
+	 */
+	public static function getStalledText(): string {
+		return __( 'The setup is not making progress. Probably the automatic background tasks of this website do not run (e.g. because of a password protection). Until the setup is finished, CommonsBooking is slower. Use "Finish setup now" to finish it here.', 'commonsbooking' );
+	}
+
+	/**
 	 * Overall assessment for the settings page.
 	 *
 	 * @return array{level: string, findings: array<int, array{level: string, text: string}>}
@@ -371,7 +381,13 @@ class Diagnostics {
 			];
 		}
 
-		if ( ! Backfill::isDone() ) {
+		if ( ! IndexSchema::tablesExist() || ! AvailabilitySchema::tablesExist() ) {
+			$add( 'error', __( 'The database tables of the booster are missing (e.g. after moving the database). "Rebuild index" creates them again.', 'commonsbooking' ) );
+		}
+
+		if ( Backfill::isStalled() ) {
+			$add( 'error', self::getStalledText() );
+		} elseif ( ! Backfill::isDone() ) {
 			$add( 'warning', __( 'The index is being built. Until it is complete, the original queries are used (correct, but slower).', 'commonsbooking' ) );
 		} else {
 			foreach ( self::getCoverage()['types'] as $type => $counts ) {
@@ -402,6 +418,10 @@ class Diagnostics {
 		}
 
 		foreach ( self::getSchedule() as $hook => $next ) {
+			if ( $hook === Backfill::CRON_HOOK && Backfill::isStalled() ) {
+				// reported above
+				continue;
+			}
 			if ( $next === null ) {
 				/* translators: %s: name of the cron event */
 				$add( 'warning', sprintf( __( 'The scheduled task %s is missing. It is created again with the next page load.', 'commonsbooking' ), $hook ) );

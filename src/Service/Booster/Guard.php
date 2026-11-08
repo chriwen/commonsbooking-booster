@@ -5,6 +5,7 @@ namespace CommonsBooking\Service\Booster;
 use CommonsBooking\Service\Index\Backfill;
 use CommonsBooking\Service\Index\Projector;
 use CommonsBooking\Service\Index\Schema as IndexSchema;
+use CommonsBooking\Service\Availability\Schema as AvailabilitySchema;
 use CommonsBooking\Service\Upgrade;
 
 /**
@@ -19,6 +20,8 @@ use CommonsBooking\Service\Upgrade;
  * Checks every hour and via WP-CLI (more expensive, see {@see self::deepCheck()}):
  * 3. Posts whose status or modification date differ from the index (changed or cancelled by other code)
  *    and index rows of deleted posts. → repair these posts, full rebuild if there are many
+ *
+ * 4. (hourly) The booster tables are missing, e.g. after a database import without them. → create, full rebuild
  *
  * Changes of meta values only (without updating the post) are found by the daily index verification.
  * Booking validation never depends on the index (see {@see Booster::withoutBooster()}), so an outdated index can
@@ -205,9 +208,26 @@ class Guard {
 	 * @return void
 	 */
 	public static function runCron(): void {
-		if ( Booster::isEnabled() ) {
-			self::deepCheck();
+		if ( ! Booster::isEnabled() ) {
+			return;
 		}
+		if ( ! IndexSchema::tablesExist() || ! AvailabilitySchema::tablesExist() ) {
+			commonsbooking_write_log( 'Booster: tables are missing, creating them and rebuilding the index.' );
+			Booster::activate();
+			Booster::saveState(
+				[
+					'last_rebuild_reason' => gmdate( 'Y-m-d H:i' ) . ' UTC: ' . self::describeRebuild( 'tables_missing', [], false ),
+					'last_rebuild'        => [
+						'time' => time(),
+						'code' => 'tables_missing',
+						'args' => [],
+					],
+				]
+			);
+
+			return;
+		}
+		self::deepCheck();
 	}
 
 	/**
@@ -241,7 +261,7 @@ class Guard {
 	/**
 	 * Text for the reason of a rebuild.
 	 *
-	 * @param string $code plugin_version|unindexed_post|many_changes
+	 * @param string $code plugin_version|unindexed_post|many_changes|manual|tables_missing
 	 * @param array  $args
 	 * @param bool   $translate false for log and WP-CLI
 	 *
@@ -263,6 +283,9 @@ class Guard {
 				break;
 			case 'many_changes':
 				$text = $translate ? __( 'many posts changed without the booster', 'commonsbooking' ) : 'many posts changed without the booster';
+				break;
+			case 'tables_missing':
+				$text = $translate ? __( 'the database tables of the booster were missing', 'commonsbooking' ) : 'the database tables of the booster were missing';
 				break;
 			case 'manual':
 				$text = $translate ? __( 'started manually', 'commonsbooking' ) : 'started manually';

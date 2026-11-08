@@ -63,6 +63,22 @@ class Schema {
 	}
 
 	/**
+	 * Returns true if both tables exist in the database, see {@see \CommonsBooking\Service\Index\Schema::tablesExist()}.
+	 *
+	 * @return bool
+	 */
+	public static function tablesExist(): bool {
+		global $wpdb;
+		foreach ( [ self::table(), self::accessTable() ] as $table ) {
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) ) !== $table ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Creates or updates the tables. The rows are a cache, so a structure change simply empties them.
 	 *
 	 * @return void

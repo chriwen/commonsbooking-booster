@@ -18,7 +18,19 @@ class SettingsView {
 
 	public const ACTION_CHECK   = 'commonsbooking_booster_check';
 	public const ACTION_REBUILD = 'commonsbooking_booster_rebuild';
+	public const ACTION_SETUP   = 'commonsbooking_booster_setup';
 	private const NOTICE_ARG    = 'cb-booster';
+
+	/**
+	 * Query argument that starts "Finish setup now" when the settings page is opened.
+	 */
+	private const SETUP_ARG = 'cb-booster-setup';
+
+	/**
+	 * Seconds of work per step of "Finish setup now". Well below common PHP time limits (30 s), a batch that started
+	 * before the end is still finished.
+	 */
+	public const SETUP_STEP_SECONDS = 8;
 
 	/**
 	 * @return void
@@ -26,6 +38,8 @@ class SettingsView {
 	public static function init(): void {
 		add_action( 'admin_post_' . self::ACTION_CHECK, array( self::class, 'handleCheck' ) );
 		add_action( 'admin_post_' . self::ACTION_REBUILD, array( self::class, 'handleRebuild' ) );
+		add_action( 'admin_post_' . self::ACTION_SETUP, array( self::class, 'handleSetupPost' ) );
+		add_action( 'wp_ajax_' . self::ACTION_SETUP, array( self::class, 'handleSetupStep' ) );
 		add_action( 'admin_notices', array( self::class, 'renderNotice' ) );
 	}
 
@@ -59,6 +73,7 @@ class SettingsView {
 		self::authorize( self::ACTION_REBUILD );
 		if ( Booster::isEnabled() ) {
 			Booster::activate();
+			Booster::workInRequest();
 			Booster::saveState(
 				[
 					'last_rebuild_reason' => gmdate( 'Y-m-d H:i' ) . ' UTC: started manually',
@@ -69,9 +84,122 @@ class SettingsView {
 					],
 				]
 			);
-			self::redirect( 'rebuild' );
+			self::redirect( Backfill::isDone() ? 'rebuilt' : 'rebuild' );
 		}
 		self::redirect( 'inactive' );
+	}
+
+	/**
+	 * Button "Finish setup now" (AJAX): one step, called repeatedly by the script of {@see self::renderSetup()}.
+	 *
+	 * @return void
+	 */
+	public static function handleSetupStep(): void {
+		if ( ! current_user_can( 'manage_options' ) || ! check_ajax_referer( self::ACTION_SETUP, false, false ) ) {
+			wp_send_json_error( [ 'message' => __( 'You are not allowed to do this.', 'commonsbooking' ) ], 403 );
+		}
+		wp_send_json_success( self::runSetupStep() );
+	}
+
+	/**
+	 * Button "Finish setup now" without JavaScript: one step per click.
+	 *
+	 * @return void
+	 */
+	public static function handleSetupPost(): void {
+		self::authorize( self::ACTION_SETUP );
+		$step = self::runSetupStep();
+		self::redirect( $step['done'] ? 'setup-done' : 'setup-step' );
+	}
+
+	/**
+	 * One step of "Finish setup now", independent of WP-Cron: builds the index for {@see self::SETUP_STEP_SECONDS},
+	 * then prepares the item calendars (precomputed availability) the same way.
+	 *
+	 * @return array{done: bool, busy: bool, phase: string, percent: int, message: string}
+	 */
+	public static function runSetupStep(): array {
+		$result = [
+			'done'    => false,
+			'busy'    => false,
+			'phase'   => 'index',
+			'percent' => 0,
+			'message' => '',
+		];
+		if ( ! Booster::isEnabled() || ! Booster::getState()['active'] ) {
+			$result['done']    = true;
+			$result['phase']   = 'off';
+			$result['message'] = __( 'The booster is switched off.', 'commonsbooking' );
+
+			return $result;
+		}
+
+		if ( ! Backfill::isDone() ) {
+			if ( ! Backfill::isRunning() ) {
+				// e.g. the index of an older projector version: start the rebuild that would start anyway
+				Backfill::start();
+			}
+			$run = Backfill::runFor( self::SETUP_STEP_SECONDS );
+			if ( Backfill::RUN_DONE !== $run ) {
+				$result['busy']    = $run === Backfill::RUN_BUSY;
+				$result['percent'] = Booster::getBackfillProgress();
+				/* translators: %d: progress in percent */
+				$result['message'] = sprintf( __( 'Setup in progress … %d %%', 'commonsbooking' ), $result['percent'] );
+
+				return $result;
+			}
+			// outside of WP-Cron, the rebuild only schedules the calendars, they are prepared in the next steps
+			// (not in this one, its time budget is used up)
+			Maintenance::syncPairs();
+			$result['phase']   = 'calendars';
+			$result['message'] = __( 'Item calendars are being prepared …', 'commonsbooking' );
+
+			return $result;
+		}
+
+		$result['phase'] = 'calendars';
+		if ( Availability::isEnabled() ) {
+			if ( ! Store::getStats()['rows'] ) {
+				Maintenance::syncPairs();
+			}
+			$refresh            = Maintenance::refresh( self::SETUP_STEP_SECONDS );
+			[ $usable, $pairs ] = self::getCalendarCounts();
+			if ( $refresh['remaining'] ) {
+				$result['percent'] = $pairs ? (int) min( 99, floor( 100 * $usable / $pairs ) ) : 0;
+				/* translators: %d: progress in percent */
+				$result['message'] = sprintf( __( 'Item calendars are being prepared … %d %%', 'commonsbooking' ), $result['percent'] );
+
+				return $result;
+			}
+		}
+
+		$result['done']    = true;
+		$result['phase']   = 'done';
+		$result['percent'] = 100;
+		$result['message'] = __( 'Done, the booster is active.', 'commonsbooking' );
+
+		return $result;
+	}
+
+	/**
+	 * Item calendars (precomputed availability rows) that are up to date and all, as on the dashboard.
+	 *
+	 * @return array{0: int, 1: int}
+	 */
+	private static function getCalendarCounts(): array {
+		$stats = Store::getStats();
+		$pairs = max( 0, $stats['rows'] - $stats['role_limited'] );
+
+		return [ min( $pairs, $stats['usable'] ), $pairs ];
+	}
+
+	/**
+	 * URL of the settings page that starts "Finish setup now" at once.
+	 *
+	 * @return string
+	 */
+	public static function getSetupUrl(): string {
+		return add_query_arg( self::SETUP_ARG, '1', admin_url( 'admin.php?page=commonsbooking_options_advanced-options' ) ) . '#booster-group-header';
 	}
 
 	/**
@@ -83,6 +211,8 @@ class SettingsView {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- only selects a message
 		$notice = isset( $_GET[ self::NOTICE_ARG ] ) ? sanitize_key( wp_unslash( $_GET[ self::NOTICE_ARG ] ) ) : '';
 		if ( ! $notice ) {
+			self::renderStalledNotice();
+
 			return;
 		}
 		$class = 'notice-success';
@@ -93,12 +223,39 @@ class SettingsView {
 			$text  = sprintf( __( 'Performance booster: %d differences were found and repaired.', 'commonsbooking' ), (int) substr( $notice, 9 ) );
 			$class = 'notice-warning';
 		} elseif ( $notice === 'rebuild' ) {
-			$text = __( 'Performance booster: the index is being rebuilt in the background. Until then, the original queries are used.', 'commonsbooking' );
+			$text = __( 'Performance booster: the index is being rebuilt. Until then, the original queries are used.', 'commonsbooking' );
+		} elseif ( $notice === 'rebuilt' || $notice === 'setup-done' ) {
+			$text = __( 'Performance booster: the setup is complete, the booster is active.', 'commonsbooking' );
+		} elseif ( $notice === 'setup-step' ) {
+			$text  = __( 'Performance booster: part of the setup was done. Click "Finish setup now" again to continue.', 'commonsbooking' );
+			$class = 'notice-info';
 		} else {
 			$text  = __( 'Performance booster: the booster is switched off.', 'commonsbooking' );
 			$class = 'notice-info';
 		}
 		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $text ) . '</p></div>';
+	}
+
+	/**
+	 * Notice on the dashboards and CommonsBooking pages if the setup does not make progress (not on the settings
+	 * page, which shows it in the status).
+	 *
+	 * @return void
+	 */
+	private static function renderStalledNotice(): void {
+		if ( ! current_user_can( 'manage_options' ) || ! Booster::isEnabled() || ! Backfill::isStalled() ) {
+			return;
+		}
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen ) {
+			return;
+		}
+		$isCbScreen = $screen->id === 'dashboard' || str_contains( $screen->id, 'commonsbooking' ) || str_starts_with( (string) $screen->post_type, 'cb_' );
+		if ( ! $isCbScreen || str_contains( $screen->id, 'advanced-options' ) ) {
+			return;
+		}
+		echo '<div class="notice notice-error"><p><strong>' . esc_html__( 'Performance booster', 'commonsbooking' ) . ':</strong> ' . esc_html( Diagnostics::getStalledText() ) . '</p>';
+		echo '<p><a class="button button-primary" href="' . esc_url( self::getSetupUrl() ) . '">' . esc_html__( 'Finish setup now', 'commonsbooking' ) . '</a></p></div>';
 	}
 
 	/**
@@ -136,6 +293,7 @@ class SettingsView {
 			echo '</ul>';
 		}
 
+		self::renderSetup();
 		self::renderSummary();
 		self::renderCoverage();
 		self::renderAvailability();
@@ -217,6 +375,12 @@ class SettingsView {
 
 		if ( $enabled && Backfill::isRunning() ) {
 			echo '<div class="cb-booster-card-progress"><span style="width:' . esc_attr( (string) Booster::getBackfillProgress() ) . '%"></span></div>';
+			if ( Backfill::isStalled() ) {
+				echo '<p class="cb-booster-card-note">' . esc_html__( 'The setup is not making progress.', 'commonsbooking' ) . '</p>';
+			}
+			if ( current_user_can( 'manage_options' ) ) {
+				echo '<p><a class="button button-primary" href="' . esc_url( self::getSetupUrl() ) . '">' . esc_html__( 'Finish setup now', 'commonsbooking' ) . '</a></p>';
+			}
 		} elseif ( $figures ) {
 			echo '<div class="cb-booster-card-figures">';
 			self::renderFigure(
@@ -289,12 +453,159 @@ class SettingsView {
 			.cb-booster-card-figure { flex: 1 1 110px; padding: 6px 8px; background: #f6f7f7; border-radius: 4px; line-height: 1.4; }
 			.cb-booster-card-figure b { display: block; font-size: 16px; white-space: nowrap; }
 			.cb-booster-card-figure span { color: #50575e; font-size: 12px; }
+			.cb-booster-card .button { height: auto; max-width: 100%; white-space: normal; line-height: 1.4; padding-top: 4px; padding-bottom: 4px; }
 			.cb-booster-card-figure-open b { color: #996800; }
 			.cb-booster-card-progress { height: 8px; margin: 0 0 10px; background: #e5e5e5; border-radius: 4px; overflow: hidden; }
 			.cb-booster-card-progress span { display: block; height: 100%; background: #dba617; }
 			.cb_welcome-panel .cb-booster-card p.cb-booster-card-updated { margin-top: -4px; color: #50575e; font-size: 12px; }
 			.cb-booster-card-link { font-weight: 600; text-decoration: none; }
 		</style>';
+	}
+
+	/**
+	 * Progress of the setup (index build, then item calendars) with the button "Finish setup now". The button works
+	 * in steps from the browser and does not depend on WP-Cron. Starts by itself right after switching on, after
+	 * "Rebuild index" and when the page is opened via {@see self::getSetupUrl()}.
+	 *
+	 * @return void
+	 */
+	private static function renderSetup(): void {
+		if ( ! Backfill::isDone() ) {
+			$label   = __( 'Setup', 'commonsbooking' );
+			$percent = Booster::getBackfillProgress();
+		} elseif ( Availability::isEnabled() ) {
+			[ $usable, $pairs ] = self::getCalendarCounts();
+			if ( ! $pairs || $usable >= $pairs ) {
+				return;
+			}
+			$label   = __( 'Item calendars', 'commonsbooking' );
+			$percent = (int) floor( 100 * $usable / $pairs );
+		} else {
+			return;
+		}
+
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- only starts the script, the steps check the nonce
+		$autostart = Booster::wasActivatedInRequest() || isset( $_GET[ self::SETUP_ARG ] )
+			|| ( isset( $_GET[ self::NOTICE_ARG ] ) && $_GET[ self::NOTICE_ARG ] === 'rebuild' );
+		// phpcs:enable
+
+		echo '<div id="cb-booster-setup" class="cb-booster-setup" data-autostart="' . ( $autostart ? '1' : '0' ) . '"'
+			. ' data-ajax="' . esc_url( admin_url( 'admin-ajax.php' ) ) . '"'
+			. ' data-done="' . esc_url( add_query_arg( self::NOTICE_ARG, 'setup-done', admin_url( 'admin.php?page=commonsbooking_options_advanced-options' ) ) . '#booster-group-header' ) . '"'
+			. ' data-started="' . esc_attr__( 'Setup in progress …', 'commonsbooking' ) . '"'
+			. ' data-error="' . esc_attr__( 'The setup was interrupted (e.g. by a time limit of the server). Click the button again to continue.', 'commonsbooking' ) . '">';
+		self::renderBar( $label, $percent, 100, sprintf( '%d %%', $percent ), 'warning' );
+		// a link, not a form: the status is rendered inside the settings form of CMB2 (nested forms are dropped)
+		$nonce = wp_create_nonce( self::ACTION_SETUP );
+		$url   = add_query_arg(
+			[
+				'action'   => self::ACTION_SETUP,
+				'_wpnonce' => $nonce,
+			],
+			admin_url( 'admin-post.php' )
+		);
+		echo '<p><a class="button button-primary cb-booster-setup-button" role="button" href="' . esc_url( $url ) . '" data-action="' . esc_attr( self::ACTION_SETUP ) . '" data-nonce="' . esc_attr( $nonce ) . '">' . esc_html__( 'Finish setup now', 'commonsbooking' ) . '</a> ';
+		echo '<span class="cb-booster-setup-status" role="status" aria-live="polite"></span></p>';
+		echo '<p class="description">' . esc_html__( 'The setup normally runs by itself in the background. This button finishes it right here. Please keep this page open until it is done.', 'commonsbooking' ) . '</p>';
+		if ( Backfill::isStalled() ) {
+			$minutes = (int) floor( Backfill::getOverdueSeconds() / MINUTE_IN_SECONDS );
+			echo '<p class="description cb-booster-setup-tech">' . esc_html(
+				$minutes
+					/* translators: 1: name of the cron event, 2: minutes */
+					? sprintf( __( 'Technical details: the scheduled task %1$s is overdue by %2$d minutes. Alternatively, run "wp commonsbooking booster rebuild" (WP-CLI).', 'commonsbooking' ), Backfill::CRON_HOOK, $minutes )
+					/* translators: %s: name of the cron event */
+					: sprintf( __( 'Technical details: the scheduled task %s is missing. Alternatively, run "wp commonsbooking booster rebuild" (WP-CLI).', 'commonsbooking' ), Backfill::CRON_HOOK )
+			) . '</p>';
+		}
+		echo '</div>';
+		self::renderSetupScript();
+	}
+
+	/**
+	 * Script of "Finish setup now": calls the AJAX step until the setup is done, then reloads the page.
+	 * Without JavaScript the form posts one step to admin-post.php.
+	 *
+	 * @return void
+	 */
+	private static function renderSetupScript(): void {
+		?>
+		<script>
+		( function () {
+			var box = document.getElementById( 'cb-booster-setup' );
+			if ( ! box || ! window.fetch || ! window.FormData ) {
+				return;
+			}
+			var button = box.querySelector( '.cb-booster-setup-button' );
+			var status = box.querySelector( '.cb-booster-setup-status' ), label = box.querySelector( '.cb-booster-bar-label' );
+			var fill = box.querySelector( '.cb-booster-bar-fill' ), text = box.querySelector( '.cb-booster-bar-text' );
+			var running = false, failures = 0;
+			function setBusy( busy ) {
+				running = busy;
+				button.classList.toggle( 'disabled', busy );
+				button.setAttribute( 'aria-disabled', busy ? 'true' : 'false' );
+			}
+			function stop( message ) {
+				setBusy( false );
+				status.textContent = message;
+			}
+			function step() {
+				var data = new FormData();
+				data.append( 'action', button.dataset.action );
+				data.append( '_wpnonce', button.dataset.nonce );
+				fetch( box.dataset.ajax, { method: 'POST', credentials: 'same-origin', body: data } )
+					.then( function ( response ) {
+						if ( ! response.ok ) {
+							throw new Error( String( response.status ) );
+						}
+						return response.json();
+					} )
+					.then( function ( response ) {
+						if ( ! response || ! response.success ) {
+							throw new Error( 'step failed' );
+						}
+						var result = response.data;
+						failures = 0;
+						if ( result.phase === 'calendars' ) {
+							label.textContent = <?php echo wp_json_encode( __( 'Item calendars', 'commonsbooking' ) ); ?>;
+						}
+						fill.style.width = result.percent + '%';
+						text.textContent = result.percent + ' %';
+						status.textContent = result.message;
+						if ( result.done ) {
+							fill.className = 'cb-booster-bar-fill cb-booster-ok';
+							window.setTimeout( function () { window.location.assign( box.dataset.done ); }, 1200 );
+							return;
+						}
+						window.setTimeout( step, result.busy ? 3000 : 100 );
+					} )
+					.catch( function () {
+						// a single failure (e.g. a time limit of the server) is retried
+						if ( ++failures < 3 ) {
+							window.setTimeout( step, 3000 );
+							return;
+						}
+						stop( box.dataset.error );
+					} );
+			}
+			function start() {
+				if ( running ) {
+					return;
+				}
+				setBusy( true );
+				failures = 0;
+				status.textContent = box.dataset.started;
+				step();
+			}
+			button.addEventListener( 'click', function ( event ) {
+				event.preventDefault();
+				start();
+			} );
+			if ( box.dataset.autostart === '1' ) {
+				start();
+			}
+		}() );
+		</script>
+		<?php
 	}
 
 	/**
@@ -327,10 +638,6 @@ class SettingsView {
 		echo '<h4>' . esc_html__( 'Index', 'commonsbooking' ) . '</h4>';
 		echo '<p class="description">' . esc_html__( 'Every timeframe, booking and restriction is copied into the index when it is saved. The numbers on both sides should be equal.', 'commonsbooking' ) . '</p>';
 
-		if ( Backfill::isRunning() ) {
-			$progress = Booster::getBackfillProgress();
-			self::renderBar( __( 'Index build', 'commonsbooking' ), $progress, 100, sprintf( '%d %%', $progress ), 'warning' );
-		}
 		foreach ( $coverage['types'] as $type => $counts ) {
 			$state = $counts['posts'] === $counts['index'] ? 'ok' : 'warning';
 			self::renderBar(
@@ -620,6 +927,10 @@ class SettingsView {
 			.cb-booster-icon-pending { color: #996800; }
 			.cb-booster-icon-mismatch { color: #b32d2e; }
 			.cb-booster-actions { margin-top: 1.2em; }
+			.cb-booster-setup { margin: .8em 0 1.2em; padding: 10px 14px; border-left: 4px solid #dba617; background: #fff; max-width: 760px; }
+			.cb-booster-setup p { margin: .5em 0; }
+			.cb-booster-setup-status { margin-left: 8px; }
+			.cb-booster-setup-tech { font-size: 12px; }
 		</style>';
 	}
 

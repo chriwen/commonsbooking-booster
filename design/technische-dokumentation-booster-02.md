@@ -867,6 +867,7 @@ liegen; sie wird nie gelesen, `wp commonsbooking booster purge` und die Deinstal
 | `commonsbooking_availability_schema_version` | ja | installierte Struktur von `cb_availability` |
 | `commonsbooking_index_ready` | ja | `PROJECTOR_VERSION` des vollständigen Backfills; fehlt = Index nicht lesbar |
 | `commonsbooking_index_backfill_cursor` | nein | höchste bereits projizierte Post-ID während des Aufbaus |
+| `commonsbooking_index_backfill_lock` | nein | Sperre während eines Aufbau-Stücks (Ablaufzeit als Unix-Zeit), nur kurz vorhanden |
 | `commonsbooking_availability_pairs_synced` | – | letzter Abgleich der Paarliste |
 | `commonsbooking_booster_checks` | nein | letzter Lauf und Ergebnis jeder Prüfung |
 | `commonsbooking_booster_activity` | nein | Ringpuffer der letzten 30 Index-Änderungen (Diagnose) |
@@ -875,7 +876,7 @@ liegen; sie wird nie gelesen, `wp commonsbooking booster purge` und die Deinstal
 
 | Hook | Rhythmus | Klasse | Aufgabe |
 |---|---|---|---|
-| `commonsbooking_index_backfill` | plant sich selbst neu, 20 s pro Lauf, 500 Beiträge je Stapel | `Index\Backfill` | Index-Aufbau |
+| `commonsbooking_index_backfill` | plant sich selbst neu, 20 s pro Lauf, 500 Beiträge je Stapel | `Index\Backfill` | Index-Aufbau; dieselbe Arbeit auch per „Einrichtung jetzt abschließen“ ohne WP-Cron (`Backfill::runFor()`, Sperre) |
 | `commonsbooking_index_verify` | täglich 04:00 | `Index\Verifier` | Stichprobe von 200 Beiträgen gegen frische Projektion, repariert |
 | `commonsbooking_booster_guard` | stündlich | `Booster\Guard` | Tiefenprüfung Status/Änderungsdatum |
 | `commonsbooking_availability_refresh` | stündlich, bei Bedarf zusätzlich | `Availability\Maintenance` | neue Paare, geänderte und über 12 h alte Zeilen neu berechnen (20 s Budget) |
@@ -1980,6 +1981,12 @@ Einstellungen → Erweitert → „Performance booster“ (`SettingsView`, Daten
   Verwaltung, Cron, WP-CLI) und erneuter Prüfung des aktuellen Stands.
 - **Prüfungen und geplante Aufgaben:** letzter Lauf, Ergebnis, nächster Lauf.
 - Knöpfe **Jetzt alle Prüfungen ausführen** und **Index neu aufbauen** (`admin_post_…`).
+- **Einrichtung jetzt abschließen** (`wp_ajax_commonsbooking_booster_setup`, ohne JavaScript `admin_post_…`): Index
+  und Artikelkalender in Schritten von 8 s aus dem Browser, unabhängig von WP-Cron. Hängt die Einrichtung
+  (`Backfill::isStalled()`, Ereignis über 5 Minuten überfällig oder fehlend), zeigen Status, Dashboard-Karte und ein
+  Admin-Hinweis den Button. Der Button ist ein Link (der Status steht im CMB2-Formular, kein verschachteltes `<form>`).
+  Jeder Schritt hört auch bei knappem Speicher auf (`Booster::isMemoryLow()`, 60 % von `memory_limit`).
+  Details: `design/booster.md`, „Einrichtung ohne WP-Cron“.
 
 Zeiten kommen aus GMT-Spalten bzw. Unix-Zeitstempeln und werden mit `wp_date()` in der WordPress-Zeitzone angezeigt.
 Ausnahme: CommonsBooking speichert `cancellation_time` als lokale Zeit (`current_time('timestamp')`); das wird

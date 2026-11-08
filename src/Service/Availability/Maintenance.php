@@ -186,7 +186,7 @@ class Maintenance {
 					$failed[ $locationId . ':' . $itemId ] = true;
 					commonsbooking_write_log( sprintf( 'Availability recomputation failed for item %d at location %d: %s', $itemId, $locationId, $e->getMessage() ) );
 				}
-				if ( $timeBudget !== null && microtime( true ) - $started > $timeBudget ) {
+				if ( $timeBudget !== null && ( microtime( true ) - $started > $timeBudget || \CommonsBooking\Service\Booster\Booster::isMemoryLow() ) ) {
 					return [
 						'recomputed' => $recomputed,
 						'remaining'  => true,

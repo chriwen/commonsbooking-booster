@@ -862,6 +862,7 @@ read, `wp commonsbooking booster purge` and uninstalling remove it.
 | `commonsbooking_availability_schema_version` | yes | installed structure of `cb_availability` |
 | `commonsbooking_index_ready` | yes | `PROJECTOR_VERSION` of the complete backfill; missing = index not readable |
 | `commonsbooking_index_backfill_cursor` | no | highest post ID already projected during the build |
+| `commonsbooking_index_backfill_lock` | no | lock during a slice of the build (expiry as unix time), only present briefly |
 | `commonsbooking_availability_pairs_synced` | – | last sync of the pair list |
 | `commonsbooking_booster_checks` | no | last run and result of every check |
 | `commonsbooking_booster_activity` | no | ring buffer of the last 30 index changes (diagnostics) |
@@ -870,7 +871,7 @@ read, `wp commonsbooking booster purge` and uninstalling remove it.
 
 | Hook | Schedule | Class | Task |
 |---|---|---|---|
-| `commonsbooking_index_backfill` | reschedules itself, 20 s per run, 500 posts per batch | `Index\Backfill` | index build |
+| `commonsbooking_index_backfill` | reschedules itself, 20 s per run, 500 posts per batch | `Index\Backfill` | index build; the same work also via "Finish setup now" without WP-Cron (`Backfill::runFor()`, lock) |
 | `commonsbooking_index_verify` | daily 04:00 | `Index\Verifier` | sample of 200 posts against fresh projection, repairs |
 | `commonsbooking_booster_guard` | hourly | `Booster\Guard` | deep check of status/modified date |
 | `commonsbooking_availability_refresh` | hourly, additionally on demand | `Availability\Maintenance` | recompute new pairs, changed rows and rows older than 12 h (20 s budget) |
@@ -1968,6 +1969,12 @@ Settings → Advanced → “Performance booster” (`SettingsView`, data from `
   cron, WP-CLI) and a re-check of the current state.
 - **Checks and scheduled tasks:** last run, result, next run.
 - Buttons **Run all checks now** and **Rebuild index** (`admin_post_…`).
+- **Finish setup now** (`wp_ajax_commonsbooking_booster_setup`, without JavaScript `admin_post_…`): index and item
+  calendars in steps of 8 s from the browser, independent of WP-Cron. If the setup is stuck (`Backfill::isStalled()`,
+  event overdue by more than 5 minutes or missing), the status, the dashboard card and an admin notice show the
+  button. The button is a link (the status sits inside the CMB2 form, no nested `<form>`). Each step also stops
+  when memory runs low (`Booster::isMemoryLow()`, 60 % of `memory_limit`). Details: `design/booster.en.md`,
+  "Setup without WP-Cron".
 
 Times come from GMT columns or Unix timestamps and are shown with `wp_date()` in the WordPress time zone. Exception:
 CommonsBooking stores `cancellation_time` as local time (`current_time('timestamp')`); this is converted. Texts of the

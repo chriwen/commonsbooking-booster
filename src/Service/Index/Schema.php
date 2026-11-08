@@ -63,6 +63,24 @@ class Schema {
 	}
 
 	/**
+	 * Returns true if both tables exist in the database. Unlike {@see self::isInstalled()} this asks the database,
+	 * e.g. after a database import without the booster tables (the options say "installed").
+	 * Two queries, not meant for every request.
+	 *
+	 * @return bool
+	 */
+	public static function tablesExist(): bool {
+		global $wpdb;
+		foreach ( [ self::table(), self::relTable() ] as $table ) {
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) ) !== $table ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Installs or upgrades the tables if needed and (re)starts the backfill.
 	 * Cheap to call on every request: only reads an autoloaded option.
 	 *

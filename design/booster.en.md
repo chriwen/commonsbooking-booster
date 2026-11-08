@@ -32,6 +32,7 @@ bookings becoming possible.
 | Plugin version | every request (autoloaded option) | The upgrade routine of another version has changed `commonsbooking_plugin_version`. The booster remembers its own changes via `update_option_…`. | rebuild |
 | New posts without an index row | every request, only posts above the last checked ID (primary key, cheap). Only after 2 minutes, so that parallel requests can still add their posts. | bookings, timeframes, restrictions created by another version | rebuild |
 | Status and modification date | hourly and `wp commonsbooking booster check --deep` (join over all posts of the three types) | cancellations and changes by another version, deleted posts | repair individual posts, rebuild from 200 on |
+| Tables present | hourly (`SHOW TABLES LIKE`) | database imported without the booster tables | create tables, rebuild |
 
 Limits:
 
@@ -147,6 +148,8 @@ Under Settings → Advanced → Performance booster (`SettingsView`, data from `
   autoloaded), including deletions, with origin (website, admin, cron, WP-CLI) and a re-check of the current
   state.
 - **Checks and scheduled tasks:** last run, result and next run (option `commonsbooking_booster_checks`).
+- **Finish setup now** with progress while the index is incomplete or item calendars are missing (see "Setup
+  without WP-Cron").
 - Buttons **Run all checks now** (guard, deep check, samples, repairs deviations) and
   **Rebuild index**.
 
@@ -201,6 +204,38 @@ requests (e.g. tests) the cron run is requested as before. Switch: filter
 
 Trade-off: the column runs no checks and only reads counts (the same queries as the settings page), so the dashboard
 stays fast. It belongs to the booster branch because it only reads and stores nothing (downgradable).
+
+## Setup without WP-Cron (07.11.2026)
+
+**Reason:** On the hosted test instance (all-inkl, 100,000 bookings) the setup stayed at 0 % without any notice after
+switching the booster off and on. The rebuild only ran via WP-Cron (`Backfill::start()` schedules an event). WP-Cron
+starts itself on page views with a loopback request to the own domain; a directory protection (HTTP password) answers
+it with 401 and nobody notices. Until the end the original queries ran and the CB dashboard stayed white. "Rebuild
+index" also depended on WP-Cron, and "scheduled task overdue" only appeared after 30 minutes.
+
+Decisions:
+
+| Question | Decision | Reason |
+|---|---|---|
+| Work without WP-Cron | `Backfill::runFor( $seconds )`: batches until the time budget is used. WP-Cron (20 s), WP-CLI and the settings page use the same path. | One path that every caller can run in slices. |
+| Concurrent runs | Lock `commonsbooking_index_backfill_lock` (expiry time, `INSERT IGNORE` on the unique option name, `add_option` is not atomic). If taken, `runFor` returns `busy`, WP-Cron tries again 60 s later. Expires after budget + 60 s if the process dies. | WP-Cron and browser (or two tabs) must not process the same posts twice or trigger `finish()` twice. |
+| A slice right away | After switching on (`admin_init` of the next admin page) and after "Rebuild index", 5 s in the same request, only for admins in the backend (not frontend, AJAX, cron, WP-CLI). | Small sites are done at once. Not at `init` priority 0, because the index and availability hooks are registered later. |
+| Button | **"Finish setup now"** in the status on the settings page while the index is incomplete or item calendars are missing. The script calls `wp_ajax_commonsbooking_booster_setup` in steps of 8 s (`SettingsView::runSetupStep()`): index first, then calendars (`syncPairs()`, `Maintenance::refresh(8)`), reload at the end. Failures (e.g. time limit) are retried twice, then it stops with a message. Without JavaScript: the same button is a link to `admin-post` with a nonce, one step per click. No `<form>` of its own: the status sits inside the CMB2 settings form, and the browser drops a nested form (script error; without JavaScript the button would have saved the settings). | Runs in the admin's browser and depends neither on WP-Cron nor on the loopback; the browser knows the password of a directory protection. 8 s stays well below common time limits (30 s). |
+| Wording | "Finish setup now", not "build in the browser"; progress "Setup in progress … 42 %", "Item calendars are being prepared …", "Done, the booster is active." Technical details (cron name, WP-CLI command) in small print below. | User requirement: understandable without technical knowledge, matching "Being set up" on the dashboard. |
+| Automatic start | right after switching on, after "Rebuild index" and via the link in the notice or on the dashboard (`?cb-booster-setup=1`) | The admin is on the page anyway. |
+| Is the setup stuck? | `Backfill::isStalled()`: running, and the event is missing or overdue by more than 5 minutes. Then an **error** finding in the status, a notice with button on the WP dashboard and the CommonsBooking pages (only `manage_options`), note and button on the dashboard card. | Early notice instead of 30 minutes. With an external cron and `DISABLE_WP_CRON` every 15 minutes it appears as well; there the setup really only advances by 20 s per 15 minutes. |
+| Memory | `runFor()` and `Maintenance::refresh()` also stop once more than 60 % of `memory_limit` is in use (`Booster::isMemoryLow()`); the next step continues. | In the browser test the first admin page after switching on aborted with "Allowed memory size exhausted": Query Monitor (`db.php` drop-in) keeps every query with its backtrace. Such plugins are rare on live sites, but possible. |
+| Missing tables | `Schema::tablesExist()` (`SHOW TABLES LIKE`) in `Booster::activate()`, in the hourly guard (then rebuild, reason `tables_missing`) and as an error in the status. Not on every request. | After a database import without the booster tables the options said "installed", `rebuild` created nothing, reads ran into SQL errors. |
+
+Rejected: **keep the index when switching off and on and only repair it with the deep check.** While the booster is
+off no hooks run; changes of meta data only (without a new modification date) would not be found by the deep check.
+That contradicts "every switch-on rebuilds". With the button and the immediate slice the rebuild finishes quickly
+anyway.
+
+For hosts with directory protection: exclude `wp-cron.php` from it (`<Files "wp-cron.php"> Require all granted
+</Files>` in `.htaccess`), then WP-Cron and an external cron job run without credentials.
+
+Tests: `tests/php/Service/Booster/SetupTest.php`.
 
 ## Double bookings with slow validation
 
