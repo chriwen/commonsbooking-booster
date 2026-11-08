@@ -3,6 +3,7 @@
 namespace CommonsBooking\Tests\Service\Booster;
 
 use CommonsBooking\Repository\Index;
+use CommonsBooking\Service\Availability\Availability;
 use CommonsBooking\Service\Availability\Schema as AvailabilitySchema;
 use CommonsBooking\Service\Booster\Booster;
 use CommonsBooking\Service\Booster\Diagnostics;
@@ -125,6 +126,12 @@ class SetupTest extends CustomPostTypeTest {
 		$this->assertSame( 100, $step['percent'] );
 		$this->assertTrue( Index::isAvailable() );
 		$stats = \CommonsBooking\Service\Availability\Store::getStats();
+		if ( ! Availability::isEnabled() ) {
+			// CB_USE_AVAILABILITY=0: every day is computed live, the setup ends with the index
+			$this->assertSame( 0, $stats['usable'], 'no calendars computed while the precomputed availability is off' );
+
+			return;
+		}
 		$this->assertGreaterThan( 0, $stats['rows'], 'calendars created without WP-Cron' );
 		$this->assertSame( $stats['rows'] - $stats['role_limited'], $stats['usable'], 'all calendars computed' );
 	}

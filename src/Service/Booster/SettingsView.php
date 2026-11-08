@@ -150,7 +150,9 @@ class SettingsView {
 			}
 			// outside of WP-Cron, the rebuild only schedules the calendars, they are prepared in the next steps
 			// (not in this one, its time budget is used up)
-			Maintenance::syncPairs();
+			if ( Availability::isEnabled() ) {
+				Maintenance::syncPairs();
+			}
 			$result['phase']   = 'calendars';
 			$result['message'] = __( 'Item calendars are being prepared …', 'commonsbooking' );
 
