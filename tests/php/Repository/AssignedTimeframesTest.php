@@ -91,6 +91,40 @@ class AssignedTimeframesTest extends CustomPostTypeTest {
 		$this->assertArrayNotHasKey( $holiday, $this->entries( AssignedTimeframes::forItem( $thirdItem, $this->now ) ) );
 	}
 
+	public function testForTimeframeFindsOtherTimeframesOfSameCombination() {
+		$otherItem     = $this->createItem( 'Other item' );
+		$otherLocation = $this->createLocation( 'Other location' );
+		$sameCombo     = $this->holiday( [ $this->locationId ], [ $this->itemId, $otherItem ], $this->now, strtotime( '+1 day', $this->now ), 'draft' );
+		$onlyItem      = $this->createTimeframe( $otherLocation, $this->itemId, strtotime( '-1 day', $this->now ), strtotime( '+1 day', $this->now ) );
+		$onlyLocation  = $this->createTimeframe( $this->locationId, $otherItem, strtotime( '-1 day', $this->now ), strtotime( '+1 day', $this->now ) );
+		$expired       = $this->holiday( [ $this->locationId ], [ $this->itemId ], strtotime( '-20 days', $this->now ), strtotime( '-10 days', $this->now ) );
+
+		$result  = AssignedTimeframes::forTimeframe( new \CommonsBooking\Model\Timeframe( $this->bookableId ), $this->now );
+		$entries = $this->entries( $result );
+
+		$this->assertEquals( [ $this->itemId ], $result['items'] );
+		$this->assertEquals( [ $this->locationId ], $result['locations'] );
+		$this->assertArrayHasKey( $sameCombo, $entries );
+		$this->assertArrayHasKey( $expired, $entries );
+		$this->assertArrayNotHasKey( $this->bookableId, $entries, 'the timeframe itself is not listed' );
+		$this->assertArrayNotHasKey( $onlyItem, $entries );
+		$this->assertArrayNotHasKey( $onlyLocation, $entries );
+		$this->assertEquals( [ $this->locationId ], $entries[ $sameCombo ]['effective_at'] );
+		$this->assertFalse( $entries[ $sameCombo ]['effective'], 'draft is shown, but not effective' );
+		$this->assertEquals( AssignedTimeframes::GROUP_EXPIRED, $entries[ $expired ]['group'] );
+	}
+
+	public function testForTimeframeWithHolidayForAll() {
+		$holiday = $this->createHolidayTimeframeForAllItemsAndLocations();
+
+		$entries = $this->entries( AssignedTimeframes::forTimeframe( new \CommonsBooking\Model\Timeframe( $this->bookableId ), $this->now ) );
+		$this->assertArrayHasKey( $holiday, $entries );
+
+		$entries = $this->entries( AssignedTimeframes::forTimeframe( new \CommonsBooking\Model\Timeframe( $holiday ), $this->now ) );
+		$this->assertArrayHasKey( $this->bookableId, $entries );
+		$this->assertArrayNotHasKey( $holiday, $entries );
+	}
+
 	/**
 	 * Item 12 must not find a timeframe with the list [112, 120].
 	 */

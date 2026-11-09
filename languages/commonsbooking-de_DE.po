@@ -5305,3 +5305,35 @@ msgstr "Technische Details: Die geplante Aufgabe %s fehlt. Alternativ „wp comm
 #: src/Service/Booster/SettingsView.php:155
 msgid "Item calendars are being prepared …"
 msgstr "Artikelkalender werden vorbereitet …"
+
+#: src/View/Admin/AssignedTimeframes.php:46
+msgid "Timeframes of the same item and location"
+msgstr "Zeitrahmen mit demselben Artikel und Standort"
+
+#: src/View/Admin/AssignedTimeframes.php:130
+msgid "The other timeframes of this item and location are shown here after saving."
+msgstr "Die anderen Zeitrahmen dieses Artikels und Standorts werden hier nach dem Speichern angezeigt."
+
+#: src/View/Admin/AssignedTimeframes.php:141
+msgid "Other timeframes that contain settings for the same combination of item and location, i.e. share at least one item and one location with this timeframe. They can be bookable timeframes, holidays or repairs, whatever their status. ⚠ marks entries that are not published."
+msgstr "Andere Zeitrahmen mit Einstellungen zur selben Kombination aus Artikel und Standort, d. h. sie haben mindestens einen Artikel und einen Standort mit diesem Zeitrahmen gemeinsam. Das können buchbare Zeitrahmen, Feiertage oder Reparaturen sein, unabhängig vom Status. ⚠ kennzeichnet Einträge, die nicht veröffentlicht sind."
+
+#: src/View/Admin/AssignedTimeframes.php:144
+msgid "No item or location is selected yet. Select them and save the timeframe to see the other timeframes of this combination."
+msgstr "Es sind noch kein Artikel und kein Standort ausgewählt. Wähle sie aus und speichere den Zeitrahmen, um die anderen Zeitrahmen dieser Kombination zu sehen."
+
+#: src/View/Admin/AssignedTimeframes.php:152
+msgid "There are no other timeframes for this combination of item and location."
+msgstr "Für diese Kombination aus Artikel und Standort gibt es keine anderen Zeitrahmen."
+
+#: src/View/Admin/AssignedTimeframes.php:175
+msgid "Item:"
+msgstr "Artikel:"
+
+#: src/View/Admin/AssignedTimeframes.php:175
+msgid "Location:"
+msgstr "Standort:"
+
+#: src/View/Admin/AssignedTimeframes.php:179
+msgid "all timeframes"
+msgstr "alle Zeitrahmen"

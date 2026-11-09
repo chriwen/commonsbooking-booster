@@ -148,6 +148,87 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Returns the other timeframes that are set up for the same item / location combination as the timeframe:
+	 * those sharing at least one item AND at least one location with it (the same rule that makes a timeframe
+	 * control an item, see {@see self::buildTimeframeEntry()}). Bookable, holiday and repair timeframes are considered,
+	 * whatever their status. The timeframe itself is not part of the result.
+	 *
+	 * The entries have the same keys as in {@see self::forItem()}; `effective_at` contains the shared locations.
+	 *
+	 * @param TimeframeModel $timeframe
+	 * @param int|null       $now timestamp used for grouping (default: current local time)
+	 *
+	 * @return array{groups: array<string, array[]>, items: int[], locations: int[]} items / locations: those of the timeframe
+	 */
+	public static function forTimeframe( TimeframeModel $timeframe, ?int $now = null ): array {
+		$now        = $now ?? current_time( 'timestamp' );
+		$todayStart = strtotime( 'today', $now );
+		$todayEnd   = $todayStart + DAY_IN_SECONDS - 1;
+
+		$itemIds     = self::assignment( $timeframe, 'item' )['ids'];
+		$locationIds = self::assignment( $timeframe, 'location' )['ids'];
+
+		$groups = [
+			self::GROUP_CURRENT => [],
+			self::GROUP_FUTURE  => [],
+			self::GROUP_EXPIRED => [],
+		];
+		$result = [
+			'groups'    => $groups,
+			'items'     => $itemIds,
+			'locations' => $locationIds,
+		];
+		if ( ! $itemIds || ! $locationIds ) {
+			return $result;
+		}
+
+		// Search from the smaller side (e.g. one location instead of "all items"), filter by the other one.
+		$byItem     = count( $itemIds ) <= count( $locationIds );
+		$searchIds  = $byItem ? $itemIds : $locationIds;
+		$candidates = [];
+		foreach ( $searchIds as $searchId ) {
+			$candidates = array_merge( $candidates, self::timeframeCandidateIds( $byItem ? 'item' : 'location', $searchId ) );
+		}
+		$candidates = array_diff( array_unique( $candidates ), [ $timeframe->ID ] );
+		if ( $candidates ) {
+			_prime_post_caches( $candidates, false, true );
+		}
+
+		foreach ( $candidates as $id ) {
+			$post = get_post( $id );
+			if ( ! $post || $post->post_type !== TimeframeCPT::$postType ) {
+				continue;
+			}
+			$other     = new TimeframeModel( $post );
+			$items     = self::assignment( $other, 'item' );
+			$locations = self::assignment( $other, 'location' );
+
+			$sharedItems     = array_intersect( $itemIds, $items['ids'] );
+			$sharedLocations = array_values( array_intersect( $locationIds, $locations['ids'] ) );
+			if ( ! $sharedItems || ! $sharedLocations ) {
+				continue;
+			}
+			$entry                       = self::timeframeEntry( $other, $items, $locations, $sharedLocations, $todayStart, $todayEnd );
+			$groups[ $entry['group'] ][] = $entry;
+		}
+
+		foreach ( $groups as $group => &$list ) {
+			usort(
+				$list,
+				function ( $a, $b ) use ( $group ) {
+					$byStart = $group === self::GROUP_EXPIRED ? ( $b['end'] ?? PHP_INT_MAX ) <=> ( $a['end'] ?? PHP_INT_MAX ) : $a['start'] <=> $b['start'];
+
+					return $byStart ?: ( $a['sort_type'] <=> $b['sort_type'] ?: $a['post_id'] <=> $b['post_id'] );
+				}
+			);
+		}
+		unset( $list );
+		$result['groups'] = $groups;
+
+		return $result;
+	}
+
+	/**
 	 * Returns the ids of timeframes (types {@see self::TIMEFRAME_TYPES}) that have the entity in their
 	 * single field (item-id / location-id) or in their list (item-id-list / location-id-list).
 	 * Same matching as {@see Timeframe::getPostIdsByType()}.
@@ -289,9 +370,7 @@ class AssignedTimeframes {
 	 * @return array|null null if the timeframe does not concern the entity
 	 */
 	private static function buildTimeframeEntry( TimeframeModel $timeframe, string $entity, int $entityId, array $counterparts, int $todayStart, int $todayEnd ): ?array {
-		$type  = $timeframe->getType();
-		$start = $timeframe->getStartDate() ?: null;
-		$end   = self::endTimestamp( $timeframe );
+		$type = $timeframe->getType();
 
 		$items     = self::assignment( $timeframe, 'item' );
 		$locations = self::assignment( $timeframe, 'location' );
@@ -308,6 +387,25 @@ class AssignedTimeframes {
 			return null;
 		}
 
+		return self::timeframeEntry( $timeframe, $items, $locations, $effectiveAt, $todayStart, $todayEnd );
+	}
+
+	/**
+	 * Builds the entry array of a timeframe (shared by the item / location overview and {@see self::forTimeframe()}).
+	 *
+	 * @param TimeframeModel $timeframe
+	 * @param array          $items       {@see self::assignment()}
+	 * @param array          $locations   {@see self::assignment()}
+	 * @param int[]          $effectiveAt
+	 * @param int            $todayStart
+	 * @param int            $todayEnd
+	 *
+	 * @return array
+	 */
+	private static function timeframeEntry( TimeframeModel $timeframe, array $items, array $locations, array $effectiveAt, int $todayStart, int $todayEnd ): array {
+		$type     = $timeframe->getType();
+		$start    = $timeframe->getStartDate() ?: null;
+		$end      = self::endTimestamp( $timeframe );
 		$weekdays = $timeframe->getWeekDays();
 
 		return [

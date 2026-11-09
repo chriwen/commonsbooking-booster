@@ -57,6 +57,44 @@ class AssignedTimeframesViewTest extends CustomPostTypeTest {
 		$this->assertStringContainsString( 'TestItem', $html );
 	}
 
+	public function testRenderMetaboxOnTimeframe() {
+		ob_start();
+		AssignedTimeframes::renderForTimeframe( get_post( $this->bookableId ) );
+		$html = ob_get_clean();
+
+		$this->assertStringContainsString( 'Summer break', $html );
+		$this->assertStringContainsString( esc_url( get_edit_post_link( $this->holidayId, 'url' ) ), $html );
+		$this->assertStringContainsString( esc_url( get_edit_post_link( $this->itemId, 'url' ) ), $html );
+		$this->assertStringContainsString( esc_url( get_edit_post_link( $this->locationId, 'url' ) ), $html );
+		$this->assertStringContainsString( '#' . AssignedTimeframes::METABOX_ID, $html );
+		$this->assertStringNotContainsString( 'Applies at', $html );
+	}
+
+	public function testRenderMetaboxOnNewTimeframe() {
+		$id = wp_insert_post(
+			[
+				'post_type'   => Timeframe::$postType,
+				'post_status' => 'auto-draft',
+			]
+		);
+		ob_start();
+		AssignedTimeframes::renderForTimeframe( get_post( $id ) );
+		$html = ob_get_clean();
+
+		$this->assertStringContainsString( 'after saving', $html );
+	}
+
+	public function testRenderMetaboxOnTimeframeWithoutOthers() {
+		wp_delete_post( $this->holidayId, true ); // the holiday for all items would apply as well
+		$other = $this->createItem( 'Lonely item' );
+		$id    = $this->createTimeframe( $this->locationId, $other, strtotime( '+100 days' ), strtotime( '+110 days' ) );
+		ob_start();
+		AssignedTimeframes::renderForTimeframe( get_post( $id ) );
+		$html = ob_get_clean();
+
+		$this->assertStringContainsString( 'no other timeframes', $html );
+	}
+
 	public function testMetaboxIsEmptyForUsersWithoutRights() {
 		$this->createSubscriber();
 		wp_set_current_user( $this->subscriberId );

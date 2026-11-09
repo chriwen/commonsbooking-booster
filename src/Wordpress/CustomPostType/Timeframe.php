@@ -1428,6 +1428,14 @@ class Timeframe extends CustomPostType {
 		// Add Meta Boxes
 		add_action( 'cmb2_admin_init', array( $this, 'registerMetabox' ) );
 
+		// Metabox "Timeframes of the same item and location" as first box of the edit page
+		add_action(
+			'add_meta_boxes_' . self::$postType,
+			function () {
+				\CommonsBooking\View\Admin\AssignedTimeframes::addMetaBox( self::$postType );
+			}
+		);
+
 		// must be 'save_post' only because of priority in relation to cmb2
 		add_action( 'save_post', array( $this, 'savePost' ), 11, 2 );
 

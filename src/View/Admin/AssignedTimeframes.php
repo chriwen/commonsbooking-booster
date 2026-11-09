@@ -38,19 +38,24 @@ class AssignedTimeframes {
 	 * @return void
 	 */
 	public static function addMetaBox( string $postType ): void {
+		if ( $postType === Timeframe::$postType ) {
+			self::registerMetaBox( $postType, __( 'Timeframes of the same item and location', 'commonsbooking' ), array( self::class, 'renderForTimeframe' ) );
+		} elseif ( $postType === Item::$postType || $postType === Location::$postType ) {
+			self::registerMetaBox( $postType, __( 'Assigned timeframes', 'commonsbooking' ), array( self::class, 'render' ) );
+		}
+	}
+
+	/**
+	 * @param string   $postType
+	 * @param string   $title
+	 * @param callable $callback
+	 *
+	 * @return void
+	 */
+	private static function registerMetaBox( string $postType, string $title, callable $callback ): void {
 		global $wp_meta_boxes;
 
-		if ( $postType !== Item::$postType && $postType !== Location::$postType ) {
-			return;
-		}
-		add_meta_box(
-			self::METABOX_ID,
-			esc_html__( 'Assigned timeframes', 'commonsbooking' ),
-			array( self::class, 'render' ),
-			$postType,
-			'normal',
-			'high'
-		);
+		add_meta_box( self::METABOX_ID, esc_html( $title ), $callback, $postType, 'normal', 'high' );
 
 		$boxes = $wp_meta_boxes[ $postType ]['normal']['high'] ?? array();
 		if ( isset( $boxes[ self::METABOX_ID ] ) ) {
@@ -100,6 +105,71 @@ class AssignedTimeframes {
 			self::renderGroup( Repository::GROUP_CURRENT, __( 'Current', 'commonsbooking' ), $groups[ Repository::GROUP_CURRENT ], $entity, true );
 			self::renderGroup( Repository::GROUP_FUTURE, __( 'Upcoming', 'commonsbooking' ), $groups[ Repository::GROUP_FUTURE ], $entity, true );
 			self::renderGroup( Repository::GROUP_EXPIRED, __( 'Expired', 'commonsbooking' ), $groups[ Repository::GROUP_EXPIRED ], $entity, false );
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * Renders the metabox on the edit page of a timeframe: the other timeframes of the same item / location combination.
+	 *
+	 * @param \WP_Post $post
+	 *
+	 * @return void
+	 */
+	public static function renderForTimeframe( \WP_Post $post ): void {
+		if ( $post->post_status === 'auto-draft' ) {
+			echo '<p>' . esc_html__( 'The other timeframes of this item and location are shown here after saving.', 'commonsbooking' ) . '</p>';
+			return;
+		}
+		if ( ! commonsbooking_isCurrentUserAllowedToEdit( $post ) ) {
+			return;
+		}
+
+		$result = Repository::forTimeframe( new \CommonsBooking\Model\Timeframe( $post ) );
+
+		echo self::styles(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static CSS
+		echo '<div class="cb-assigned-timeframes">';
+		echo '<p class="cb-at-intro"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span>' . esc_html__( 'Other timeframes that contain settings for the same combination of item and location, i.e. share at least one item and one location with this timeframe. They can be bookable timeframes, holidays or repairs, whatever their status. ⚠ marks entries that are not published.', 'commonsbooking' ) . '</p>';
+
+		if ( ! $result['items'] || ! $result['locations'] ) {
+			echo '<p class="cb-at-empty">' . esc_html__( 'No item or location is selected yet. Select them and save the timeframe to see the other timeframes of this combination.', 'commonsbooking' ) . '</p></div>';
+			return;
+		}
+
+		self::renderTimeframeSummary( $result['items'], $result['locations'] );
+
+		$groups = $result['groups'];
+		if ( ! $groups[ Repository::GROUP_CURRENT ] && ! $groups[ Repository::GROUP_FUTURE ] && ! $groups[ Repository::GROUP_EXPIRED ] ) {
+			echo '<p class="cb-at-empty">' . esc_html__( 'There are no other timeframes for this combination of item and location.', 'commonsbooking' ) . '</p>';
+		} else {
+			self::renderGroup( Repository::GROUP_CURRENT, __( 'Current', 'commonsbooking' ), $groups[ Repository::GROUP_CURRENT ], 'timeframe', true );
+			self::renderGroup( Repository::GROUP_FUTURE, __( 'Upcoming', 'commonsbooking' ), $groups[ Repository::GROUP_FUTURE ], 'timeframe', true );
+			self::renderGroup( Repository::GROUP_EXPIRED, __( 'Expired', 'commonsbooking' ), $groups[ Repository::GROUP_EXPIRED ], 'timeframe', false );
+		}
+		echo '</div>';
+	}
+
+	/**
+	 * Toolbar with the (linked) items and locations of the timeframe. If there is exactly one, the overview of all its
+	 * timeframes and restrictions (box "Assigned timeframes") is linked as well.
+	 *
+	 * @param int[] $itemIds
+	 * @param int[] $locationIds
+	 *
+	 * @return void
+	 */
+	private static function renderTimeframeSummary( array $itemIds, array $locationIds ): void {
+		echo '<div class="cb-at-toolbar">';
+		foreach ( array( array( __( 'Item:', 'commonsbooking' ), $itemIds ), array( __( 'Location:', 'commonsbooking' ), $locationIds ) ) as list( $label, $ids ) ) {
+			echo '<span class="cb-at-bookable"><strong>' . esc_html( $label ) . '</strong> ' . self::names( $ids ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
+			if ( count( $ids ) === 1 && get_post( $ids[0] ) && self::mayEdit( get_post( $ids[0] ) ) ) {
+				printf(
+					' (<a href="%s">%s</a>)',
+					esc_url( self::getLink( $ids[0] ) ),
+					esc_html__( 'all timeframes', 'commonsbooking' )
+				);
+			}
+			echo '</span>';
 		}
 		echo '</div>';
 	}
@@ -183,8 +253,10 @@ class AssignedTimeframes {
 			__( 'Grid', 'commonsbooking' ),
 			__( 'Items', 'commonsbooking' ),
 			__( 'Locations', 'commonsbooking' ),
-			$entity === 'item' ? __( 'Applies at', 'commonsbooking' ) : __( 'Affects items', 'commonsbooking' ),
 		);
+		if ( $entity !== 'timeframe' ) {
+			$headers[] = $entity === 'item' ? __( 'Applies at', 'commonsbooking' ) : __( 'Affects items', 'commonsbooking' );
+		}
 		echo '<div class="cb-at-scroll"><table class="cb-at-table"><thead><tr>';
 		foreach ( $headers as $header ) {
 			echo '<th scope="col">' . esc_html( $header ) . '</th>';
@@ -269,7 +341,7 @@ class AssignedTimeframes {
 		$end   = $entry['end'] ? date_i18n( get_option( 'date_format' ), $entry['end'] ) : __( 'open end', 'commonsbooking' );
 
 		printf(
-			'<tr class="%s"><td class="cb-at-type"><span class="cb-at-badge"><span class="dashicons %s" aria-hidden="true"></span>%s</span></td><td>%s</td><td class="cb-at-nowrap">%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="cb-at-applies">%s</td></tr>',
+			'<tr class="%s"><td class="cb-at-type"><span class="cb-at-badge"><span class="dashicons %s" aria-hidden="true"></span>%s</span></td><td>%s</td><td class="cb-at-nowrap">%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>%s</tr>',
 			esc_attr( implode( ' ', $classes ) ),
 			esc_attr( $icon ),
 			esc_html( $entry['type_label'] ),
@@ -279,7 +351,7 @@ class AssignedTimeframes {
 			$entry['grid'] !== null ? esc_html( self::gridLabel( $entry ) ) : '–',
 			self::assignmentHtml( $entry['items'], Item::getTaxonomyName() ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
 			self::assignmentHtml( $entry['locations'], Location::getTaxonomyName() ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
-			$entry['effective_at'] ? self::names( $entry['effective_at'] ) : '–' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
+			$entity === 'timeframe' ? '' : '<td class="cb-at-applies">' . ( $entry['effective_at'] ? self::names( $entry['effective_at'] ) : '–' ) . '</td>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
 		);
 	}
 
@@ -315,6 +387,10 @@ class AssignedTimeframes {
 		}
 		if ( $entry['kind'] === 'restriction' && $entry['status'] !== 'active' && $entry['effective_at'] ) {
 			return __( 'restriction not active', 'commonsbooking' );
+		}
+
+		if ( $entity === 'timeframe' ) {
+			return __( 'not published', 'commonsbooking' );
 		}
 
 		return $entity === 'item'
