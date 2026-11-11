@@ -5344,6 +5344,7 @@ msgstr "Standort:"
 #: src/View/Admin/AssignedTimeframes.php:179
 msgid "all timeframes"
 msgstr "alle Zeitrahmen"
+
 #: src/View/Admin/Stats
 msgid "You are not allowed to export statistics."
 msgstr "Der Export der Statistik ist nicht erlaubt."
