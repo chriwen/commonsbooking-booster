@@ -5344,3 +5344,471 @@ msgstr "Standort:"
 #: src/View/Admin/AssignedTimeframes.php:179
 msgid "all timeframes"
 msgstr "alle Zeitrahmen"
+#: src/View/Admin/Stats
+msgid "You are not allowed to export statistics."
+msgstr "Der Export der Statistik ist nicht erlaubt."
+
+#: src/View/Admin/Stats
+msgid "Unit"
+msgstr "Einheit"
+
+#: src/View/Admin/Stats
+msgid "Capacity"
+msgstr "Kapazität"
+
+#: src/View/Admin/Stats
+msgid "Booked slots"
+msgstr "Gebuchte Slots"
+
+#: src/View/Admin/Stats
+msgid "Utilisation rate"
+msgstr "Auslastung"
+
+#: src/View/Admin/Stats
+msgid "Cancellations"
+msgstr "Stornierungen"
+
+#: src/View/Admin/Stats
+msgid "Usage days"
+msgstr "Nutzungstage"
+
+#: src/View/Admin/Stats
+msgid "full day"
+msgstr "ganztägig"
+
+#: src/View/Admin/Stats
+msgid "hourly"
+msgstr "stundenweise"
+
+#: src/View/Admin/Stats
+msgid "Statistics"
+msgstr "Statistik"
+
+#: src/View/Admin/Stats
+msgid "You are not allowed to see statistics."
+msgstr "Kein Zugriff auf die Statistik."
+
+#: src/View/Admin/Stats
+msgid "How heavily your items and locations are used. Click the (i) next to a figure for an explanation."
+msgstr "Wie stark Artikel und Standorte genutzt werden. Ein Klick auf das (i) neben einer Kennzahl zeigt eine Erläuterung."
+
+#: src/View/Admin/Stats
+msgid "No items or locations match the selected categories."
+msgstr "Keine Artikel oder Standorte passen zu den gewählten Kategorien."
+
+#: src/View/Admin/Stats
+msgid "Show statistics"
+msgstr "Statistik anzeigen"
+
+#: src/View/Admin/Stats
+msgid "Reading bookings …"
+msgstr "Buchungen werden gelesen …"
+
+#: src/View/Admin/Stats
+msgid "Finding items and locations …"
+msgstr "Artikel und Standorte werden ermittelt …"
+
+#: src/View/Admin/Stats
+msgid "Computing daily values …"
+msgstr "Tageswerte werden berechnet …"
+
+#: src/View/Admin/Stats
+msgid "The build was interrupted. It continues when you reload this page."
+msgstr "Der Aufbau wurde unterbrochen. Er wird beim Neuladen dieser Seite fortgesetzt."
+
+#: src/View/Admin/Stats
+msgid "The statistics are being built."
+msgstr "Die Statistik wird aufgebaut."
+
+#: src/View/Admin/Stats
+msgid "You can leave this page, the build continues in the background. It is done in small steps and is safe on shared hosting."
+msgstr "Die Seite kann verlassen werden, der Aufbau läuft im Hintergrund weiter. Er erfolgt in kleinen Schritten und ist auch auf Shared Hosting unproblematisch."
+
+#: src/View/Admin/Stats
+msgid "Progress"
+msgstr "Fortschritt"
+
+#: src/View/Admin/Stats
+msgid "Reload to continue"
+msgstr "Neu laden, um fortzufahren"
+
+#: src/View/Admin/Stats
+msgid "The statistics show how heavily items and locations are used. They are computed once from your bookings and then kept up to date in the background. They add their own database tables and change nothing in your existing data."
+msgstr "Die Statistik zeigt, wie stark Artikel und Standorte genutzt werden. Sie wird einmalig aus den Buchungen berechnet und danach im Hintergrund aktuell gehalten. Sie legt eigene Datenbanktabellen an und ändert nichts an den bestehenden Daten."
+
+#: src/View/Admin/Stats
+msgid "Switch on statistics"
+msgstr "Statistik einschalten"
+
+#: src/View/Admin/Stats
+msgid "Last 30 days"
+msgstr "Letzte 30 Tage"
+
+#: src/View/Admin/Stats
+msgid "Last 12 months"
+msgstr "Letzte 12 Monate"
+
+#: src/View/Admin/Stats
+msgid "This year"
+msgstr "Dieses Jahr"
+
+#: src/View/Admin/Stats
+msgid "Last year"
+msgstr "Letztes Jahr"
+
+#: src/View/Admin/Stats
+msgid "Custom"
+msgstr "Benutzerdefiniert"
+
+#: src/View/Admin/Stats
+msgid "From"
+msgstr "Von"
+
+#: src/View/Admin/Stats
+msgid "To"
+msgstr "Bis"
+
+#: src/View/Admin/Stats
+msgid "Compare with"
+msgstr "Vergleichen mit"
+
+#: src/View/Admin/Stats
+msgid "nothing"
+msgstr "nichts"
+
+#: src/View/Admin/Stats
+msgid "previous period"
+msgstr "Vorperiode"
+
+#: src/View/Admin/Stats
+msgid "previous year"
+msgstr "Vorjahr"
+
+#: src/View/Admin/Stats
+msgid "Resolution"
+msgstr "Auflösung"
+
+#: src/View/Admin/Stats
+msgid "day"
+msgstr "Tag"
+
+#: src/View/Admin/Stats
+msgid "week"
+msgstr "Woche"
+
+#: src/View/Admin/Stats
+msgid "month"
+msgstr "Monat"
+
+#: src/View/Admin/Stats
+msgid "Booking kind"
+msgstr "Buchungsart"
+
+#: src/View/Admin/Stats
+msgid "both, separately"
+msgstr "beide, getrennt"
+
+#: src/View/Admin/Stats
+msgid "Item categories"
+msgstr "Artikelkategorien"
+
+#: src/View/Admin/Stats
+msgid "Location categories"
+msgstr "Standortkategorien"
+
+#: src/View/Admin/Stats
+msgid "Apply"
+msgstr "Anwenden"
+
+#: src/View/Admin/Stats
+msgid "Overview"
+msgstr "Übersicht"
+
+#: src/View/Admin/Stats
+msgid "No data for this selection."
+msgstr "Keine Daten für diese Auswahl."
+
+#: src/View/Admin/Stats
+msgid "Full-day slots (counted in days)"
+msgstr "Ganztägige Slots (gezählt in Tagen)"
+
+#: src/View/Admin/Stats
+msgid "Hourly slots (counted in hours)"
+msgstr "Stundenweise Slots (gezählt in Stunden)"
+
+#: src/View/Admin/Stats
+msgid "days"
+msgstr "Tage"
+
+#: src/View/Admin/Stats
+msgid "hours"
+msgstr "Stunden"
+
+#: src/View/Admin/Stats
+msgid "Utilisation"
+msgstr "Auslastung"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Share of the bookable %s that were actually booked. Times when an item was not offered do not count."
+msgstr "Anteil der buchbaren %s, die tatsächlich gebucht wurden. Zeiten, in denen ein Artikel nicht angeboten wurde, zählen nicht."
+
+#: src/View/Admin/Stats
+msgid "Confirmed bookings that start in the period. Cancelled and unconfirmed bookings are not counted."
+msgstr "Bestätigte Buchungen, die im Zeitraum beginnen. Stornierte und unbestätigte Buchungen werden nicht gezählt."
+
+#: src/View/Admin/Stats
+msgid "Days on which an item was booked at least once, added up over all items and locations."
+msgstr "Tage, an denen ein Artikel mindestens einmal gebucht war, summiert über alle Artikel und Standorte."
+
+#: src/View/Admin/Stats
+msgid "Cancellation rate"
+msgstr "Stornoquote"
+
+#: src/View/Admin/Stats
+msgid "Cancelled bookings in relation to all bookings (confirmed and cancelled) that start in the period."
+msgstr "Stornierte Buchungen im Verhältnis zu allen Buchungen (bestätigt und storniert), die im Zeitraum beginnen."
+
+#: src/View/Admin/Stats
+msgid "Fully booked days"
+msgstr "Voll gebuchte Tage"
+
+#: src/View/Admin/Stats
+msgid "Share of the days with offered capacity on which everything was booked."
+msgstr "Anteil der Tage mit angebotener Kapazität, an denen alles gebucht war."
+
+#: src/View/Admin/Stats
+msgid "Availability"
+msgstr "Verfügbarkeit"
+
+#: src/View/Admin/Stats
+msgid "Share of the planned capacity that was really available. Holidays, closures, repairs and restrictions with total failure reduce it."
+msgstr "Anteil der geplanten Kapazität, der tatsächlich verfügbar war. Feiertage, Schließungen, Reparaturen und Einschränkungen mit Totalausfall verringern ihn."
+
+#: src/View/Admin/Stats
+msgid "Utilisation over time"
+msgstr "Auslastung im Zeitverlauf"
+
+#: src/View/Admin/Stats
+msgid "Bookings over time"
+msgstr "Buchungen im Zeitverlauf"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Utilisation by weekday and month (%s)"
+msgstr "Auslastung nach Wochentag und Monat (%s)"
+
+#: src/View/Admin/Stats
+msgid "Utilisation by weekday and month"
+msgstr "Auslastung nach Wochentag und Monat"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Booking duration (%s)"
+msgstr "Buchungsdauer (%s)"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Mean %1$s, median %2$s %3$s"
+msgstr "Mittelwert %1$s, Median %2$s %3$s"
+
+#: src/View/Admin/Stats
+msgid "Booking duration"
+msgstr "Buchungsdauer"
+
+#: src/View/Admin/Stats
+msgid "Length"
+msgstr "Dauer"
+
+#: src/View/Admin/Stats
+msgid "< 1 day"
+msgstr "< 1 Tag"
+
+#: src/View/Admin/Stats
+msgid "1–3 days"
+msgstr "1–3 Tage"
+
+#: src/View/Admin/Stats
+msgid "3–7 days"
+msgstr "3–7 Tage"
+
+#: src/View/Admin/Stats
+msgid "1–2 weeks"
+msgstr "1–2 Wochen"
+
+#: src/View/Admin/Stats
+msgid "2–4 weeks"
+msgstr "2–4 Wochen"
+
+#: src/View/Admin/Stats
+msgid "> 4 weeks"
+msgstr "> 4 Wochen"
+
+#: src/View/Admin/Stats
+msgid "Lead time (booking to start)"
+msgstr "Vorlaufzeit (Buchung bis Beginn)"
+
+#: src/View/Admin/Stats
+msgid "Lead time"
+msgstr "Vorlaufzeit"
+
+#: src/View/Admin/Stats
+msgid "< 1 day before start"
+msgstr "< 1 Tag vor Beginn"
+
+#: src/View/Admin/Stats
+msgid "1–2 days"
+msgstr "1–2 Tage"
+
+#: src/View/Admin/Stats
+msgid "2–7 days"
+msgstr "2–7 Tage"
+
+#: src/View/Admin/Stats
+msgid "> 1 week"
+msgstr "> 1 Woche"
+
+#: src/View/Admin/Stats
+msgid "Cancellation timing"
+msgstr "Zeitpunkt der Stornierung"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "%d more cancelled bookings have no recorded cancellation time."
+msgstr "%d weitere stornierte Buchungen haben keinen erfassten Stornierungszeitpunkt."
+
+#: src/View/Admin/Stats
+msgid "Utilisation by item"
+msgstr "Auslastung nach Artikel"
+
+#: src/View/Admin/Stats
+msgid "Utilisation by location"
+msgstr "Auslastung nach Standort"
+
+#: src/View/Admin/Stats
+msgid "Rates are formed within one booking kind only; items with both kinds appear twice. The chart shows the first 20 rows of the table."
+msgstr "Quoten werden nur innerhalb einer Buchungsart gebildet; Artikel mit beiden Arten erscheinen doppelt. Das Diagramm zeigt die ersten 20 Zeilen der Tabelle."
+
+#: src/View/Admin/Stats
+msgid "Utilisation ranking"
+msgstr "Auslastungsranking"
+
+#: src/View/Admin/Stats
+msgid "Idle days"
+msgstr "Leerstandstage"
+
+#: src/View/Admin/Stats
+msgid "Kind"
+msgstr "Art"
+
+#: src/View/Admin/Stats
+msgid "Export as CSV"
+msgstr "Als CSV exportieren"
+
+#: src/View/Admin/Stats
+msgid "Exports the aggregated table of this view with the current filters."
+msgstr "Exportiert die aggregierte Tabelle dieser Ansicht mit den aktuellen Filtern."
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Explanation: %s"
+msgstr "Erläuterung: %s"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "before: %s"
+msgstr "vorher: %s"
+
+#: src/View/Admin/Stats
+msgid "Show values as table"
+msgstr "Werte als Tabelle anzeigen"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "%d selected"
+msgstr "%d ausgewählt"
+
+#: src/View/Admin/Stats
+msgid "Search …"
+msgstr "Suchen …"
+
+#: src/View/Admin/Stats
+#, php-format
+msgid "Search: %s"
+msgstr "Suchen: %s"
+
+#: src/View/Admin/Stats
+msgid "Clear selection"
+msgstr "Auswahl löschen"
+
+#: src/View/Admin/Stats/Page.php
+msgid "Failure rate"
+msgstr "Ausfallquote"
+
+#: src/View/Admin/Stats/Page.php
+msgid "Share of the planned capacity lost to a total failure (active repair restriction). Holidays, closures and repair timeframes are not included."
+msgstr "Anteil der geplanten Kapazität, der durch einen Totalausfall (aktive Einschränkung vom Typ Totalausfall) verloren ging. Feiertage, Schließungen und Reparatur-Zeitrahmen sind nicht enthalten."
+
+#: src/View/Admin/Stats
+msgid "overall, plus separately"
+msgstr "gesamt und getrennt"
+
+#: src/View/Admin/Stats
+msgid "Overall (full-day and hourly bookings together)"
+msgstr "Gesamt (ganztägige und stundenweise Buchungen zusammen)"
+
+#: src/View/Admin/Stats
+msgid "Day rate"
+msgstr "Tagesquote"
+
+#: src/View/Admin/Stats
+msgid "Share of the days with offered capacity on which an item was booked at least once, hourly or full-day. A single booked hour makes the day a usage day, so hourly items look somewhat busier than their hour utilisation."
+msgstr "Anteil der Tage mit angebotener Kapazität, an denen ein Artikel mindestens einmal gebucht war, ob stundenweise oder ganztägig. Schon eine gebuchte Stunde macht den Tag zum Nutzungstag, stundenweise Artikel wirken daher etwas stärker ausgelastet als ihre Stundenauslastung."
+
+#: src/View/Admin/Stats
+msgid "Confirmed bookings of both kinds that start in the period. Cancelled and unconfirmed bookings are not counted."
+msgstr "Bestätigte Buchungen beider Arten, die im Zeitraum beginnen. Stornierte und unbestätigte Buchungen werden nicht gezählt."
+
+#: src/View/Admin/Stats
+msgid "Share of the planned capacity that was really available, counted by days. Holidays, closures, repairs and restrictions with total failure reduce it."
+msgstr "Anteil der geplanten Kapazität, der tatsächlich verfügbar war, tageweise gezählt. Feiertage, Schließungen, Reparaturen und Einschränkungen mit Totalausfall verringern ihn."
+
+#: src/View/Admin/Stats
+msgid "Share of the planned capacity lost to a total failure (active repair restriction), counted by days. Holidays, closures and repair timeframes are not included."
+msgstr "Anteil der geplanten Kapazität, der durch einen Totalausfall (aktive Einschränkung vom Typ Totalausfall) verloren ging, tageweise gezählt. Feiertage, Schließungen und Reparatur-Zeitrahmen sind nicht enthalten."
+
+#: src/View/Admin/Stats
+msgid "Day rate over time"
+msgstr "Tagesquote im Zeitverlauf"
+
+#: src/View/Admin/Stats
+msgid "Overall"
+msgstr "Gesamt"
+
+#: src/View/Admin/Stats
+msgid "Breakdown by booking kind"
+msgstr "Aufschlüsselung nach Buchungsart"
+
+#: src/View/Admin/Stats
+msgid "Day rate by item"
+msgstr "Tagesquote nach Artikel"
+
+#: src/View/Admin/Stats
+msgid "Day rate by location"
+msgstr "Tagesquote nach Standort"
+
+#: src/View/Admin/Stats
+msgid "One row per item or location over full-day and hourly bookings together. The columns on the right show the slot utilisation of each kind separately. The chart shows the first 20 rows of the table."
+msgstr "Eine Zeile je Artikel oder Standort über ganztägige und stundenweise Buchungen zusammen. Die Spalten rechts zeigen die Slotauslastung je Art getrennt. Das Diagramm zeigt die ersten 20 Zeilen der Tabelle."
+
+#: src/View/Admin/Stats
+msgid "Day rate ranking"
+msgstr "Ranking nach Tagesquote"
+
+#: src/View/Admin/Stats
+msgid "Utilisation full-day"
+msgstr "Auslastung ganztägig"
+
+#: src/View/Admin/Stats
+msgid "Utilisation hourly"
+msgstr "Auslastung stundenweise"
