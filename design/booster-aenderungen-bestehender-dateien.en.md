@@ -50,7 +50,7 @@ the unchanged original code runs. `wp_posts`/`wp_postmeta` are never written dif
 `Booster::SETTINGS_FIELD`, status area via `SettingsView::render` (diagnostics, buttons "Check"/"Rebuild").
 Default: off.
 
-**`commonsbooking.php`** – version `2.11.4-beta.5`. The version is part of every cache key, so old cache entries
+**`commonsbooking.php`** – version `2.11.4-beta.6`. The version is part of every cache key, so old cache entries
 expire.
 
 ---
