@@ -155,6 +155,7 @@ Geschrieben wird wie in Stufe 3, 6.3: Generation `G` vor der Berechnung lesen, `
 | Ganze Kartenantwort je Rollenkontext cachen | Bei jeder Buchung irgendwo ungültig, groß, je Seite und Karte getrennt. Hilft nur bei wiederholten Aufrufen. |
 | Speichern je Nutzer | Viele Zeilen, kaum Wiederverwendung. Das Zugriffsprofil fasst alle Nutzer mit gleicher Wirkung zusammen. |
 | Speichern je Rollenkombination der ganzen Instanz | Die meisten Rollen sind für ein Paar ohne Wirkung. Die Schnittmenge mit `R` hält die Zahl je Paar klein. |
+| Profilzeilen in `cb_availability` statt eigener Tabelle (Entscheidung 08.11.2026, auch ohne Rücksicht auf Abwärtskompatibilität) | Die Paarzeile trägt `gen` (Invalidierung, Generationsprüfung beim Schreiben) und gehört genau einmal je Paar. Profilzeilen kommen mehrfach je Paar, mit eigener Lebensdauer (`last_read`, Grenze je Paar). In einer Tabelle gäbe es zwei Zeilenarten mit je anderen Pflichtfeldern, Sonderzeilen im Primärschlüssel und Filter in jeder Abfrage, und der Hot Path unbeschränkter Paare teilte sich Tabelle und Index mit den Profilzeilen. Eine Tabelle je Zeilenart bleibt das saubere Modell. |
 
 ## 5. Risiken
 
