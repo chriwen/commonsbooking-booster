@@ -5344,3 +5344,203 @@ msgstr "Standort:"
 #: src/View/Admin/AssignedTimeframes.php:179
 msgid "all timeframes"
 msgstr "alle Zeitrahmen"
+
+msgid "Occupancy plan"
+msgstr "Belegungsplan"
+
+msgid "Dates"
+msgstr "Termine"
+
+msgid "Maximum booking days"
+msgstr "Maximale Buchungsdauer (Tage)"
+
+msgid "Advance booking days"
+msgstr "Vorausbuchung (Tage)"
+
+msgid "not limited"
+msgstr "nicht begrenzt"
+
+msgid "Only bookable for"
+msgstr "Nur buchbar für"
+
+msgid "Email"
+msgstr "E-Mail"
+
+msgid "Phone"
+msgstr "Telefon"
+
+msgid "Booked on"
+msgstr "Gebucht am"
+
+msgid "Unknown user"
+msgstr "Unbekannte Person"
+
+msgid "Access denied"
+msgstr "Zugriff verweigert"
+
+msgid "No location available. You need to be admin of at least one location."
+msgstr "Keine Station verfügbar. Dafür ist die Verwaltung mindestens einer Station nötig."
+
+msgid "From"
+msgstr "Ab"
+
+msgid "Show canceled bookings"
+msgstr "Stornierte Buchungen zeigen"
+
+msgid "Earlier"
+msgstr "Früher"
+
+msgid "Today"
+msgstr "Heute"
+
+msgid "Later"
+msgstr "Später"
+
+msgid "Show"
+msgstr "Anzeigen"
+
+#, php-format
+msgid "%d week"
+msgid_plural "%d weeks"
+msgstr[0] "%d Woche"
+msgstr[1] "%d Wochen"
+
+#, php-format
+msgid "%d month"
+msgid_plural "%d months"
+msgstr[0] "%d Monat"
+msgstr[1] "%d Monate"
+
+msgid "Booking (unconfirmed)"
+msgstr "Buchung (unbestätigt)"
+
+msgid "Beyond advance booking period"
+msgstr "Außerhalb der Vorausbuchung"
+
+msgid "All items of the location"
+msgstr "Alle Artikel der Station"
+
+msgid "No items with timeframes or bookings at this location in the selected period."
+msgstr "Keine Artikel mit Zeitrahmen oder Buchungen an dieser Station im gewählten Zeitraum."
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "Edit"
+msgstr "Bearbeiten"
+
+msgid "Not bookable: no bookable timeframe"
+msgstr "Nicht buchbar: kein buchbarer Zeitrahmen"
+
+msgid "Not bookable: holidays or location closed"
+msgstr "Nicht buchbar: Feiertag oder Station geschlossen"
+
+msgid "Booked or blocked for the whole day"
+msgstr "Ganztägig gebucht oder gesperrt"
+
+msgid "Not bookable: all slots locked"
+msgstr "Nicht buchbar: alle Zeitfenster gesperrt"
+
+msgid "Partially booked"
+msgstr "Teilweise gebucht"
+
+msgid "In the past: cannot be selected in the calendar."
+msgstr "In der Vergangenheit: im Kalender nicht auswählbar."
+
+msgid "Beyond the advance booking period (currently bookable until %s): shown as not bookable in the calendar."
+msgstr "Außerhalb der Vorausbuchung (derzeit buchbar bis %s): im Kalender als nicht buchbar angezeigt."
+
+msgid "pickup day"
+msgstr "Abholtag"
+
+msgid "pickup and return day"
+msgstr "Abhol- und Rückgabetag"
+
+msgid "return day"
+msgstr "Rückgabetag"
+
+msgid "No bookable timeframe on the %s."
+msgstr "Kein buchbarer Zeitrahmen am %s."
+
+msgid "Location closed on the %1$s: %2$s"
+msgstr "Station am %1$s geschlossen: %2$s"
+
+msgid "Overlaps a block that cannot be overbooked: %s"
+msgstr "Überschneidet sich mit einer Sperre, die nicht überbuchbar ist: %s"
+
+msgid "No item available. You need to be admin of at least one item."
+msgstr "Kein Artikel verfügbar. Dafür ist die Verwaltung mindestens eines Artikels nötig."
+
+msgid "By location"
+msgstr "Nach Station"
+
+msgid "By item"
+msgstr "Nach Artikel"
+
+msgid "Location category"
+msgstr "Stationskategorie"
+
+msgid "Item category"
+msgstr "Artikelkategorie"
+
+msgid "Day width"
+msgstr "Tagesbreite"
+
+msgid "Automatic"
+msgstr "Automatisch"
+
+msgid "Very narrow"
+msgstr "Sehr schmal"
+
+msgid "Narrow"
+msgstr "Schmal"
+
+msgid "Medium"
+msgstr "Mittel"
+
+msgid "Wide"
+msgstr "Breit"
+
+msgid "Very wide"
+msgstr "Sehr breit"
+
+msgid "Conflict"
+msgstr "Konflikt"
+
+msgid "Click a bar for details, a day for the reasons."
+msgstr "Klick auf einen Balken zeigt Details, Klick auf einen Tag die Gründe."
+
+msgid "week"
+msgstr "KW"
+
+msgid "All locations of the item"
+msgstr "Alle Stationen des Artikels"
+
+msgid "No locations with timeframes or bookings for this item in the selected period."
+msgstr "Keine Stationen mit Zeitrahmen oder Buchungen für diesen Artikel im gewählten Zeitraum."
+
+msgid "Loading …"
+msgstr "Wird geladen …"
+
+msgid "Could not load the details."
+msgstr "Die Details konnten nicht geladen werden."
+
+msgid "Day"
+msgstr "Tag"
+
+msgid "Reasons"
+msgstr "Gründe"
+
+msgid "No timeframes, restrictions or bookings on this day."
+msgstr "An diesem Tag keine Zeitrahmen, Einschränkungen oder Buchungen."
+
+msgid "Conflicts"
+msgstr "Konflikte"
+
+msgid "In the booking calendar"
+msgstr "Im Buchungskalender"
+
+msgid "%d booking with conflict"
+msgid_plural "%d bookings with conflicts"
+msgstr[0] "%d Buchung mit Konflikt"
+msgstr[1] "%d Buchungen mit Konflikten"
