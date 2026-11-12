@@ -16,8 +16,9 @@ class Calculator {
 	 * Version of the calculation. Increase when {@see DayFacts::fromGrid()}, {@see Slots} or the grid calculation
 	 * changes, all stored rows are recomputed then.
 	 * 2: packed availability slots for API and GBFS (column slots)
+	 * 3: days computed without the booking window (advance booking days), applied when reading
 	 */
-	public const VERSION = 2;
+	public const VERSION = 3;
 
 	/**
 	 * Result of the last computations in this request, by "locationId:itemId".
@@ -155,8 +156,11 @@ class Calculator {
 	 * @throws \Exception
 	 */
 	private static function computeDays( int $itemId, int $locationId, string $from, string $to ): array {
+		// Without the booking window: it moves with the current date, the stored days must not. The readers apply it
+		// ({@see CalendarWindow}, {@see Reader::getFacts()}, {@see SlotReader}).
 		[ $flags, $slots ] = Plugin::withoutCache(
-			function () use ( $itemId, $locationId, $from, $to ) {
+			fn() => \CommonsBooking\Model\Timeframe::withoutBookingWindow(
+				function () use ( $itemId, $locationId, $from, $to ) {
 				$flags    = [];
 				$slots    = [];
 				$calendar = new Calendar( new Day( $from ), new Day( $to ), [ $locationId ], [ $itemId ] );
@@ -173,7 +177,8 @@ class Calculator {
 				}
 
 				return [ $flags, $slots ];
-			}
+				}
+			)
 		);
 
 		// the calendar contains every day of the range, make sure the lists start at $from without gaps

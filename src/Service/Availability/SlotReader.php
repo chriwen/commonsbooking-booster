@@ -10,6 +10,8 @@ use stdClass;
 /**
  * Availability slots for the API and GBFS from the precomputed rows ({@see Store}, column slots).
  *
+ * The stored slots are computed without booking window and start day offset, both are applied here per timeframe.
+ *
  * Same result as {@see \CommonsBooking\Model\Calendar::getAvailabilitySlots()} computed live, with two intended
  * differences:
  * - A calendar for an item without location filter is answered as the union of the item's pairs. The live calendar
@@ -78,6 +80,7 @@ class SlotReader {
 		$slots             = [];
 		$done              = [];
 		$firstBookableDays = []; // by timeframe id, depends on the current date
+		$latestBookingTime = []; // by timeframe id, depends on the current date
 		foreach ( $dates as $date ) {
 			$base     = strtotime( $date );
 			$daySlots = [];
@@ -88,6 +91,14 @@ class SlotReader {
 				}
 				foreach ( $unpacked['days'][ $offset ] ?? [] as [ $start, $end, $timeframeIndex ] ) {
 					[ $timeframeId, $locationId, $itemId ] = $unpacked['timeframes'][ $timeframeIndex ];
+					// booking window: the stored slots are computed without it, the live day drops the timeframe
+					// once its latest possible booking date is before the day ({@see \CommonsBooking\Model\Day})
+					if ( ! array_key_exists( $timeframeId, $latestBookingTime ) ) {
+						$latestBookingTime[ $timeframeId ] = self::getLatestPossibleBookingDateTimestamp( $timeframeId );
+					}
+					if ( $latestBookingTime[ $timeframeId ] === null || $latestBookingTime[ $timeframeId ] < $base ) {
+						continue;
+					}
 					if ( ! $ignoreStartDayOffset ) {
 						if ( ! array_key_exists( $timeframeId, $firstBookableDays ) ) {
 							$firstBookableDays[ $timeframeId ] = self::getFirstBookableDay( $timeframeId );
@@ -270,6 +281,19 @@ class SlotReader {
 	private static function getFirstBookableDay( int $timeframeId ): ?string {
 		try {
 			return ( new Timeframe( $timeframeId ) )->getFirstBookableDay();
+		} catch ( \Exception $e ) {
+			return null;
+		}
+	}
+
+	/**
+	 * @param int $timeframeId
+	 *
+	 * @return int|null timestamp, null if the timeframe does not exist anymore
+	 */
+	private static function getLatestPossibleBookingDateTimestamp( int $timeframeId ): ?int {
+		try {
+			return (int) ( new Timeframe( $timeframeId ) )->getLatestPossibleBookingDateTimestamp();
 		} catch ( \Exception $e ) {
 			return null;
 		}

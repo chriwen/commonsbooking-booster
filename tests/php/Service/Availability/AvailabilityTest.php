@@ -237,6 +237,57 @@ class AvailabilityTest extends CustomPostTypeTest {
 		$this->assertSame( $computations, Calculator::getComputeCount() );
 	}
 
+	/**
+	 * Creates a pair whose timeframe has a booking window of $advanceDays and computes it at $computedAt.
+	 */
+	private function windowPair( int $advanceDays, string $computedAt ): int {
+		$itemId = $this->createItem( 'Window item' );
+		$this->createTimeframe( $this->locationId, $itemId, $this->day( -10 ), $this->day( 120, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd', 0, '8:00 AM', '12:00 PM', 'publish', [ '1', '2', '3', '4', '5', '6', '7' ], '', self::USER_ID, 3, $advanceDays );
+		Indexer::flush();
+		Maintenance::syncPairs();
+		Invalidator::reset();
+		ClockMock::freeze( new \DateTime( $computedAt ) );
+		Calculator::recompute( $itemId, $this->locationId );
+
+		return $itemId;
+	}
+
+	/**
+	 * The stored days don't contain the booking window: after midnight the window moves on, the stored row of the
+	 * evening still answers like the live calculation (it used to keep the last day of the window locked).
+	 */
+	public function testBookingWindowMovesWithTheDate() {
+		$itemId = $this->windowPair( 7, '01.07.2021 23:30' );
+
+		ClockMock::freeze( new \DateTime( '02.07.2021 00:30' ) );
+		$this->assertTrue( $this->isUsable( $itemId, $this->locationId ), 'the row of the evening is still used' );
+		$computations = Calculator::getComputeCount();
+		$statuses     = $this->statuses( $itemId, $this->locationId );
+		$this->assertSame( $computations, Calculator::getComputeCount(), 'answered from the stored row' );
+
+		// 7 days including today
+		$this->assertSame( DayStatus::AVAILABLE, $statuses[ $this->date( 6 ) ] );
+		$this->assertNotSame( DayStatus::AVAILABLE, $statuses[ $this->date( 7 ) ] );
+	}
+
+	/**
+	 * A second bookable timeframe with a shorter booking window than the one of the calendar window: the live
+	 * calculation drops it after its own window, the stored days can't show that and the pair is evaluated live.
+	 */
+	public function testShorterBookingWindowOfAnotherTimeframeIsEvaluatedLive() {
+		$itemId = $this->createItem( 'Two windows' );
+		// closest timeframe until day 3 with 30 days, then one with 5 days
+		$this->createTimeframe( $this->locationId, $itemId, $this->day( -10 ), $this->day( 3, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd', 0, '8:00 AM', '12:00 PM', 'publish', [ '1', '2', '3', '4', '5', '6', '7' ], '', self::USER_ID, 3, 30 );
+		$this->createTimeframe( $this->locationId, $itemId, $this->day( 4 ), $this->day( 120, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd', 0, '8:00 AM', '12:00 PM', 'publish', [ '1', '2', '3', '4', '5', '6', '7' ], '', self::USER_ID, 3, 5 );
+		Indexer::flush();
+		Maintenance::syncPairs();
+		Maintenance::refresh( null, 0 );
+
+		$statuses = $this->statuses( $itemId, $this->locationId );
+		$this->assertSame( DayStatus::AVAILABLE, $statuses[ $this->date( 4 ) ] );
+		$this->assertNotSame( DayStatus::AVAILABLE, $statuses[ $this->date( 5 ) ] );
+	}
+
 	public function testOldRowsAreNotUsed() {
 		ClockMock::freeze( new \DateTime( '02.07.2021 11:00' ) );
 		$this->assertFalse( $this->isUsable( $this->itemId, $this->locationId ) );

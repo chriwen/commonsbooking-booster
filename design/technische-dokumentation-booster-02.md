@@ -402,7 +402,7 @@ nur mit `wp commonsbooking booster purge`.
 | Schema-Klasse, Version | `Index\Schema`, 3 | `Index\Schema`, 3 | `Availability\Schema`, 3 | (dieselbe) |
 | Versionsoption | `commonsbooking_index_schema_version` | (dieselbe) | `commonsbooking_availability_schema_version` | (dieselbe) |
 | bei Strukturänderung | `dbDelta` erweitert, Zeilen bleiben gültig | wie `cb_index` | Tabelle wird verworfen und neu angelegt (reiner Cache) | wie `cb_availability` (beide zusammen) |
-| bei geänderter Ableitungslogik | `Projector::PROJECTOR_VERSION` (2) erhöhen → Neuaufbau | wie `cb_index` | `Calculator::VERSION` (2) erhöhen → alte Zeilen ungültig | wie `cb_availability` |
+| bei geänderter Ableitungslogik | `Projector::PROJECTOR_VERSION` (2) erhöhen → Neuaufbau | wie `cb_index` | `Calculator::VERSION` (3) erhöhen → alte Zeilen ungültig | wie `cb_availability` |
 
 Zwei Regeln für Datentypen: Was gesucht oder verglichen wird, ist eine Zahl (Typ, IDs, Zeitstempel). Und `NULL` hat in
 jeder Spalte eine feste Bedeutung, damit die SQL-Bedingungen das alte `postmeta`-SQL exakt nachbilden.
@@ -613,7 +613,7 @@ Die Tabelle ist ein **reiner Cache**: Jede Zeile kann jederzeit gelöscht werden
 | `slots` | mediumblob, NULL | – | freie buchbare Slots je Tag für API und GBFS (8.7); NULL bei Rollenbeschränkung (8.8) |
 | `has_role_limit` | tinyint(1) | 0 | 1 = mindestens ein buchbarer Zeitrahmen des Paares ist rollenbeschränkt |
 | `computed_at` | datetime (UTC), NULL | – | Zeitpunkt der Berechnung (`gmdate()`) |
-| `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (derzeit 2) |
+| `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (derzeit 3) |
 
 Schlüssel: `PRIMARY (location_id, item_id)`, `KEY item_id` (Invalidierung nur nach Artikel, z. B. Einschränkung für
 alle Standorte), `KEY computed_at` (Cron sucht die ältesten Zeilen).
@@ -682,17 +682,36 @@ Alles, was vom heutigen Datum oder vom angemeldeten Nutzer abhängt, wird beim *
 | Regel | angewendet von | Quelle |
 |---|---|---|
 | Tag liegt in der Vergangenheit | `CalendarWindow::mapDay()` | heutiges Datum |
-| Tag liegt außerhalb des Vorausbuchungsfensters (`advance_days`) | `CalendarWindow` (`lastBookableDate`) | buchbare Zeitrahmen + heute |
+| Tag liegt außerhalb des Vorausbuchungsfensters (`advance_days`) | `CalendarWindow` (`lastBookableDate`); `Reader::getFacts()` rechnet live, wenn ein weiterer buchbarer Zeitrahmen ein kürzeres Fenster hat; `SlotReader` je Zeitrahmen | buchbare Zeitrahmen + heute |
 | Tag liegt vor dem ersten buchbaren Tag (`startday_offset`) | `CalendarWindow` (`firstBookableDay`) | buchbare Zeitrahmen + heute |
 | Tag liegt nach dem Ende des angefragten Bereichs | `CalendarWindow` | Parameter der Anfrage |
 | Status für Karte/Tabelle | `DayStatus::fromDayArray()` | Tagesfakten nach dem Fenster |
 | Rollenbeschränkung | Zeile je Zugriffsprofil in `cb_availability_access` (8.8), Auswahl beim Lesen | Rollen des angemeldeten Nutzers |
 | Slots mit Uhrzeiten für den Buchungskalender der Artikelseite | dort live | – |
 
-Geprüft wurde, dass `Day::getGrid()`, `mapTimeFrames()`, `mapRestrictions()`, `getHigherPrioFrame()` und `isLocked()`
-nur von den Beiträgen abhängen, nicht von `time()`. Alle datumsabhängigen Teile steckten in
-`View\Calendar::getCalendarDataArray()` und `mapDay()` und liegen jetzt in `CalendarWindow`. Eine Ausnahme beschreibt
-31.2 (`Timeframe::isBookable()`).
+`Day::getGrid()`, `mapTimeFrames()`, `mapRestrictions()`, `getHigherPrioFrame()` und `isLocked()` hängen von den
+Beiträgen ab und an einer Stelle von `time()`: `Timeframe::getEndDate()` kürzt das Ende eines buchbaren Zeitrahmens auf
+das Vorausbuchungsfenster (`getLatestPossibleBookingDateTimestamp()`), und `isBookable()` fragt dasselbe Fenster ab.
+Beides nutzen `Model\Day`, `Model\Week` und `Repository\Timeframe::filterTimeframesForTimerange()`. Deshalb rechnet
+`Calculator::computeDays()` innerhalb von `Timeframe::withoutBookingWindow()`: Die gespeicherten Tagesfakten enthalten
+den Zeitrahmen bis zu seinem eigentlichen Ende, das Fenster wird beim Lesen angewendet (Tabelle oben).
+
+**Entscheidung (Frontendtest 12.11.2026, F1):** Vorher steckte das Fenster vom Rechenzeitpunkt in der Zeile. Nach
+Mitternacht blieb der letzte Tag des Fensters gesperrt, bis die Zeile neu berechnet war (bis zu 12 h), und der nächtliche
+Verifier meldete solche Paare als veraltet. Verworfen wurde, Zeilen mit Vorausbuchungsfenster um Mitternacht neu zu
+berechnen: Das sind fast alle Paare, und es bliebe eine Lücke bis zum Cron-Lauf. Das Fenster beim Lesen anzuwenden
+kostet nichts, `CalendarWindow` tut es ohnehin. Zwei Fälle brauchen eigene Regeln:
+
+- **Mehrere buchbare Zeitrahmen mit verschiedenen Fenstern:** `CalendarWindow` nimmt das Fenster des nächsten buchbaren
+  Zeitrahmens. Der Live-Weg schneidet jeden anderen Zeitrahmen zusätzlich an seinem eigenen Fenster ab. Endet das
+  Fenster eines buchbaren Zeitrahmens vor dem letzten benötigten Tag und vor dem Ende des Zeitrahmens, liefert
+  `Reader::getFacts()` `null` und das Paar wird live berechnet. Das ist selten (Zeitrahmen mit unterschiedlichen
+  Fenstern hintereinander).
+- **Slots (API, GBFS):** `SlotReader` wirft je Zeitrahmen die Slots nach `getLatestPossibleBookingDateTimestamp()` weg,
+  wie er es schon mit dem ersten buchbaren Tag tut.
+
+`Calculator::VERSION = 3` macht die alten Zeilen ungültig; sie werden live beantwortet, bis Cron oder ein Aufruf sie
+neu berechnet. Downgrade: Eine ältere Version erkennt Version 3 nicht als ihre eigene und rechnet neu.
 
 Ohne Rollenbeschränkung ist das Ergebnis für alle Nutzer gleich, auch für Admins:
 `commonsbooking_isCurrentUserAllowedToBook()` liefert bei leerer Rollenliste immer `true`. Mit Rollenbeschränkung
@@ -2334,9 +2353,7 @@ Neu öffentlich in bestehenden Klassen: `Calendar::getAvailabilitySlotsLive()`, 
 - Schreibvorgänge an den Hooks vorbei sieht der Index erst über Wächter oder Verifier (20.2); Verfügbarkeitszeilen
   verfallen spätestens nach 24 h. Buchungen bleiben in jedem Fall korrekt geprüft.
 - Anfragen über den Horizont hinaus und rollenbeschränkte Paare jenseits von 8 Zugriffsprofilen werden live berechnet.
-- `Timeframe::isBookable()` (Vorausbuchungsfenster) hängt vom heutigen Datum ab und fließt beim Berechnen in die Auswahl
-  der Zeitrahmen ein. Rückt ein Zeitrahmen ins Vorausbuchungsfenster, kann eine Zeile bis zur nächsten Neuberechnung
-  (ab 12 h, höchstens 24 h) veraltet sein.
+- Das Vorausbuchungsfenster wird nicht gespeichert, sondern beim Lesen angewendet (8.4, seit `Calculator::VERSION = 3`).
 - Die Wiederholungs- und Rasterspalten in `cb_index` werden gepflegt, aber noch nicht für Abfragen genutzt.
 
 ### 31.3 Offene Punkte

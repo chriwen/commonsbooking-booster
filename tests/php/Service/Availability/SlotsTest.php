@@ -176,6 +176,22 @@ class SlotsTest extends CustomPostTypeTest {
 		$this->assertSameAsLive( $this->date( 0 ), $this->date( 9 ), [], [ $this->offsetItemId ] );
 	}
 
+	public function testBookingWindowIsAppliedOnRead() {
+		// booking window of 7 days, computed in the evening, read after midnight
+		$itemId = $this->createItem( 'Window item' );
+		$this->createTimeframe( $this->locationId, $itemId, $this->day( -10 ), $this->day( 120, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd', 0, '8:00 AM', '12:00 PM', 'publish', [ '1', '2', '3', '4', '5', '6', '7' ], '', self::USER_ID, 3, 7 );
+		Indexer::flush();
+		Maintenance::syncPairs();
+		Invalidator::reset();
+		ClockMock::freeze( new \DateTime( '01.07.2021 23:30' ) );
+		Calculator::recompute( $itemId, $this->locationId );
+
+		ClockMock::freeze( new \DateTime( '02.07.2021 00:30' ) );
+		$days = $this->days( $this->assertSameAsLive( $this->date( 0 ), $this->date( 9 ), [ $this->locationId ], [ $itemId ] ) );
+		$this->assertContains( $this->date( 6 ), $days );
+		$this->assertNotContains( $this->date( 7 ), $days );
+	}
+
 	public function testChangesAreVisibleImmediately() {
 		$this->createBooking( $this->locationId, $this->itemId, $this->day( 5 ), $this->day( 5, '23:59:59' ) );
 		Indexer::flush();

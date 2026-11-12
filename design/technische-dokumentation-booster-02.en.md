@@ -399,7 +399,7 @@ with `wp commonsbooking booster purge`.
 | schema class, version | `Index\Schema`, 3 | `Index\Schema`, 3 | `Availability\Schema`, 3 | (the same) |
 | version option | `commonsbooking_index_schema_version` | (the same) | `commonsbooking_availability_schema_version` | (the same) |
 | on structural change | `dbDelta` extends, rows stay valid | like `cb_index` | table is dropped and recreated (pure cache) | like `cb_availability` (both together) |
-| on changed derivation logic | increment `Projector::PROJECTOR_VERSION` (2) → rebuild | like `cb_index` | increment `Calculator::VERSION` (2) → old rows invalid | like `cb_availability` |
+| on changed derivation logic | increment `Projector::PROJECTOR_VERSION` (2) → rebuild | like `cb_index` | increment `Calculator::VERSION` (3) → old rows invalid | like `cb_availability` |
 
 Two rules for data types: whatever is searched or compared is a number (type, IDs, timestamps). And `NULL` has a fixed
 meaning in every column, so the SQL conditions reproduce the old `postmeta` SQL exactly.
@@ -610,7 +610,7 @@ The table is a **pure cache**: every row can be deleted at any time and is recre
 | `slots` | mediumblob, NULL | – | free bookable slots per day for API and GBFS (8.7); NULL with role limit (8.8) |
 | `has_role_limit` | tinyint(1) | 0 | 1 = at least one bookable timeframe of the pair is role-limited |
 | `computed_at` | datetime (UTC), NULL | – | time of computation (`gmdate()`) |
-| `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (currently 2) |
+| `calc_version` | smallint unsigned | 0 | `Calculator::VERSION` (currently 3) |
 
 Keys: `PRIMARY (location_id, item_id)`, `KEY item_id` (invalidation by item only, e.g. a restriction for all
 locations), `KEY computed_at` (cron looks for the oldest rows).
@@ -679,16 +679,35 @@ Everything that depends on today's date or on the logged-in user is applied on *
 | Rule | applied by | Source |
 |---|---|---|
 | day is in the past | `CalendarWindow::mapDay()` | today's date |
-| day is outside the advance-booking window (`advance_days`) | `CalendarWindow` (`lastBookableDate`) | bookable timeframes + today |
+| day is outside the advance-booking window (`advance_days`) | `CalendarWindow` (`lastBookableDate`); `Reader::getFacts()` computes live when another bookable timeframe has a shorter window; `SlotReader` per timeframe | bookable timeframes + today |
 | day is before the first bookable day (`startday_offset`) | `CalendarWindow` (`firstBookableDay`) | bookable timeframes + today |
 | day is after the end of the requested range | `CalendarWindow` | request parameters |
 | status for map/table | `DayStatus::fromDayArray()` | day facts after the window |
 | role limit | row per access profile in `cb_availability_access` (8.8), chosen on reading | roles of the logged-in user |
 | slots with times for the booking calendar of the item page | live there | – |
 
-It was verified that `Day::getGrid()`, `mapTimeFrames()`, `mapRestrictions()`, `getHigherPrioFrame()` and `isLocked()`
-depend only on the posts, not on `time()`. All date-dependent parts were in `View\Calendar::getCalendarDataArray()`
-and `mapDay()` and now live in `CalendarWindow`. One exception is described in 31.2 (`Timeframe::isBookable()`).
+`Day::getGrid()`, `mapTimeFrames()`, `mapRestrictions()`, `getHigherPrioFrame()` and `isLocked()` depend on the posts
+and in one place on `time()`: `Timeframe::getEndDate()` cuts the end of a bookable timeframe to the advance-booking
+window (`getLatestPossibleBookingDateTimestamp()`), and `isBookable()` checks the same window. Both are used by
+`Model\Day`, `Model\Week` and `Repository\Timeframe::filterTimeframesForTimerange()`. Therefore
+`Calculator::computeDays()` computes inside `Timeframe::withoutBookingWindow()`: the stored day facts contain the
+timeframe up to its real end, the window is applied on reading (table above).
+
+**Decision (frontend test 12 Nov 2026, F1):** Before, the row contained the window as of the computation time. After
+midnight the last day of the window stayed locked until the row was recomputed (up to 12 h), and the nightly verifier
+reported such pairs as outdated. Rejected: recomputing rows with an advance-booking window at midnight. That is almost
+every pair, and a gap until the cron run would remain. Applying the window on reading costs nothing, `CalendarWindow`
+does it anyway. Two cases need their own rules:
+
+- **Several bookable timeframes with different windows:** `CalendarWindow` takes the window of the closest bookable
+  timeframe. The live path additionally cuts every other timeframe at its own window. If the window of a bookable
+  timeframe ends before the last needed day and before the end of the timeframe, `Reader::getFacts()` returns `null`
+  and the pair is computed live. This is rare (consecutive timeframes with different windows).
+- **Slots (API, GBFS):** `SlotReader` drops the slots after `getLatestPossibleBookingDateTimestamp()` per timeframe, as
+  it already does with the first bookable day.
+
+`Calculator::VERSION = 3` invalidates the old rows; they are answered live until cron or a request recomputes them.
+Downgrade: an older version does not recognise version 3 as its own and recomputes.
 
 Without a role limit the result is the same for all users, including admins:
 `commonsbooking_isCurrentUserAllowedToBook()` always returns `true` for an empty role list. With a role limit it only
@@ -2322,9 +2341,7 @@ New public members in existing classes: `Calendar::getAvailabilitySlotsLive()`, 
 - The index only sees writes bypassing the hooks via guard or verifier (20.2); availability rows expire after 24 h at
   the latest. Bookings are validated correctly in every case.
 - Requests beyond the horizon and role-limited pairs beyond 8 access profiles are computed live.
-- `Timeframe::isBookable()` (advance-booking window) depends on today's date and influences the selection of timeframes
-  during computation. When a timeframe moves into the advance-booking window, a row can be outdated until the next
-  recomputation (from 12 h, at most 24 h).
+- The advance-booking window is not stored but applied on reading (8.4, since `Calculator::VERSION = 3`).
 - The repetition and grid columns in `cb_index` are maintained but not yet used for queries.
 
 ### 31.3 Open points

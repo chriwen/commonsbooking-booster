@@ -171,6 +171,9 @@ class Reader {
 		if ( ! $needed ) {
 			return [];
 		}
+		if ( $this->hasShorterBookingWindow( $itemId, $locationId, ( new Day( end( $needed ) ) )->getStartTimestamp() ) ) {
+			return null;
+		}
 
 		$row = Store::get( $itemId, $locationId );
 		if ( Store::isUsable( $row ) ) {
@@ -205,6 +208,36 @@ class Reader {
 		}
 
 		return self::factsFromComputed( $computed, $needed );
+	}
+
+	/**
+	 * Whether a bookable timeframe of the pair ends its own booking window before the last needed day.
+	 *
+	 * The stored days are computed without booking window ({@see Calculator}). The window of the calendar comes from
+	 * the closest bookable timeframe ({@see CalendarWindow}), but the calendar json also drops every other timeframe
+	 * from the days after its own latest possible booking date ({@see \CommonsBooking\Model\Day}). The stored days
+	 * can't show that, such pairs are evaluated live. Usually a pair has one bookable timeframe at a time.
+	 *
+	 * @param int $itemId
+	 * @param int $locationId
+	 * @param int $lastDayStart start timestamp of the last needed day
+	 *
+	 * @return bool
+	 */
+	private function hasShorterBookingWindow( int $itemId, int $locationId, int $lastDayStart ): bool {
+		foreach ( $this->bookableTimeframes[ $locationId ][ $itemId ] ?? [] as $timeframe ) {
+			$latest = $timeframe->getLatestPossibleBookingDateTimestamp();
+			if ( $latest >= $lastDayStart ) {
+				continue;
+			}
+			// the window only matters if the timeframe lasts longer
+			$end = $timeframe->getRawEndDate();
+			if ( ! $end || $end > $latest ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
