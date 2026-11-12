@@ -4807,7 +4807,7 @@ msgstr "Website"
 
 #: src/Service/Booster/SettingsView.php:746
 msgid "admin"
-msgstr "Verwaltung"
+msgstr "admin"
 
 #: src/Service/Booster/SettingsView.php:747
 msgid "scheduled task"
