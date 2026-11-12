@@ -105,6 +105,18 @@ limited to 1826 days (filter `commonsbooking_stats_max_history_days`).
   `before_delete_post`) only collect post IDs. At the end of the request (`shutdown`) the booking rows are projected
   again (meta such as `cancellation_time` is written after the status change) and the affected pairs are marked dirty
   from the start day. At most 2 pairs are computed immediately, the rest by WP-Cron (single event +30 s).
+- **Cancellation via SQL (12 Nov 2026):** `Model\Booking::cancel()` sets the status with direct SQL, without
+  `transition_post_status` (e.g. when a total-breakdown restriction is sent). Therefore `Stats` also listens to
+  `added_post_meta`/`updated_post_meta` with the key `cancellation_time` on bookings (`Stats::onMetaChange`). The
+  booster index uses the same path. Found in the frontend test (F2).
+- **Changes without this code (12 Nov 2026, decision):** downgrade, database import or code bypassing the hooks.
+  The statistics have no guard of their own but use the booster's (`Booster\Guard`). The guard fires
+  `commonsbooking_booster_rebuild` when it rebuilds the index (version change, post without index row, many changes,
+  missing tables) and `commonsbooking_booster_repaired` with the ids of individually repaired posts.
+  `Stats::onBoosterRebuild` then calls `Build::start()` (not `ready` until finished), `onBoosterRepaired` projects the
+  affected bookings again, deleted ones included. A manual index rebuild (`manual`) triggers nothing. Rejected: a
+  second guard for the statistics (duplicated logic, its own sources of error). Limit: with the booster switched off
+  there is no reconciliation, `wp commonsbooking stats rebuild` helps then. Found in the frontend test (F3).
 - **Nightly run (00:20):** discover new pairs, recompute yesterday and today for all pairs (rollover; also catches
   cases the hooks miss, e.g. timeframes selecting items by category or list).
 - **Initial build:** `wp commonsbooking stats enable` or `rebuild`; the queue runs in 20-second WP-Cron slices. Until

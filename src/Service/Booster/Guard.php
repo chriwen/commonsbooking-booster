@@ -191,6 +191,12 @@ class Guard {
 		foreach ( $result['orphans'] as $postId ) {
 			Projector::remove( $postId );
 		}
+		/**
+		 * Posts changed or deleted without the hooks were repaired in the index.
+		 *
+		 * @param int[] $postIds changed and deleted posts
+		 */
+		do_action( 'commonsbooking_booster_repaired', array_merge( $result['changed'], $result['orphans'] ) );
 		commonsbooking_write_log(
 			sprintf(
 				'Booster guard repaired index rows changed without the booster: posts %s, removed rows of deleted posts %s',
@@ -224,6 +230,8 @@ class Guard {
 					],
 				]
 			);
+			/** This action is documented in {@see self::rebuild()} */
+			do_action( 'commonsbooking_booster_rebuild', 'tables_missing', [] );
 
 			return;
 		}
@@ -254,6 +262,13 @@ class Guard {
 				],
 			]
 		);
+		/**
+		 * The index is rebuilt because it is outdated (or on request, code `manual`).
+		 *
+		 * @param string $code see {@see self::describeRebuild()}
+		 * @param array  $args
+		 */
+		do_action( 'commonsbooking_booster_rebuild', $code, $args );
 
 		return $reason;
 	}
