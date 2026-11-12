@@ -1,0 +1,119 @@
+# Occupancy plan in the admin area
+
+Status: stages 1 to 3 implemented in branch `feature/belegungsplan` (based on `booster/index-availability`), not committed.
+No new tables, options or post meta, so downgradable. Works with and without the booster.
+German version: `belegungsplan.md`.
+
+## Goal
+
+Admins and CB managers see for a location at a glance **when which item is booked by whom** and **why a day is not
+bookable** (holidays, repair, restriction, no timeframe, beyond the advance booking period), with direct links to edit.
+
+## Decisions of the user (2026-11-12)
+
+- **Admin area only.** An info layer in the frontend calendar (tooltip per day) was rejected.
+- **CB managers may see all booking data at a location** they manage, including items they do not manage.
+- **Freely selectable period, also beyond the advance booking period**, and into the past.
+
+## Presentation
+
+Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-plan`), plus row action
+"Occupancy plan" in the location and item lists.
+
+- **Two views** (tabs): **By location** (rows = items of the location) and **By item** (rows = locations of the item,
+  `view=item`).
+- **Selection:** location or item, category of the rows (item category or location category; only if categories with
+  entries exist), "Show canceled bookings"; second line: start date, period (1, 2, 4, 8 weeks, 3, 6, 12 months), day
+  width, paging ← Today →. Default: 4 weeks from today − 3 days. At most 366 days.
+- **Day width:** "Automatic" depends on the period (up to 2 weeks 96 px, 4 weeks 64 px, 8 weeks 44 px, 3 months
+  28 px, longer 18 px), or fixed from very narrow to very wide. Wider days because names were unreadable at 30 px
+  (feedback of the user).
+- **Timeline:** columns = days (month and day header sticky, weekday from 28 px, today marked, weekends shaded, week and
+  month starts as stronger lines), rows = items or locations (column sticky, link to edit with edit permission).
+- **Bar labels** by width: full name from 60 px, below that initials for bookings and no text for blocks. The tooltip
+  shows the rest.
+- **Row "All items of the location"** or "All locations of the item" (top, only if needed): blocks that occur identically in *every* item row (same
+  post, same days) are moved there instead of being repeated. Only with two or more rows.
+- **Layers per row:**
+  1. bookable timeframe as light green, semi-transparent background with a green top edge on the days it applies
+     (weekdays, manual dates, repetition); white = no timeframe;
+  2. blocks as bars: holidays/closed (yellow), blocked/repair (dark red), restriction total breakdown (red), notice
+     (yellow outline); inactive restrictions and unpublished timeframes faded;
+  3. bookings as bars with the name of the booking user; unconfirmed dashed, canceled struck through.
+  Overlapping bars get their own lanes (blocks first, then bookings; each lane is filled as far as possible).
+- **Conflicts** (stage 2): bookings with a red outline and ⚠, counter "⚠ n" at the row. A conflict means: no bookable
+  timeframe or location closed (holiday) on the pickup or return day, or overlap with a block that cannot be
+  overbooked (blocked/repair, active total breakdown). Pickup and return day are only checked if they are in the
+  period. Canceled bookings have no conflicts. It shows today's rules, not whether the booking was valid back then.
+- **End of the advance booking period:** days after the latest booking window end of the bookable timeframes are
+  hatched. If the timeframe ends earlier, there is no hatching.
+- Bars that continue outside the period have square ends on that side.
+
+## Interaction
+
+- **Click on a bar** opens a side panel: kind, title, conflicts, details, "Edit" button (only with edit permission).
+  Esc or × closes it.
+- **Click on a day** (stage 2, "Why is this day like this?"): cell = this day for this row, day header = all rows. The
+  panel shows the result as the booking calendar sees it (bookable, partially booked, booked/blocked for the whole day,
+  all slots locked, holidays/closed, no timeframe), notes on the past and the advance booking period, and below all
+  reasons (timeframes, restrictions, bookings) expandable with details and edit link. Loaded via AJAX.
+- **Tooltip on hover** as its own element (`position: fixed`, on top) instead of `title`: the native `title` was hidden
+  by the scroll area and the sticky column (feedback of the user). Also on keyboard focus.
+- Timeframe details: period, repetition, weekdays or dates, time, maximum booking days, advance booking days, role
+  restriction, status (if not published).
+- Restriction details: period, state, hint text.
+- Booking details: period, status, name, email, phone (if present), booking code, comment, booked on.
+- Read-only, bookings cannot be moved.
+
+## Permissions
+
+- Page: capability `manage_commonsbooking` (admins and CB managers).
+- Locations: `Repository\Location::getByCurrentUser()`, i.e. all for admins, otherwise the locations the user manages
+  or authored. Another location in the URL falls back to the first allowed one.
+- Items (view by item): `Repository\Item::getByCurrentUser()` accordingly. All locations where the item has a
+  timeframe are shown, with all bookings (in line with the decision above).
+- For an allowed location **all** bookings are shown with full data (decision above). Edit links still check
+  `commonsbooking_isCurrentUserAllowedToEdit()`, so existing permissions do not change.
+- Day explanation via AJAX (`wp_ajax_cb_occupancy_day`): nonce, capability `manage_commonsbooking` and allowed
+  location or item are checked on every request.
+- No cache for the page (the calendar JSON is keyed by roles only and must not contain names).
+
+## Technical notes
+
+- `Service\OccupancyPlan::build( $locationId, $from, $to, $withCanceled, $onlyRows )` and `buildForItem( $itemId, … )`
+  return view, days, rows (`row_id`, `item_id`, `location_id`, `conflicts`), segments (`kind`, `post_id`, `from`/`to`
+  as day index, `clip_start`/`clip_end`, `lane`, `label`, `state`, `conflict`) and the details per post. `$onlyRows` is
+  the category filter (ids from `get_objects_in_term()`).
+- `explainDay( $view, $id, $date, $rowId )` builds the plan for one day and returns per row `dayResult()` (result via
+  `DayFacts::fromGrid()` of `Model\Day`, i.e. the same evaluation as the calendar) and the reasons.
+  `View\Admin\OccupancyPlan` renders a CSS grid (subgrid per row); the panel is a small inline script without
+  dependencies.
+- **Plan rendered on the server** (deviation from the concept): the page reloads via GET. Only the day explanation
+  uses AJAX, because it computes the calendar grid per day, which would be too expensive for all days on page load. The details of all visible posts are embedded as JSON, for permitted users only.
+- **Data sources:**
+  - Items of the location: bookable timeframes of the location in the period (`Repository\Timeframe::getInRange`)
+    plus items with bookings in the period.
+  - Timeframes per item: `getInRange( …, [ $location ], [ $item ], [ bookable, holidays, repair ] )` like
+    `Model\Calendar`, so lists, categories and "all" are included.
+  - Restrictions: `Repository\Restriction::get()` with the statuses from `Day::RESTRICTION_STATUSES`.
+  - Bookings: `Repository\Booking::getByTimerange()`; uses the index when the booster is on.
+- **Same rules as the calendar:** whether a timeframe applies on a day is decided by
+  `Repository\Timeframe::filterTimeframesForTimerange()` and `Model\Day::isInTimeframe()`, run inside
+  `Model\Timeframe::withoutBookingWindow()` so that days after the advance booking period are shown too. No second
+  implementation of the repetition rules.
+- **Tests** (`tests/php/Service/OccupancyPlanTest.php`): weekdays and booking window, bookings with status and
+  clipping, station row, restriction without end, lanes, permissions for CB managers, comparison with `DayFacts` from
+  the calendar grid, same result with and without the booster, view by item and category filter, conflicts (holiday on
+  the pickup day, block, no timeframe, clipping), day explanation (reasons, result, notes).
+
+## Stages
+
+1. **Done:** timeline per location, detail panel, permissions, tests.
+2. **Done:** "Why is this day like this?" and conflict marking.
+3. **Done:** view per item, filter by category; plus reworked layout (day width, tooltip).
+4. Optional: print/export, link with `feature/dashboard`.
+
+## Open questions
+
+- Default period and an "all locations" selection for admins.
+- Hourly bookings currently show only the day; the time is in the panel.
