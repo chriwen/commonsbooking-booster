@@ -98,6 +98,12 @@ bleiben englisch). `languages/commonsbooking.pot` wurde wie in `bin/update-pot.s
 mit `wp i18n make-mo` erzeugt. Das Plugin lädt die eigene `.mo` vor dem Sprachpaket von wordpress.org, die
 Übersetzungen wirken also sofort.
 
+**Kurze Begriffe immer mit Kontext (12.11.2026):** Das Original-Template `shortcode-bookings.php` schickt Filterwerte,
+also auch Benutzer-, Artikel- und Standortnamen, durch `__( $value )`. Eine kontextlose msgid wie „admin“ oder
+„website“ übersetzt dann einen gleichnamigen Benutzer im Buchungsfilter mit (Frontendtest F4: „admin“ erschien als
+„Verwaltung“). Die Begriffe des Aktivitätsprotokolls stehen deshalb in `_x( …, 'index activity' )`. Neue kurze
+Einzelwörter des Boosters bekommen ebenso einen Kontext. „admin“ bleibt auch im Deutschen „admin“.
+
 ## Symfony-Cache und Booster
 
 Alle Messwerte des Boosters stammen aus Umgebungen mit `WP_DEBUG`, also ohne den Plugin-Cache. Karte und Tabelle

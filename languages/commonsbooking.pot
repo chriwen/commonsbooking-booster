@@ -2370,30 +2370,37 @@ msgid "No changes recorded since the booster was switched on."
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:740
+msgctxt "index activity"
 msgid "added"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:741
+msgctxt "index activity"
 msgid "changed"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:742
+msgctxt "index activity"
 msgid "removed"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:745
+msgctxt "index activity"
 msgid "website"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:746
+msgctxt "index activity"
 msgid "admin"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:747
+msgctxt "index activity"
 msgid "scheduled task"
 msgstr ""
 
 #: src/Service/Booster/SettingsView.php:748
+msgctxt "index activity"
 msgid "WP-CLI"
 msgstr ""
 

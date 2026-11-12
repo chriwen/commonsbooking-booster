@@ -751,15 +751,15 @@ class SettingsView {
 			return;
 		}
 		$actions = [
-			'created' => __( 'added', 'commonsbooking' ),
-			'changed' => __( 'changed', 'commonsbooking' ),
-			'removed' => __( 'removed', 'commonsbooking' ),
+			'created' => _x( 'added', 'index activity', 'commonsbooking' ),
+			'changed' => _x( 'changed', 'index activity', 'commonsbooking' ),
+			'removed' => _x( 'removed', 'index activity', 'commonsbooking' ),
 		];
 		$sources = [
-			'frontend' => __( 'website', 'commonsbooking' ),
-			'admin'    => __( 'admin', 'commonsbooking' ),
-			'cron'     => __( 'scheduled task', 'commonsbooking' ),
-			'cli'      => __( 'WP-CLI', 'commonsbooking' ),
+			'frontend' => _x( 'website', 'index activity', 'commonsbooking' ),
+			'admin'    => _x( 'admin', 'index activity', 'commonsbooking' ),
+			'cron'     => _x( 'scheduled task', 'index activity', 'commonsbooking' ),
+			'cli'      => _x( 'WP-CLI', 'index activity', 'commonsbooking' ),
 		];
 		echo '<table class="widefat striped cb-booster-table"><thead><tr>';
 		foreach ( [ __( 'Time', 'commonsbooking' ), __( 'Post', 'commonsbooking' ), __( 'Action', 'commonsbooking' ), __( 'Status', 'commonsbooking' ), __( 'Source', 'commonsbooking' ), __( 'Index now', 'commonsbooking' ) ] as $head ) {

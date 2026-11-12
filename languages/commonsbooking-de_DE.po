@@ -4790,30 +4790,37 @@ msgid "No changes recorded since the booster was switched on."
 msgstr "Seit dem Einschalten des Boosters wurden keine Änderungen erfasst."
 
 #: src/Service/Booster/SettingsView.php:740
+msgctxt "index activity"
 msgid "added"
 msgstr "hinzugefügt"
 
 #: src/Service/Booster/SettingsView.php:741
+msgctxt "index activity"
 msgid "changed"
 msgstr "geändert"
 
 #: src/Service/Booster/SettingsView.php:742
+msgctxt "index activity"
 msgid "removed"
 msgstr "entfernt"
 
 #: src/Service/Booster/SettingsView.php:745
+msgctxt "index activity"
 msgid "website"
 msgstr "Website"
 
 #: src/Service/Booster/SettingsView.php:746
+msgctxt "index activity"
 msgid "admin"
 msgstr "admin"
 
 #: src/Service/Booster/SettingsView.php:747
+msgctxt "index activity"
 msgid "scheduled task"
 msgstr "geplante Aufgabe"
 
 #: src/Service/Booster/SettingsView.php:748
+msgctxt "index activity"
 msgid "WP-CLI"
 msgstr "WP-CLI"
 
