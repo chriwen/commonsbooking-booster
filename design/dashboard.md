@@ -108,6 +108,19 @@ Der Verlauf ist auf 1826 Tage begrenzt (Filter `commonsbooking_stats_max_history
   `before_delete_post`) sammeln nur Post-IDs. Am Ende der Anfrage (`shutdown`) werden Buchungszeilen neu projiziert
   (Meta wie `cancellation_time` entsteht erst nach dem Statuswechsel) und die betroffenen Paare ab dem Starttag als
   „dirty“ markiert. Höchstens 2 Paare werden sofort berechnet, der Rest per WP-Cron (Einzelereignis +30 s).
+- **Storno per SQL (12.11.2026):** `Model\Booking::cancel()` setzt den Status per direktem SQL, ohne
+  `transition_post_status` (z. B. beim „Senden“ einer Totalausfall-Einschränkung). Deshalb hört `Stats` zusätzlich
+  auf `added_post_meta`/`updated_post_meta` mit dem Schlüssel `cancellation_time` bei Buchungen
+  (`Stats::onMetaChange`). Der Booster-Index nutzt denselben Weg. Gefunden im Frontendtest (F2).
+- **Änderungen ohne diesen Code (12.11.2026, Entscheidung):** Downgrade, DB-Import oder Code, der die Hooks umgeht.
+  Die Statistik hat keinen eigenen Wächter, sondern nutzt den des Boosters (`Booster\Guard`). Der Guard löst
+  `commonsbooking_booster_rebuild` aus, wenn er den Index neu aufbaut (Versionswechsel, Beitrag ohne Index, viele
+  Änderungen, fehlende Tabellen), und `commonsbooking_booster_repaired` mit den IDs einzeln reparierter Beiträge.
+  `Stats::onBoosterRebuild` startet dann `Build::start()` (bis zum Ende nicht `ready`), `onBoosterRepaired` projiziert
+  die betroffenen Buchungen neu, auch gelöschte. Ein manueller Index-Neuaufbau (`manual`) löst nichts aus.
+  Verworfen: ein zweiter Wächter für die Statistik (doppelte Logik, eigene Fehlerquellen). Grenze: Bei
+  ausgeschaltetem Booster gibt es keinen Abgleich, dann hilft `wp commonsbooking stats rebuild`. Gefunden im
+  Frontendtest (F3).
 - **Nachtlauf (00:20):** neue Paare finden, gestern und heute aller Paare neu berechnen (Rollover; fängt auch Fälle ab,
   die die Hooks nicht erfassen, z. B. Zeitrahmen mit Kategorie- oder Listenauswahl).
 - **Erstaufbau:** `wp commonsbooking stats enable` bzw. `rebuild`; Warteschlange in 20-Sekunden-Läufen per WP-Cron.

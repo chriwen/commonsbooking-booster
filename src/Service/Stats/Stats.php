@@ -72,6 +72,10 @@ class Stats {
 		}
 
 		add_action( 'transition_post_status', [ self::class, 'onTransition' ], 10, 3 );
+		add_action( 'added_post_meta', [ self::class, 'onMetaChange' ], 10, 3 );
+		add_action( 'updated_post_meta', [ self::class, 'onMetaChange' ], 10, 3 );
+		add_action( 'commonsbooking_booster_rebuild', [ self::class, 'onBoosterRebuild' ] );
+		add_action( 'commonsbooking_booster_repaired', [ self::class, 'onBoosterRepaired' ] );
 		add_action( 'save_post_' . Timeframe::$postType, [ self::class, 'onOtherSaved' ] );
 		add_action( 'save_post_' . Restriction::$postType, [ self::class, 'onOtherSaved' ] );
 		add_action( 'before_delete_post', [ self::class, 'onDelete' ] );
@@ -148,6 +152,63 @@ class Stats {
 		}
 		if ( $post->post_type === Booking::$postType ) {
 			self::$bookings[] = (int) $post->ID;
+		}
+	}
+
+	/**
+	 * `Model\Booking::cancel()` sets the status with direct SQL, without `transition_post_status`. The meta
+	 * `cancellation_time` written right after it is the only hook of that path (the booster index uses it as well).
+	 *
+	 * @param int    $metaId
+	 * @param int    $postId
+	 * @param string $metaKey
+	 *
+	 * @return void
+	 */
+	public static function onMetaChange( $metaId, $postId, $metaKey ): void {
+		if ( $metaKey === 'cancellation_time' && get_post_type( (int) $postId ) === Booking::$postType ) {
+			self::$bookings[] = (int) $postId;
+		}
+	}
+
+	/**
+	 * The booster guard found changes made while this code did not run (downgrade, database import, posts created by
+	 * other code) and rebuilds the index. The statistics are outdated in the same way and are rebuilt too.
+	 * A manual rebuild of the index says nothing about the statistics.
+	 *
+	 * @param string $code see {@see \CommonsBooking\Service\Booster\Guard::describeRebuild()}
+	 *
+	 * @return void
+	 */
+	public static function onBoosterRebuild( $code ): void {
+		if ( $code === 'manual' ) {
+			return;
+		}
+		commonsbooking_write_log( 'Statistics: rebuilding together with the booster index. Reason: ' . $code );
+		Build::start();
+	}
+
+	/**
+	 * The booster guard repaired single posts changed without the hooks: the bookings among them are projected again.
+	 *
+	 * @param int[] $postIds changed and deleted posts
+	 *
+	 * @return void
+	 */
+	public static function onBoosterRepaired( $postIds ): void {
+		global $wpdb;
+		$ids = array_values( array_filter( array_map( 'intval', (array) $postIds ) ) );
+		if ( ! $ids ) {
+			return;
+		}
+		// deleted posts have no type any more, they are found by their row in the booking table
+		$list = implode( ',', $ids );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$known = array_map( 'intval', $wpdb->get_col( 'SELECT booking_id FROM ' . Schema::booking() . " WHERE booking_id IN ($list)" ) );
+		foreach ( $ids as $postId ) {
+			if ( in_array( $postId, $known, true ) || get_post_type( $postId ) === Booking::$postType ) {
+				self::$bookings[] = $postId;
+			}
 		}
 	}
 

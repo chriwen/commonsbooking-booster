@@ -245,6 +245,111 @@ class StatsTest extends CustomPostTypeTest {
 		}
 	}
 
+	private function bookingRow( int $bookingId ): ?array {
+		global $wpdb;
+		return $wpdb->get_row( 'SELECT * FROM ' . Schema::booking() . ' WHERE booking_id = ' . $bookingId, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	}
+
+	/**
+	 * Model\Booking::cancel() sets the status with direct SQL (no transition_post_status), e.g. when a restriction
+	 * is sent. The cancellation must arrive anyway.
+	 */
+	public function testCancelWithoutStatusTransitionIsCounted() {
+		Stats::enable();
+		$this->finishBuild();
+		$bookingId = $this->booking( $this->locationId, $this->itemId, $this->day( 2 ), $this->day( 2, '23:59:59' ) );
+		Stats::onTransition( 'confirmed', 'unconfirmed', get_post( $bookingId ) );
+		Stats::flush();
+		$this->assertSame( 'confirmed', $this->bookingRow( $bookingId )['status'] );
+
+		// the hooks Stats::init() registers when the statistics are switched on
+		add_action( 'added_post_meta', [ Stats::class, 'onMetaChange' ], 10, 3 );
+		add_action( 'updated_post_meta', [ Stats::class, 'onMetaChange' ], 10, 3 );
+		try {
+			( new \CommonsBooking\Model\Booking( $bookingId ) )->cancel();
+		} finally {
+			remove_action( 'added_post_meta', [ Stats::class, 'onMetaChange' ] );
+			remove_action( 'updated_post_meta', [ Stats::class, 'onMetaChange' ] );
+		}
+		Stats::flush();
+
+		$row = $this->bookingRow( $bookingId );
+		$this->assertSame( 'canceled', $row['status'] );
+		$this->assertNotNull( $row['canceled_ts'] );
+	}
+
+	public function testOtherMetaChangesAreIgnored() {
+		$bookingId = $this->booking( $this->locationId, $this->itemId, $this->day( 2 ), $this->day( 2, '23:59:59' ) );
+		Stats::onMetaChange( 0, $bookingId, 'comment' );
+		Stats::onMetaChange( 0, $this->itemId, 'cancellation_time' );
+		Stats::flush();
+		$this->assertNull( $this->bookingRow( $bookingId ) );
+	}
+
+	/**
+	 * F3: the booster guard found changes made without this code (downgrade, database import) and rebuilds the
+	 * index. The statistics follow: not ready until rebuilt, then complete.
+	 */
+	public function testBoosterRebuildRebuildsTheStatistics() {
+		global $wpdb;
+		Stats::enable();
+		$this->finishBuild();
+		$this->assertTrue( Stats::isReady() );
+
+		// created and changed while the statistics code did not run
+		$added   = $this->booking( $this->locationId, $this->itemId, $this->day( -3 ), $this->day( -3, '23:59:59' ) );
+		$deleted = $this->booking( $this->locationId, $this->itemId, $this->day( -5 ), $this->day( -5, '23:59:59' ) );
+		Stats::onTransition( 'confirmed', 'new', get_post( $deleted ) );
+		Stats::flush();
+		$wpdb->delete( $wpdb->posts, [ 'ID' => $deleted ] );
+		clean_post_cache( $deleted );
+		$this->assertNull( $this->bookingRow( $added ) );
+
+		Stats::onBoosterRebuild( 'manual' );
+		$this->assertTrue( Stats::isReady(), 'a manual index rebuild says nothing about the statistics' );
+
+		Stats::onBoosterRebuild( 'plugin_version' );
+		$this->assertFalse( Stats::isReady() );
+		$this->assertTrue( Build::isRunning() );
+		$this->finishBuild();
+
+		$this->assertTrue( Stats::isReady() );
+		$this->assertSame( 'confirmed', $this->bookingRow( $added )['status'] );
+		$this->assertNull( $this->bookingRow( $deleted ) );
+		$days = $this->daily();
+		$this->assertSame( '1', $days[ $this->date( -3 ) ]['booked_slots'] );
+		$this->assertSame( '0', $days[ $this->date( -5 ) ]['booked_slots'] );
+	}
+
+	public function testPostsRepairedByTheBoosterGuardAreProjected() {
+		global $wpdb;
+		Stats::enable();
+		$this->finishBuild();
+		$changed = $this->booking( $this->locationId, $this->itemId, $this->day( -3 ), $this->day( -3, '23:59:59' ) );
+		$deleted = $this->booking( $this->locationId, $this->itemId, $this->day( -5 ), $this->day( -5, '23:59:59' ) );
+		Stats::onTransition( 'confirmed', 'new', get_post( $changed ) );
+		Stats::onTransition( 'confirmed', 'new', get_post( $deleted ) );
+		Stats::flush();
+
+		// changed and deleted without hooks
+		$wpdb->update( $wpdb->posts, [ 'post_status' => 'canceled' ], [ 'ID' => $changed ] );
+		clean_post_cache( $changed );
+		$wpdb->delete( $wpdb->posts, [ 'ID' => $deleted ] );
+		clean_post_cache( $deleted );
+
+		// like Guard::deepCheck(): repair the index first, then fire the action
+		\CommonsBooking\Service\Index\Projector::project( $changed );
+		\CommonsBooking\Service\Index\Projector::remove( $deleted );
+		Stats::onBoosterRepaired( [ $changed, $deleted, $this->itemId ] );
+		Stats::flush();
+
+		$this->assertSame( 'canceled', $this->bookingRow( $changed )['status'] );
+		$this->assertNull( $this->bookingRow( $deleted ) );
+		$days = $this->daily();
+		$this->assertSame( '0', $days[ $this->date( -3 ) ]['booked_slots'] );
+		$this->assertSame( '0', $days[ $this->date( -5 ) ]['booked_slots'] );
+	}
+
 	public function testBuildRunsInStepsAndReportsProgress() {
 		$bookingId = $this->booking( $this->locationId, $this->itemId, $this->day( -2 ), $this->day( -2, '23:59:59' ) );
 		wp_update_post(
