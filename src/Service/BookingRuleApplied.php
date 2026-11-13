@@ -158,14 +158,16 @@ class BookingRuleApplied extends BookingRule {
 
 		// users should only have one unconfirmed booking at a time, when booking rules are active
 		// this is to prevent circumvention by having multiple approved, unconfirmed bookings
-		$unconfirmedBookings = array_filter(
-			\CommonsBooking\Repository\Booking::getForCurrentUser( true, null, [ 'unconfirmed' ] ),
+		// Only the user's own bookings count (not the managed ones), so they are queried directly by author
+		// instead of loading all bookings the user is allowed to see.
+		$ownUnconfirmedBookings = is_user_logged_in()
+			? \CommonsBooking\Repository\Booking::getForUserPaginated( wp_get_current_user(), 1, -1, [], [ 'unconfirmed' ] )
+			: [];
+		$unconfirmedBookings    = array_filter(
+			$ownUnconfirmedBookings,
 			function ( $unconfirmedBooking ) use ( $booking ) {
-				if ( $unconfirmedBooking->ID === $booking->ID ) {
-					return false; // Exclude the current booking from the check
-				}
-				return intval( $unconfirmedBooking->getPost()->post_author ) === get_current_user_id();
-			} // getForCurrentUser also gets managed bookings, these should be ignored
+				return $unconfirmedBooking->ID !== $booking->ID; // Exclude the current booking from the check
+			}
 		);
 
 		if ( ! empty( $unconfirmedBookings ) ) {

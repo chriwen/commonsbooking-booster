@@ -28,6 +28,14 @@ class Location extends CustomPostType {
 
 		// Save-handling
 		add_action( 'save_post', array( $this, 'savePost' ), 11, 2 );
+
+		// Metabox "Assigned timeframes" (timeframes and restrictions controlling this post)
+		add_action(
+			'add_meta_boxes_' . self::$postType,
+			function () {
+				\CommonsBooking\View\Admin\AssignedTimeframes::addMetaBox( self::$postType );
+			}
+		);
 	}
 
 	protected static function getTaxonomyArgs() {

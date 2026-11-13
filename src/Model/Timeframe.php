@@ -167,6 +167,35 @@ class Timeframe extends CustomPost {
 	private ?int $repetitionEnd = null;
 
 	/**
+	 * True while {@see self::withoutBookingWindow()} runs.
+	 *
+	 * @var bool
+	 */
+	private static bool $ignoreBookingWindow = false;
+
+	/**
+	 * Runs the callback without the booking window (advance booking days): {@see self::getEndDate()} returns the end
+	 * of the timeframe and {@see self::isBookable()} is true for timeframes starting later.
+	 *
+	 * Used by the precomputed availability, whose stored days must not depend on the current date. The booking window
+	 * is applied when the days are read.
+	 *
+	 * @template T
+	 * @param callable(): T $callback
+	 *
+	 * @return T
+	 */
+	public static function withoutBookingWindow( callable $callback ) {
+		$before                    = self::$ignoreBookingWindow;
+		self::$ignoreBookingWindow = true;
+		try {
+			return $callback();
+		} finally {
+			self::$ignoreBookingWindow = $before;
+		}
+	}
+
+	/**
 	 * Return the span of a timeframe in human-readable format
 	 *
 	 * "From xx.xx.",  "Until xx.xx.", "From xx.xx. until xx.xx.", "no longer available"
@@ -298,6 +327,10 @@ class Timeframe extends CustomPost {
 	 * @return false|int
 	 */
 	public function getLatestPossibleBookingDateTimestamp() {
+		if ( self::$ignoreBookingWindow ) {
+			return PHP_INT_MAX;
+		}
+
 		$calculationBase = time();
 
 		// if meta-value not set we define a default value far in the future so that we count all possibly relevant timeframes

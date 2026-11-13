@@ -31,6 +31,30 @@ trait Cache {
 	private static string $clearCacheHook = COMMONSBOOKING_PLUGIN_SLUG . '_clear_cache';
 
 	/**
+	 * > 0 while {@see self::withoutCache()} runs.
+	 *
+	 * @var int
+	 */
+	private static int $cacheBypassDepth = 0;
+
+	/**
+	 * Runs a callback without reading or writing cache items, e.g. to compute values from the current database state
+	 * while the cache may still contain items from before a change.
+	 *
+	 * @param callable $callback
+	 *
+	 * @return mixed return value of the callback
+	 */
+	public static function withoutCache( callable $callback ) {
+		++self::$cacheBypassDepth;
+		try {
+			return $callback();
+		} finally {
+			--self::$cacheBypassDepth;
+		}
+	}
+
+	/**
 	 * Returns cache item based on calling class, function and args.
 	 *
 	 * @param mixed|null $custom_id
@@ -38,7 +62,7 @@ trait Cache {
 	 * @return mixed
 	 */
 	public static function getCacheItem( $custom_id = null ) {
-		if ( WP_DEBUG ) {
+		if ( WP_DEBUG || self::$cacheBypassDepth > 0 ) {
 			return false;
 		}
 
@@ -65,6 +89,8 @@ trait Cache {
 	 * @return string
 	 * @since 2.7.2 added Plugin_Dir to Namespace to avoid conflicts on multiple instances on same server
 	 * @since 2.9.4 added support for multisite caches
+	 * Includes the roles of the current user: timeframes can be limited to user roles, so calendar data, day slots,
+	 * table rows and item pages differ between users (e.g. a guest must not get the calendar of an editor).
 	 */
 	public static function getCacheId( $custom_id = null ): string {
 		$backtrace     = debug_backtrace()[2];
@@ -72,6 +98,7 @@ trait Cache {
 		$namespace     = COMMONSBOOKING_VERSION; // To account for changes in the installed plugin versions
 		$namespace    .= COMMONSBOOKING_PLUGIN_DIR; // To account for multiple instances on same server
 		$namespace    .= '_' . get_current_blog_id(); // To account for WP Multisite
+		$namespace    .= '_' . self::getRoleContext(); // To account for timeframes limited to user roles
 		$namespace    .= '_' . str_replace( '\\', '_', strtolower( $backtrace['class'] ) );
 		$namespace    .= '_' . $backtrace['function'];
 		$backtraceArgs = $backtrace['args'];
@@ -81,6 +108,22 @@ trait Cache {
 		}
 
 		return md5( $namespace );
+	}
+
+	/**
+	 * Roles of the current user (and whether CommonsBooking treats the user as admin), part of every cache key.
+	 * Users with the same roles share the cache items.
+	 *
+	 * @return string
+	 */
+	private static function getRoleContext(): string {
+		if ( ! function_exists( 'wp_get_current_user' ) || ! is_user_logged_in() ) {
+			return 'guest';
+		}
+		$roles = array_values( (array) wp_get_current_user()->roles );
+		sort( $roles );
+
+		return implode( ',', $roles ) . ( commonsbooking_isCurrentUserAdmin() ? '|admin' : '' );
 	}
 
 	/**
@@ -251,6 +294,9 @@ trait Cache {
 	 * @return bool
 	 */
 	public static function setCacheItem( $value, array $tags, $custom_id = null, ?string $expirationString = null ): bool {
+		if ( self::$cacheBypassDepth > 0 ) {
+			return false;
+		}
 		try {
 			// Set a default expiration to make sure, that we get rid of stale items, if there are some
 			// too much space

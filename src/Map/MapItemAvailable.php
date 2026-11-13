@@ -4,7 +4,9 @@ namespace CommonsBooking\Map;
 
 use CommonsBooking\Helper\Wordpress;
 use CommonsBooking\Model\Day;
-use CommonsBooking\View\Calendar;
+use CommonsBooking\Service\Availability\Availability;
+use CommonsBooking\Service\Availability\DayStatus;
+use CommonsBooking\Service\Availability\Reader;
 use DateInterval;
 use DatePeriod;
 use Exception;
@@ -55,12 +57,27 @@ class MapItemAvailable {
 
 		$startDay = new Day( $date_start );
 		$endDay   = new Day( $date_end );
+		$from     = $startDay->getFormattedDate( 'Y-m-d' );
+		$to       = $endDay->getFormattedDate( 'Y-m-d' );
 
 		$filter_period = new DatePeriod(
 			Wordpress::getUTCDateTime( $date_start ),
 			new DateInterval( 'P1D' ),
 			Wordpress::getUTCDateTime( $date_end . ' +1 day' )
 		);
+
+		// precomputed availability: load the stored days and bookable timeframes of all pairs at once
+		$reader = null;
+		if ( Availability::isEnabled() ) {
+			$reader = new Reader();
+			$pairs  = [];
+			foreach ( $locations as $location_id => $location ) {
+				foreach ( $location['items'] as $item ) {
+					$pairs[] = [ (int) $item['id'], (int) $location_id ];
+				}
+			}
+			$reader->preload( $pairs );
+		}
 
 		foreach ( $locations as $location_id => &$location ) {
 			foreach ( $location['items'] as &$item ) {
@@ -74,17 +91,12 @@ class MapItemAvailable {
 					];
 				}
 
-				$calendarData = Calendar::getCalendarDataArray(
-					$item['id'],
-					$location_id,
-					$startDay->getFormattedDate( 'Y-m-d' ),
-					$endDay->getFormattedDate( 'Y-m-d' ),
-				);
+				// status of the days of the calendar data, same as Calendar::getCalendarDataArray( item, location, from, to )
+				$statuses = $reader
+					? $reader->getDayStatuses( (int) $item['id'], (int) $location_id, $from, $to, false, $from, $to )
+					: Reader::evaluateLive( (int) $item['id'], (int) $location_id, $from, $to, false, $from, $to );
 
-				// mark days in timeframe
-				$availability = self::markDaysInTimeframe( $calendarData, $availability );
-
-				$item['availability'] = $availability;
+				$item['availability'] = self::markDays( $statuses['days'], $availability );
 			}
 		}
 
@@ -92,41 +104,31 @@ class MapItemAvailable {
 	}
 
 	/**
-	 * This determines the status of the item based on the calendar data.
-	 * For each day, the status is determined based on the following rules:
-	 * - if there are no slots, the status is set to "locked"
-	 * - if the day is a holiday, the status is set to "location-holiday"
-	 * - if the day is locked and there are no slots, the status is set to "locked"
-	 * - if the day is locked and the first and last slot are booked, the status is set to "booked"
-	 * - if the day is locked and partially booked, the status is set to "partially-booked"
-	 * - if neither of the above is true, the status is set to "available"
-	 *
-	 *  This logic should resemble the logic in the @see \CommonsBooking\View\Calendar::processSlot() method because
-	 *  otherwise days would be mapped differently throughout the plugin.
-	 *
-	 * @param $calendarData
-	 * @param $availabilities
-	 *
-	 * @return mixed
+	 * Maps the day status of the calendar data to the status shown in the map.
 	 */
-	protected static function markDaysInTimeframe( $calendarData, $availabilities ) {
-		// mark days which are inside a timeframe
+	private const STATUS_MAPPING = [
+		DayStatus::NO_SLOTS               => self::ITEM_LOCKED,
+		DayStatus::HOLIDAY                => self::LOCATION_HOLIDAY,
+		DayStatus::BOOKED                 => self::ITEM_BOOKED,
+		DayStatus::PARTIALLY_BOOKED_START => self::ITEM_PARTIALLY_BOOKED,
+		DayStatus::PARTIALLY_BOOKED_END   => self::ITEM_PARTIALLY_BOOKED,
+		DayStatus::LOCKED                 => self::ITEM_LOCKED,
+		DayStatus::AVAILABLE              => self::ITEM_AVAILABLE,
+	];
+
+	/**
+	 * Sets the map status of the days that are part of the calendar data.
+	 * Uses the same rules as the items table ({@see DayStatus}), other days keep the status "no-timeframe".
+	 *
+	 * @param array<string, string> $dayStatuses {@see DayStatus} by date
+	 * @param array                 $availabilities
+	 *
+	 * @return array
+	 */
+	protected static function markDays( array $dayStatuses, array $availabilities ): array {
 		foreach ( $availabilities as &$availability ) {
-			if ( array_key_exists( $availability['date'], $calendarData['days'] ) ) {
-				$day = $calendarData['days'][ $availability['date'] ];
-				if ( ! count( $day['slots'] ) ) {
-					$availability['status'] = self::ITEM_LOCKED;
-				} elseif ( $day['holiday'] ) {
-					$availability['status'] = self::LOCATION_HOLIDAY;
-				} elseif ( $day['locked'] && $day['firstSlotBooked'] && $day['lastSlotBooked'] ) {
-					$availability['status'] = self::ITEM_BOOKED;
-				} elseif ( $day['locked'] && $day['partiallyBookedDay'] ) {
-					$availability['status'] = self::ITEM_PARTIALLY_BOOKED;
-				} elseif ( $day['locked'] ) {
-					$availability['status'] = self::ITEM_LOCKED;
-				} else {
-					$availability['status'] = self::ITEM_AVAILABLE;
-				}
+			if ( isset( $dayStatuses[ $availability['date'] ] ) ) {
+				$availability['status'] = self::STATUS_MAPPING[ $dayStatuses[ $availability['date'] ] ];
 			}
 		}
 
