@@ -2,6 +2,7 @@
 
 namespace CommonsBooking\Service\Booster;
 
+use CommonsBooking\Service\Availability\Availability;
 use CommonsBooking\Service\Availability\Maintenance;
 use CommonsBooking\Service\Availability\Store;
 use CommonsBooking\Service\Index\Backfill;
@@ -21,16 +22,43 @@ use WP_CLI;
 class Cli {
 
 	/**
-	 * Shows whether the booster is switched on and in use.
+	 * Shows whether the booster is switched on and in use, followed by the findings of the health check (stale rows,
+	 * overdue cron events, ...) as on the settings page.
 	 *
 	 * @subcommand status
 	 */
 	public function status( $args, $assocArgs ): void {
-		foreach ( Booster::getStatus() as $key => $value ) {
+		$status = Booster::getStatus();
+		if ( isset( $status['availability'] ) && Availability::isEnabled() ) {
+			$stats                  = Store::getStats();
+			$status['availability'] = sprintf(
+				'%s (%d of %d rows usable, %d changed, %d role limited)',
+				$status['availability'],
+				$stats['usable'],
+				$stats['rows'],
+				$stats['changed'],
+				$stats['role_limited']
+			);
+		}
+		foreach ( $status as $key => $value ) {
 			WP_CLI::log( str_pad( $key . ':', 15 ) . $value );
 		}
 		$state = Booster::getState();
 		WP_CLI::log( str_pad( 'guard:', 15 ) . sprintf( 'plugin version %s, checked up to post id %d', $state['plugin_version'] ?: '-', $state['watermark'] ) );
+
+		$health = Diagnostics::getHealth();
+		if ( $health['level'] === 'off' ) {
+			return;
+		}
+		WP_CLI::log( str_pad( 'health:', 15 ) . $health['level'] );
+		foreach ( $health['findings'] as $finding ) {
+			if ( $finding['level'] === 'info' ) {
+				WP_CLI::log( '  ' . $finding['text'] );
+			} else {
+				// warning, not error: status must not end the command
+				WP_CLI::warning( $finding['text'] );
+			}
+		}
 	}
 
 	/**

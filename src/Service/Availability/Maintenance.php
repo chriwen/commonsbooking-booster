@@ -266,8 +266,13 @@ class Maintenance {
 	 * @param int|null $sampleSize null = all rows, otherwise the sample size for pairs and for access profiles each
 	 * @param bool     $repair recompute rows with differences
 	 *
-	 * @return array{checked: int, mismatches: string[]} mismatches as "locationId:itemId" or
-	 *                                                   "locationId:itemId:accessProfile"
+	 * @return array{checked: int, skipped: int, mismatches: string[]} mismatches as "locationId:itemId" or
+	 *                                                                 "locationId:itemId:accessProfile"; skipped = rows
+	 *                                                                 not checked because they are not usable: changed
+	 *                                                                 pairs, rows that are too old or from another calc
+	 *                                                                 version. Not counted: role limited pairs (computed
+	 *                                                                 live by design) and access profile rows of a
+	 *                                                                 removed or changed pair (superseded).
 	 * @throws \Exception
 	 */
 	public static function verify( ?int $sampleSize = null, bool $repair = false ): array {
@@ -276,6 +281,7 @@ class Maintenance {
 
 		return [
 			'checked'    => $pairs['checked'] + $profiles['checked'],
+			'skipped'    => $pairs['skipped'] + $profiles['skipped'],
 			'mismatches' => array_merge( $pairs['mismatches'], $profiles['mismatches'] ),
 		];
 	}
@@ -284,7 +290,7 @@ class Maintenance {
 	 * @param int|null $sampleSize
 	 * @param bool     $repair
 	 *
-	 * @return array{checked: int, mismatches: string[]}
+	 * @return array{checked: int, skipped: int, mismatches: string[]}
 	 * @throws \Exception
 	 */
 	private static function verifyAccessProfiles( ?int $sampleSize, bool $repair ): array {
@@ -295,12 +301,18 @@ class Maintenance {
 		}
 
 		$checked    = 0;
+		$skipped    = 0;
 		$mismatches = [];
 		foreach ( $rows as [ $itemId, $locationId, $accessProfile ] ) {
 			Store::reset();
 			$pairRow = Store::get( $itemId, $locationId );
 			$row     = AccessStore::loadWithSlots( [ [ $itemId, $locationId, $accessProfile ] ] )[ $locationId . ':' . $itemId . ':' . $accessProfile ] ?? null;
 			if ( ! AccessStore::isUsable( $row, $pairRow ) ) {
+				// rows of a removed or changed pair are superseded and go with AccessStore::cleanup(), only rows of the
+				// current pair state that are too old or from another calc version could have been checked
+				if ( $row && $pairRow && (int) $row['computed_gen'] === (int) $pairRow['gen'] ) {
+					++$skipped;
+				}
 				continue;
 			}
 			++$checked;
@@ -318,6 +330,7 @@ class Maintenance {
 
 		return [
 			'checked'    => $checked,
+			'skipped'    => $skipped,
 			'mismatches' => $mismatches,
 		];
 	}
@@ -326,7 +339,7 @@ class Maintenance {
 	 * @param int|null $sampleSize
 	 * @param bool     $repair
 	 *
-	 * @return array{checked: int, mismatches: string[]}
+	 * @return array{checked: int, skipped: int, mismatches: string[]}
 	 * @throws \Exception
 	 */
 	private static function verifyPairs( ?int $sampleSize, bool $repair ): array {
@@ -337,11 +350,15 @@ class Maintenance {
 		}
 
 		$checked    = 0;
+		$skipped    = 0;
 		$mismatches = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
 			Store::reset();
 			$row = Store::loadWithSlots( [ [ $itemId, $locationId ] ] )[ $locationId . ':' . $itemId ] ?? null;
 			if ( ! Store::isUsable( $row ) ) {
+				if ( ! $row || (int) $row['has_role_limit'] !== 1 ) {
+					++$skipped;
+				}
 				continue;
 			}
 			++$checked;
@@ -358,6 +375,7 @@ class Maintenance {
 
 		return [
 			'checked'    => $checked,
+			'skipped'    => $skipped,
 			'mismatches' => $mismatches,
 		];
 	}

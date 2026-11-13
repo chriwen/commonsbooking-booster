@@ -1974,6 +1974,17 @@ wp commonsbooking availability status|rebuild|verify [--repair] [--sample=<n>]|d
 `availability status` shows the role-limited pairs and the access profiles (“Access profiles: 36 (36 usable) for 18
 pairs, at most 8 per pair”). `verify` checks pairs and access profiles; `--sample` applies to each separately.
 
+Only usable rows can be checked. Rows that are changed, older than 24 h or from an old calculation version are counted
+by `verify()` as `skipped`; the CLI then warns with the number and a hint to `wp cron event run --due-now` or
+`rebuild`, and reports no success when nothing was checked at all. Not counted are role-limited pairs (always live) and
+access profiles of a removed or changed pair (superseded, deleted by `AccessStore::cleanup()`). Background: before,
+`verify` reported “0 rows checked, no differences” as success when cron had stopped (bug hunt 2026-11-13, B1).
+
+With availability on, `booster status` shows the row counts (“precomputed (42 of 47 rows usable, 0 changed, 5 role
+limited)”) followed by the state from `Diagnostics::getHealth()` with all hints of the settings page (old rows, missing
+or overdue cron tasks …) as warnings. Before, it only said “precomputed”, even when no row was usable (B2).
+`Booster::getStatus()` stays unchanged, the settings page shows the state anyway.
+
 ### 24.2 Diagnostics in the settings
 
 Settings → Advanced → “Performance booster” (`SettingsView`, data from `Diagnostics`):

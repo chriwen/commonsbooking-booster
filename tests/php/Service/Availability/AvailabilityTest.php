@@ -380,6 +380,34 @@ class AvailabilityTest extends CustomPostTypeTest {
 		$this->assertSame( [], Maintenance::verify()['mismatches'] );
 	}
 
+	public function testVerifyCountsRowsItCannotCheck() {
+		global $wpdb;
+		$this->assertSame( 0, Maintenance::verify()['skipped'] );
+
+		// cron did not run: the row is too old to be used and therefore not compared
+		$wpdb->update(
+			Schema::table(),
+			[ 'computed_at' => '2000-01-01 00:00:00' ],
+			[
+				'item_id' => $this->itemId,
+				'location_id' => $this->locationId,
+			]
+		);
+		Store::invalidate( [ $this->otherItemId ], [ $this->otherLocationId ] );
+		$result = Maintenance::verify();
+		$this->assertSame( 2, $result['checked'] );
+		$this->assertSame( 2, $result['skipped'] );
+		$this->assertSame( [], $result['mismatches'] );
+
+		// role limited pairs are computed live by design, they are not reported as skipped
+		Maintenance::refresh( null, 0 );
+		$timeframeId = $this->createTimeframe( $this->otherLocationId, $this->otherItemId, $this->day( 20 ), $this->day( 30, '23:59:59' ), Timeframe::BOOKABLE_ID, 'on', 'd' );
+		update_post_meta( $timeframeId, \CommonsBooking\Model\Timeframe::META_ALLOWED_USER_ROLES, [ 'editor' ] );
+		Indexer::flush();
+		Invalidator::processQueue();
+		$this->assertSame( 0, Maintenance::verify()['skipped'] );
+	}
+
 	public function testDisabledWithoutIndex() {
 		add_filter( 'commonsbooking_use_index', '__return_false' );
 		$this->assertFalse( Availability::isEnabled() );

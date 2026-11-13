@@ -79,8 +79,22 @@ class Cli {
 	public function verify( $args, $assocArgs ): void {
 		$sample = isset( $assocArgs['sample'] ) ? (int) $assocArgs['sample'] : null;
 		$result = Maintenance::verify( $sample, isset( $assocArgs['repair'] ) );
+		if ( $result['skipped'] ) {
+			// not usable rows are never read (the views compute live), but they cannot be verified either
+			WP_CLI::warning(
+				sprintf(
+					'%d rows not checked: changed, older than %d hours or from an older version. Run "wp cron event run --due-now" or "wp commonsbooking availability rebuild" first and check that WP-Cron runs.',
+					$result['skipped'],
+					(int) round( Availability::getMaxAge() / HOUR_IN_SECONDS )
+				)
+			);
+		}
 		if ( $result['mismatches'] ) {
 			WP_CLI::warning( sprintf( '%d of %d checked rows (pairs and access profiles) differ: %s', count( $result['mismatches'] ), $result['checked'], implode( ', ', $result['mismatches'] ) ) );
+		} elseif ( ! $result['checked'] ) {
+			WP_CLI::warning( 'No usable rows, nothing checked.' );
+		} elseif ( $result['skipped'] ) {
+			WP_CLI::log( sprintf( '%d rows (pairs and access profiles) checked, no differences.', $result['checked'] ) );
 		} else {
 			WP_CLI::success( sprintf( '%d rows (pairs and access profiles) checked, no differences.', $result['checked'] ) );
 		}
