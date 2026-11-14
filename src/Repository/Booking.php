@@ -734,19 +734,6 @@ class Booking extends PostRepository {
 	}
 
 	/**
-	 * Finds bookings with the index, mirroring the WP_Query based methods of this class.
-	 * Returns null if the index is not available or $customArgs contains arguments the index does not support;
-	 * the caller then runs the legacy WP_Query.
-	 *
-	 * Supported custom args (same semantics as in WP_Query): author (single id), post_status, orderby=date, order.
-	 *
-	 * @param array    $criteria see {@see Index::findPostIds()}
-	 * @param array    $customArgs WP_Query args passed by the caller
-	 * @param string[] $postStatus
-	 *
-	 * @return \CommonsBooking\Model\Booking[]|null
-	 */
-	/**
 	 * Finds the bookings of one item (and location) in the postmeta, with the same conditions as the meta queries of
 	 * {@see self::getByDateWithMetaQuery()} and {@see self::getByTimerangeWithMetaQuery()}.
 	 *
@@ -838,6 +825,19 @@ class Booking extends PostRepository {
 		return $bookings;
 	}
 
+	/**
+	 * Finds bookings with the index, mirroring the WP_Query based methods of this class.
+	 * Returns null if the index is not available or $customArgs contains arguments the index does not support;
+	 * the caller then runs the legacy WP_Query.
+	 *
+	 * Supported custom args (same semantics as in WP_Query): author (single id), post_status, orderby=date, order.
+	 *
+	 * @param array    $criteria see {@see Index::findPostIds()}
+	 * @param array    $customArgs WP_Query args passed by the caller
+	 * @param string[] $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[]|null
+	 */
 	private static function findViaIndex( array $criteria, array $customArgs, array $postStatus ): ?array {
 		if ( ! Index::isAvailable() ) {
 			return null;
