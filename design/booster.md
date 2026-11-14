@@ -21,7 +21,7 @@ Doppelbuchungen möglich werden.
 | Ort des Schalters | Einstellungen → Erweitert → „Performance booster“ (Feld `booster_enabled` in `commonsbooking_options_advanced-options`), dazu Filter `commonsbooking_booster_enabled` und WP-CLI | Passt zu den übrigen Cache-Einstellungen. |
 | Was passiert bei „aus“ | keine Hooks, keine Cron-Jobs, kein Lesen aus den Tabellen. Index gilt als veraltet, Tabellen bleiben (Entfernen mit `purge`). | Ausgeschaltet identisch zum Originalcode. Wiedereinschalten braucht keinen neuen Tabellenaufbau, nur ein Neubefüllen. |
 | Einschalten | Tabellen anlegen, Index **immer komplett neu aufbauen**; bis zum Ende Originalabfragen | Während der Booster aus war, hat niemand den Index gepflegt. |
-| Buchungsprüfung | läuft **immer** mit den Originalabfragen und ohne Plugin-Cache (`Booster::withoutBooster()`): Buchungsformular, Admin-Buchung, Prüfung von Zeitrahmen | Ein veralteter Index kann so höchstens eine falsche Anzeige verursachen, nie eine Doppelbuchung. Der Symfony-Cache wird ebenfalls umgangen, weil er Ergebnisse enthalten kann, die aus dem Index stammen. Eine Prüfung betrifft ein Paar und bleibt schnell. |
+| Buchungsprüfung | läuft **immer** mit den Originalabfragen und ohne Plugin-Cache (`Booster::withoutBooster()`): Buchungsformular, Admin-Buchung, Prüfung von Zeitrahmen | Ein veralteter Index kann so höchstens eine falsche Anzeige verursachen, nie eine Doppelbuchung. Der Symfony-Cache wird ebenfalls umgangen, weil er Ergebnisse enthalten kann, die aus dem Index stammen. Die Postmeta-Abfrage für ein Paar setzt bei den `item-id`-Zeilen an und bleibt so auch bei 100.000 Buchungen schnell (0,05–0,16 s), siehe `buchungspruefung.md`. |
 | Erkennen eines Downgrades | Wächter (`Guard`) mit drei Prüfungen, siehe unten | Die alte Version hinterlässt keine Markierung, die neue muss die Folgen in den Daten erkennen. |
 
 ## Wächter
@@ -247,7 +247,8 @@ Tests: `tests/php/Service/Booster/SetupTest.php`.
 
 ## Doppelte Buchungen bei langsamer Prüfung
 
-Die Buchungsprüfung nutzt immer die ursprünglichen Abfragen. Bei 167.000 Buchungen dauert sie etwa 3 Sekunden. Ein
+Die Buchungsprüfung nutzt immer die ursprünglichen Abfragen. Bei 167.000 Buchungen dauerte sie etwa 3 Sekunden (seit
+`buchungspruefung.md` unter 0,5 s). Ein
 zweiter Klick in dieser Zeit legte eine zweite unbestätigte Buchung an (beide Anfragen fanden den Slot frei), der
 dritte endete mit „Found more than one bookings“. Das gab es schon vor dem Booster. Abhilfe:
 - `Booking::withItemLock()`: MySQL-Sperre (`GET_LOCK`) je Artikel um die Prüfung und das Speichern. Anfragen für denselben
