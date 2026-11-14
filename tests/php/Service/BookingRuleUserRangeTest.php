@@ -32,7 +32,9 @@ class BookingRuleUserRangeTest extends CustomPostTypeTest {
 	protected function setUp(): void {
 		parent::setUp();
 		$this->createSubscriber();
-		$this->otherUserId = wp_create_user( 'otheruser', 'other', 'other@example.com' );
+		// users are not removed between tests (other tests use the same login)
+		$other             = get_user_by( 'login', 'otheruser' );
+		$this->otherUserId = $other ? $other->ID : wp_create_user( 'otheruser', 'other', 'other@example.com' );
 
 		$this->termA      = $this->term( 'cat-a' );
 		$this->termB      = $this->term( 'cat-b' );
