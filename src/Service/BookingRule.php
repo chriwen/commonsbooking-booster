@@ -705,10 +705,9 @@ class BookingRule {
 	 * The bookings of the booking's user in the range (ordered by post_date ascending), as
 	 * {@see self::filterBookingsForTermsAndUser()} returns them for all bookings in the range.
 	 *
-	 * Queries the user's bookings first: on large sites the bookings of all users in a week or month are thousands
-	 * (about 1.5 s per rule with 100,000 bookings), those of one user a few. Only when the rule is limited to terms and
-	 * none of the user's bookings has one of them, the result depends on the bookings of the other users (any of them
-	 * with a matching term makes all bookings of the user count), then all bookings are queried as before.
+	 * Queries only the user's bookings: on large sites the bookings of all users in a week or month are thousands
+	 * (about 1.5 s per rule with 100,000 bookings), those of one user a few. Since the user and the terms are both
+	 * filtered (see filterBookingsForTermsAndUser()), the bookings of other users do not matter.
 	 *
 	 * @param DateTime    $startOfRange
 	 * @param DateTime    $endOfRange
@@ -737,20 +736,9 @@ class BookingRule {
 		if ( empty( $userBookings ) ) {
 			return null;
 		}
-		if ( empty( $appliedTerms ) || Booking::filterTermsApply( $userBookings, $appliedTerms ) ) {
-			return $userBookings;
-		}
+		$filtered = Booking::filterTermsApply( $userBookings, $appliedTerms );
 
-		$rangeBookings = \CommonsBooking\Repository\Booking::getByTimerange(
-			$startOfRange->getTimestamp(),
-			$endOfRange->getTimestamp(),
-			null,
-			null,
-			$order,
-			$postStatus
-		);
-
-		return self::filterBookingsForTermsAndUser( $rangeBookings, $user, $appliedTerms );
+		return empty( $filtered ) ? null : $filtered;
 	}
 
 	/**
