@@ -217,8 +217,7 @@ class BookingRule {
 	 * @throws BookingRuleException
 	 */
 	public static function init(): array {
-		$weekDays        = __( 'Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', 'cmb2' );
-		$weekDaysSelect  = array_combine( range( 1, 7 ), explode( ', ', $weekDays ) );
+		$weekDaysSelect  = array_combine( range( 1, 7 ), self::getWeekDayNames() );
 		$monthDaysSelect = array_combine( range( 1, 31 ), range( 1, 31 ) );
 		$defaultRuleSet  = [
 			new BookingRule(
@@ -490,18 +489,14 @@ class BookingRule {
 	 */
 	public static function checkMaxBookingDaysPerWeek( Booking $booking, array $args, $appliedTerms = false ): ?array {
 		$allowedBookableDays = $args[0];
-		// default is sunday, we could not use 0 because it would be interpreted as an empty value
-		$resetDay = ( $args[2] < 7 && $args[2] >= 1 ) ? $args[2] : 1;
-		$range    = self::getBookingWeekRange( $booking, $resetDay );
+		$range               = self::getBookingWeekRange( $booking, self::getWeekResetDay( $args ) );
 
 		return self::checkBookingRangeForDays( $range[0], $range[1], $booking, $appliedTerms, $allowedBookableDays );
 	}
 
 	public static function maxDaysWeekErrorMessage( array $args ): string {
 		$maxDays        = $args[0];
-		$resetDay       = $args[2] - 1;
-		$weekDays       = __( 'Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', 'cmb2' );
-		$resetDayString = explode( ', ', $weekDays )[ $resetDay ];
+		$resetDayString = self::getWeekDayNames()[ self::getWeekResetDay( $args ) - 1 ];
 
 		// translators: %1$s number of days allowed, %2$s name of day next week
 		return sprintf( __( 'You can only book %1$s days per week, please try again after %2$s next week.', 'commonsbooking' ), $maxDays, $resetDayString );
@@ -509,18 +504,14 @@ class BookingRule {
 
 	public static function checkMaxBookingsWeek( Booking $booking, array $args, $appliedTerms = false ): ?array {
 		$allowedTotalBookings = $args[0];
-		// default is sunday
-		$resetDay = ( $args[2] < 6 && $args[2] >= 0 ) ? $args[2] : 0;
-		$range    = self::getBookingWeekRange( $booking, $resetDay );
+		$range                = self::getBookingWeekRange( $booking, self::getWeekResetDay( $args ) );
 
 		return self::checkBookingAmount( $range[0], $range[1], $booking, $appliedTerms, $allowedTotalBookings );
 	}
 
 	public static function maxBookingsWeekErrorMessage( array $args ): string {
 		$maxDays        = $args[0];
-		$resetDay       = $args[2];
-		$weekDays       = __( 'Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', 'cmb2' );
-		$resetDayString = explode( ', ', $weekDays )[ $resetDay ];
+		$resetDayString = self::getWeekDayNames()[ self::getWeekResetDay( $args ) - 1 ];
 
 		// translators: %1$s allowed number of bookings, %2$s reset day
 		return sprintf( __( 'You are only allowed to have %1$s booking(s) per week, please try again after %2$s next week.', 'commonsbooking' ), $maxDays, $resetDayString );
@@ -570,6 +561,37 @@ class BookingRule {
 
 		// translators: %1$s allowed number of bookings, %2$s reset day (date)
 		return sprintf( __( 'You are only allowed %1$s booking(s) per month, please try again after the %2$s. next month.', 'commonsbooking' ), $maxDays, $resetDay );
+	}
+
+	/**
+	 * The day of the week on which the weekly counters are reset, from the select param (args[2]).
+	 *
+	 * The select stores 1 = Sunday ... 7 = Saturday (0 would be an empty value). Default and for invalid values: Sunday.
+	 * Formerly "bookings per week" accepted 0–5 only (Friday and Saturday became Sunday) and its message named the day
+	 * after the reset day; "days per week" accepted 1–6 (Saturday became Sunday).
+	 *
+	 * @param array $args rule args, see {@see BookingRuleApplied::getArgs()}
+	 *
+	 * @return int 1 = Sunday ... 7 = Saturday
+	 */
+	private static function getWeekResetDay( array $args ): int {
+		$resetDay = $args[2] ?? null;
+
+		return ( is_numeric( $resetDay ) && $resetDay >= 1 && $resetDay <= 7 ) ? (int) $resetDay : 1;
+	}
+
+	/**
+	 * Translated names of the weekdays, Sunday first (index 0).
+	 *
+	 * @return string[]
+	 */
+	private static function getWeekDayNames(): array {
+		global $wp_locale;
+		if ( $wp_locale instanceof \WP_Locale ) {
+			return array_map( fn( $day ) => $wp_locale->get_weekday( $day ), range( 0, 6 ) );
+		}
+
+		return explode( ', ', __( 'Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', 'cmb2' ) );
 	}
 
 	/**
@@ -643,12 +665,16 @@ class BookingRule {
 	 * @return array|null
 	 */
 	private static function filterBookingsForTermsAndUser( array $bookings, \WP_User $user, $terms ): ?array {
+		// Formerly the terms were only checked on all bookings, and then all bookings of the user were returned: with a
+		// rule for some categories, the user's bookings of other categories counted as soon as anybody had booked one of
+		// these categories in the range.
 		$filteredTerms = Booking::filterTermsApply( $bookings, $terms );
-		if ( ! empty( $filteredTerms ) ) {
-			return Booking::filterForUser( $bookings, $user );
-		} else {
+		if ( empty( $filteredTerms ) ) {
 			return null;
 		}
+		$filtered = Booking::filterForUser( $filteredTerms, $user );
+
+		return empty( $filtered ) ? null : $filtered;
 	}
 
 	/**

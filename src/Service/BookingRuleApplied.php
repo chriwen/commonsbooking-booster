@@ -275,7 +275,12 @@ class BookingRuleApplied extends BookingRule {
 					continue;
 				}
 
-				$ruleParams = [];
+				// per rule: values of the previous rule must not carry over (a rule for some categories after a rule
+				// "applies to all" applied to all items, a missing select param took the previous rule's one)
+				$ruleParams   = [];
+				$selectParam  = null;
+				$appliesToAll = false;
+				$appliedTerms = [];
 				if (
 					! empty( $ruleConfig['rule-param1'] ) &&
 					count( $validRule->params ) >= 1 ) {
@@ -289,7 +294,8 @@ class BookingRuleApplied extends BookingRule {
 				}
 
 				if ( ! empty( $ruleConfig['rule-select-param'] ) ) {
-					$selectParam = $ruleConfig['rule-select-param']; }
+					$selectParam = $ruleConfig['rule-select-param'];
+				}
 
 				if ( ! empty( $ruleConfig['rule-applies-all'] ) && $ruleConfig['rule-applies-all'] === 'on' ) {
 					$appliesToAll = true;
@@ -304,8 +310,8 @@ class BookingRuleApplied extends BookingRule {
 				$bookingRule = new self( $validRule );
 				try {
 					$bookingRule->setAppliesToWhat(
-						$appliesToAll ?? false,
-						$appliedTerms ?? []
+						$appliesToAll,
+						$appliedTerms
 					);
 				} catch ( BookingRuleException $e ) {
 					if ( $ignoreErrors ) {
@@ -317,7 +323,7 @@ class BookingRuleApplied extends BookingRule {
 				try {
 					$bookingRule->setAppliedParams(
 						$ruleParams,
-						$selectParam ?? null
+						$selectParam
 					);
 				} catch ( BookingRuleException $e ) {
 					if ( $ignoreErrors ) {
