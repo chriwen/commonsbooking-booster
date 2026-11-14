@@ -41,7 +41,10 @@ umgangen, läuft der unveränderte Originalcode. `wp_posts`/`wp_postmeta` werden
 - `activation()` → `Booster::onPluginActivation()` (Index nach einer Pause neu aufbauen), `deactivation()` →
   `Booster::onPluginDeactivation()` (Cron-Jobs entfernen).
 - `init()` → `Booster::init()` registriert Hooks, Cron und WP-CLI, **nur wenn eingeschaltet**.
-- `handleBookingForms()` führt `Booking::handleFormRequest()` in `Booster::withoutBooster()` aus (siehe 6).
+- `handleBookingForms()` führt `Booking::processFormRequest()` in `Booster::withoutBooster()` aus (siehe 6) und leitet
+  erst danach weiter (`Booking::redirectToBooking()`). Das `exit` der Weiterleitung übersprang sonst den `finally`-Block:
+  Der Rest des Requests (Neuberechnung der Verfügbarkeit in `shutdown`) lief ohne Booster, die Artikelsperre blieb bis
+  zum Verbindungsende. `handleFormRequest()` bleibt für bestehende Aufrufer.
 
 **`includes/OptionsArray.php`** – neue Gruppe „Performance booster“ in *Erweiterte Optionen*: Checkbox
 `Booster::SETTINGS_FIELD`, Statusbereich über `SettingsView::render` (Diagnose, Knöpfe „Prüfen“/„Neu aufbauen“).

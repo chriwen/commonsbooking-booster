@@ -424,9 +424,14 @@ class Plugin {
 	public static function handleBookingForms(): void {
 		try {
 			// booking validation always uses the original queries, never the booster tables
-			\CommonsBooking\Service\Booster\Booster::withoutBooster(
-				array( \CommonsBooking\Wordpress\CustomPostType\Booking::class, 'handleFormRequest' )
+			$postId = \CommonsBooking\Service\Booster\Booster::withoutBooster(
+				array( \CommonsBooking\Wordpress\CustomPostType\Booking::class, 'processFormRequest' )
 			);
+			// redirect (exit) only after leaving withoutBooster(): exit would skip its finally block and the rest of the
+			// request, e.g. the recomputation of the availability on shutdown, would run without the booster
+			if ( $postId !== null ) {
+				\CommonsBooking\Wordpress\CustomPostType\Booking::redirectToBooking( $postId );
+			}
 		} catch ( BookingDeniedException $e ) {
 			set_transient(
 				\CommonsBooking\Wordpress\CustomPostType\Booking::ERROR_TYPE . '-' . get_current_user_id(),

@@ -226,6 +226,38 @@ class Booking extends Timeframe {
 	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
 	 */
 	public static function handleFormRequest() {
+		$postId = self::processFormRequest();
+		if ( $postId !== null ) {
+			self::redirectToBooking( $postId );
+		}
+	}
+
+	/**
+	 * Redirects to the booking page and ends the request.
+	 *
+	 * @param int $postId
+	 *
+	 * @return void
+	 */
+	public static function redirectToBooking( int $postId ): void {
+		// get slug as parameter
+		$post_slug = get_post( $postId )->post_name;
+
+		wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
+		exit;
+	}
+
+	/**
+	 * Handles the frontend booking form without redirecting, see {@see self::handleFormRequest()}.
+	 *
+	 * Separate from the redirect so that callers can leave {@see \CommonsBooking\Service\Booster\Booster::withoutBooster()}
+	 * (and release the item lock) before the request ends: `exit` skips the `finally` blocks, the rest of the request
+	 * including the shutdown work would run without the booster.
+	 *
+	 * @return int|null id of the booking, null if the request is no valid booking form request
+	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
+	 */
+	public static function processFormRequest(): ?int {
 		if (
 			function_exists( 'wp_verify_nonce' ) &&
 			isset( $_REQUEST[ static::getWPNonceId() ] ) &&
@@ -260,12 +292,10 @@ class Booking extends Timeframe {
 				)
 			);
 
-			// get slug as parameter
-			$post_slug = get_post( $postId )->post_name;
-
-			wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
-			exit;
+			return (int) $postId;
 		}
+
+		return null;
 	}
 
 

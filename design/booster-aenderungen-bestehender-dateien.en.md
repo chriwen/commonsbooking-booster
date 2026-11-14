@@ -41,7 +41,10 @@ the unchanged original code runs. `wp_posts`/`wp_postmeta` are never written dif
 - `activation()` → `Booster::onPluginActivation()` (rebuild the index after a pause), `deactivation()` →
   `Booster::onPluginDeactivation()` (remove cron jobs).
 - `init()` → `Booster::init()` registers hooks, cron and WP-CLI, **only when switched on**.
-- `handleBookingForms()` runs `Booking::handleFormRequest()` inside `Booster::withoutBooster()` (see 6).
+- `handleBookingForms()` runs `Booking::processFormRequest()` inside `Booster::withoutBooster()` (see 6) and redirects
+  only afterwards (`Booking::redirectToBooking()`). Otherwise the `exit` of the redirect skipped the `finally` block: the
+  rest of the request (availability recomputation on shutdown) ran without the booster, and the item lock was held until
+  the connection closed. `handleFormRequest()` stays for existing callers.
 
 **`includes/OptionsArray.php`** – new group "Performance booster" in *Advanced options*: checkbox
 `Booster::SETTINGS_FIELD`, status area via `SettingsView::render` (diagnostics, buttons "Check"/"Rebuild").
