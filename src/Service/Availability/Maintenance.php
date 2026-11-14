@@ -176,14 +176,14 @@ class Maintenance {
 		do {
 			$pairs = array_filter(
 				Store::getStalePairs( $before, 50 + count( $failed ) ),
-				fn( $pair ) => ! isset( $failed[ $pair[1] . ':' . $pair[0] ] )
+				fn( $pair ) => ! isset( $failed[ Store::key( $pair[0], $pair[1] ) ] )
 			);
 			foreach ( $pairs as [ $itemId, $locationId ] ) {
 				try {
 					Calculator::recompute( $itemId, $locationId );
 					++$recomputed;
 				} catch ( \Throwable $e ) {
-					$failed[ $locationId . ':' . $itemId ] = true;
+					$failed[ Store::key( $itemId, $locationId ) ] = true;
 					commonsbooking_write_log( sprintf( 'Availability recomputation failed for item %d at location %d: %s', $itemId, $locationId, $e->getMessage() ) );
 				}
 				if ( $timeBudget !== null && ( microtime( true ) - $started > $timeBudget || \CommonsBooking\Service\Booster\Booster::isMemoryLow() ) ) {
@@ -213,13 +213,13 @@ class Maintenance {
 
 		$existing = [];
 		foreach ( Store::getAllPairs() as [ $itemId, $locationId ] ) {
-			$existing[ $locationId . ':' . $itemId ] = true;
+			$existing[ Store::key( $itemId, $locationId ) ] = true;
 		}
 
 		$created = 0;
 		$values  = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
-			if ( ! isset( $existing[ $locationId . ':' . $itemId ] ) ) {
+			if ( ! isset( $existing[ Store::key( $itemId, $locationId ) ] ) ) {
 				$values[] = sprintf( '(%d, %d, 1, 0)', $itemId, $locationId );
 				++$created;
 			}
@@ -306,7 +306,7 @@ class Maintenance {
 		foreach ( $rows as [ $itemId, $locationId, $accessProfile ] ) {
 			Store::reset();
 			$pairRow = Store::get( $itemId, $locationId );
-			$row     = AccessStore::loadWithSlots( [ [ $itemId, $locationId, $accessProfile ] ] )[ $locationId . ':' . $itemId . ':' . $accessProfile ] ?? null;
+			$row     = AccessStore::loadWithSlots( [ [ $itemId, $locationId, $accessProfile ] ] )[ AccessStore::key( $itemId, $locationId, $accessProfile ) ] ?? null;
 			if ( ! AccessStore::isUsable( $row, $pairRow ) ) {
 				// rows of a removed or changed pair are superseded and go with AccessStore::cleanup(), only rows of the
 				// current pair state that are too old or from another calc version could have been checked
@@ -319,7 +319,7 @@ class Maintenance {
 
 			$fresh = Calculator::compute( $itemId, $locationId, $accessProfile );
 			if ( ! self::matches( $row, $fresh ) ) {
-				$mismatches[] = $locationId . ':' . $itemId . ':' . $accessProfile;
+				$mismatches[] = AccessStore::key( $itemId, $locationId, $accessProfile );
 				if ( $repair ) {
 					AccessStore::delete( $itemId, $locationId, $accessProfile );
 					Calculator::reset();
@@ -354,7 +354,7 @@ class Maintenance {
 		$mismatches = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
 			Store::reset();
-			$row = Store::loadWithSlots( [ [ $itemId, $locationId ] ] )[ $locationId . ':' . $itemId ] ?? null;
+			$row = Store::loadWithSlots( [ [ $itemId, $locationId ] ] )[ Store::key( $itemId, $locationId ) ] ?? null;
 			if ( ! Store::isUsable( $row ) ) {
 				if ( ! $row || (int) $row['has_role_limit'] !== 1 ) {
 					++$skipped;
@@ -365,7 +365,7 @@ class Maintenance {
 
 			$fresh = Calculator::compute( $itemId, $locationId );
 			if ( $fresh['roleLimited'] || ! self::matches( $row, $fresh ) ) {
-				$mismatches[] = $locationId . ':' . $itemId;
+				$mismatches[] = Store::key( $itemId, $locationId );
 				if ( $repair ) {
 					Store::invalidate( [ $itemId ], [ $locationId ] );
 					Calculator::recompute( $itemId, $locationId );

@@ -28,12 +28,14 @@ class Store {
 	private static array $rows = [];
 
 	/**
+	 * Key of an item/location pair, used for the rows of this table and the request caches of the booster.
+	 *
 	 * @param int $itemId
 	 * @param int $locationId
 	 *
-	 * @return string
+	 * @return string "locationId:itemId"
 	 */
-	private static function key( int $itemId, int $locationId ): string {
+	public static function key( int $itemId, int $locationId ): string {
 		return $locationId . ':' . $itemId;
 	}
 

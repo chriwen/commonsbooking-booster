@@ -151,7 +151,7 @@ class AccessProfile {
 	public static function getRoles( int $itemId, int $locationId ): array {
 		self::preloadRoles( [ [ $itemId, $locationId ] ] );
 
-		return self::$roles[ $locationId . ':' . $itemId ];
+		return self::$roles[ Store::key( $itemId, $locationId ) ];
 	}
 
 	/**
@@ -169,7 +169,7 @@ class AccessProfile {
 
 		$wanted = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
-			$key = (int) $locationId . ':' . (int) $itemId;
+			$key = Store::key( (int) $itemId, (int) $locationId );
 			if ( ! isset( self::$roles[ $key ] ) ) {
 				$wanted[ $key ] = [ (int) $itemId, (int) $locationId ];
 			}
@@ -221,7 +221,7 @@ class AccessProfile {
 			}
 			foreach ( $locations as $locationId ) {
 				foreach ( $items as $itemId ) {
-					$key = $locationId . ':' . $itemId;
+					$key = Store::key( $itemId, $locationId );
 					if ( isset( $roles[ $key ] ) ) {
 						$roles[ $key ] = array_merge( $roles[ $key ], (array) $allowed );
 					}

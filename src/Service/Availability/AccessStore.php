@@ -35,8 +35,8 @@ class AccessStore {
 	 *
 	 * @return string
 	 */
-	private static function key( int $itemId, int $locationId, string $accessProfile ): string {
-		return $locationId . ':' . $itemId . ':' . $accessProfile;
+	public static function key( int $itemId, int $locationId, string $accessProfile ): string {
+		return Store::key( $itemId, $locationId ) . ':' . $accessProfile;
 	}
 
 	/**

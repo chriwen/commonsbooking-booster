@@ -192,13 +192,6 @@ final class DayFacts {
 	}
 
 	/**
-	 * @return array slots with timeframe (empty if restored from flags)
-	 */
-	public function getSlots(): array {
-		return $this->slots;
-	}
-
-	/**
 	 * @return WP_Post|null timeframe of the first slot, if that slot is bookable (null if restored from flags)
 	 */
 	public function getFirstBookableTimeframe(): ?WP_Post {

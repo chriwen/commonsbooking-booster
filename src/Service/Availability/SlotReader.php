@@ -3,6 +3,7 @@
 namespace CommonsBooking\Service\Availability;
 
 use CommonsBooking\Model\Timeframe;
+use CommonsBooking\Repository\Index;
 use CommonsBooking\Service\Index\Indexer;
 use CommonsBooking\Service\Index\Schema as IndexSchema;
 use stdClass;
@@ -42,8 +43,8 @@ class SlotReader {
 		if ( $ignoreRestrictions || ! Availability::isEnabled() ) {
 			return null;
 		}
-		$items     = self::ids( $items );
-		$locations = self::ids( $locations );
+		$items     = Index::ids( $items );
+		$locations = Index::ids( $locations );
 		if ( ! $items ) {
 			return null;
 		}
@@ -70,7 +71,7 @@ class SlotReader {
 		$accessRows = self::loadAccessProfileRows( $pairs, $rows );
 		$data       = [];
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
-			$pairData = self::getPairData( $itemId, $locationId, $rows[ $locationId . ':' . $itemId ] ?? null, $from, $accessRows );
+			$pairData = self::getPairData( $itemId, $locationId, $rows[ Store::key( $itemId, $locationId ) ] ?? null, $from, $accessRows );
 			if ( $pairData === null ) {
 				return null;
 			}
@@ -133,7 +134,7 @@ class SlotReader {
 		if ( ! AccessProfile::isEnabled() ) {
 			return [];
 		}
-		$limited = array_values( array_filter( $pairs, fn( $pair ) => (int) ( $rows[ $pair[1] . ':' . $pair[0] ]['has_role_limit'] ?? 0 ) === 1 ) );
+		$limited = array_values( array_filter( $pairs, fn( $pair ) => (int) ( $rows[ Store::key( $pair[0], $pair[1] ) ]['has_role_limit'] ?? 0 ) === 1 ) );
 		if ( ! $limited ) {
 			return [];
 		}
@@ -190,7 +191,7 @@ class SlotReader {
 			return null;
 		}
 		$accessProfile = AccessProfile::forCurrentUser( $itemId, $locationId );
-		$row           = $accessRows[ $locationId . ':' . $itemId . ':' . $accessProfile ] ?? null;
+		$row           = $accessRows[ AccessStore::key( $itemId, $locationId, $accessProfile ) ] ?? null;
 		if ( AccessStore::isUsable( $row, $pairRow ) && $row['slots'] !== null ) {
 			return [ $row, Slots::unpack( $row['slots'] ) ];
 		}
@@ -266,7 +267,7 @@ class SlotReader {
 			if ( $locations && ! in_array( $locationId, $locations, true ) ) {
 				continue;
 			}
-			$pairs[ $locationId . ':' . $row['item_id'] ] = [ (int) $row['item_id'], $locationId ];
+			$pairs[ Store::key( (int) $row['item_id'], $locationId ) ] = [ (int) $row['item_id'], $locationId ];
 		}
 		ksort( $pairs );
 
@@ -297,14 +298,5 @@ class SlotReader {
 		} catch ( \Exception $e ) {
 			return null;
 		}
-	}
-
-	/**
-	 * @param array $values
-	 *
-	 * @return int[]
-	 */
-	private static function ids( array $values ): array {
-		return array_values( array_unique( array_map( 'intval', array_filter( $values ) ) ) );
 	}
 }

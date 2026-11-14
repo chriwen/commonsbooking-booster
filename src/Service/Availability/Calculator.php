@@ -60,7 +60,7 @@ class Calculator {
 		$result = self::compute( $itemId, $locationId );
 		Store::write( $itemId, $locationId, $gen, $result['from'], $result['flags'], $result['roleLimited'], $result['slots'] );
 
-		self::$computed[ $locationId . ':' . $itemId ] = $result;
+		self::$computed[ Store::key( $itemId, $locationId ) ] = $result;
 
 		if ( $result['roleLimited'] && AccessProfile::isEnabled() ) {
 			foreach ( array_unique( [ '', AccessProfile::forAllRoles( $itemId, $locationId ) ] ) as $accessProfile ) {
@@ -83,7 +83,7 @@ class Calculator {
 	 * @throws \Exception
 	 */
 	public static function computeAccessProfile( int $itemId, int $locationId, string $accessProfile ): ?array {
-		$key = $locationId . ':' . $itemId . ':' . $accessProfile;
+		$key = AccessStore::key( $itemId, $locationId, $accessProfile );
 		if ( array_key_exists( $key, self::$computedProfiles ) ) {
 			return self::$computedProfiles[ $key ];
 		}
@@ -101,7 +101,7 @@ class Calculator {
 	 * @throws \Exception
 	 */
 	private static function recomputeAccessProfile( int $itemId, int $locationId, string $accessProfile, int $gen ): ?array {
-		$key    = $locationId . ':' . $itemId . ':' . $accessProfile;
+		$key    = AccessStore::key( $itemId, $locationId, $accessProfile );
 		$result = null;
 		if ( AccessStore::hasRoom( $itemId, $locationId, $accessProfile, $gen ) ) {
 			$result = self::compute( $itemId, $locationId, $accessProfile );
@@ -209,7 +209,7 @@ class Calculator {
 	 * @return array{from: string, flags: int[], slots: ?string, roleLimited: bool}|null
 	 */
 	public static function getComputed( int $itemId, int $locationId ): ?array {
-		return self::$computed[ $locationId . ':' . $itemId ] ?? null;
+		return self::$computed[ Store::key( $itemId, $locationId ) ] ?? null;
 	}
 
 	/**

@@ -179,14 +179,14 @@ class Index {
 	}
 
 	/**
-	 * @param array $values
-	 *
 	 * Same sanitizing as the legacy queries: empty values are dropped (no filter), all others are cast to int.
 	 * A non-empty list of invalid values therefore results in IN (0), which matches nothing.
 	 *
+	 * @param array $values
+	 *
 	 * @return int[]
 	 */
-	private static function ids( array $values ): array {
+	public static function ids( array $values ): array {
 		return array_values( array_unique( array_map( 'intval', array_filter( $values ) ) ) );
 	}
 

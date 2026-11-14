@@ -5,8 +5,6 @@ namespace CommonsBooking\Repository;
 use CommonsBooking\Model\Restriction as RestrictionModel;
 use CommonsBooking\Model\Timeframe as TimeframeModel;
 use CommonsBooking\Service\Index\Schema as IndexSchema;
-use CommonsBooking\Wordpress\CustomPostType\Item as ItemCPT;
-use CommonsBooking\Wordpress\CustomPostType\Location as LocationCPT;
 use CommonsBooking\Wordpress\CustomPostType\Restriction as RestrictionCPT;
 use CommonsBooking\Wordpress\CustomPostType\Timeframe as TimeframeCPT;
 
@@ -601,26 +599,18 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Whether the current user may edit the post, see {@see commonsbooking_isCurrentUserAllowedToEdit()}
+	 * (admins included). Also used by the meta box ({@see \CommonsBooking\View\Admin\AssignedTimeframes}).
+	 *
 	 * @param \WP_Post $post
 	 *
 	 * @return bool
 	 */
-	private static function canEdit( \WP_Post $post ): bool {
+	public static function canEdit( \WP_Post $post ): bool {
 		try {
 			return commonsbooking_isCurrentUserAllowedToEdit( $post );
 		} catch ( \Exception $e ) {
 			return false;
 		}
-	}
-
-	/**
-	 * Returns the post type of the other side.
-	 *
-	 * @param string $entity
-	 *
-	 * @return string
-	 */
-	public static function counterpartPostType( string $entity ): string {
-		return $entity === 'item' ? LocationCPT::$postType : ItemCPT::$postType;
 	}
 }

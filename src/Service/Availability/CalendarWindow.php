@@ -122,10 +122,6 @@ final class CalendarWindow {
 		return $this->advanceBookingDays;
 	}
 
-	public function getLastBookableDate(): int {
-		return $this->lastBookableDate;
-	}
-
 	public function getFirstBookableDay(): ?string {
 		return $this->firstBookableDay;
 	}

@@ -194,7 +194,7 @@ class Invalidator {
 				self::$overflow = true;
 				return;
 			}
-			self::$queue[ $pair[1] . ':' . $pair[0] ] = $pair;
+			self::$queue[ Store::key( $pair[0], $pair[1] ) ] = $pair;
 		}
 	}
 

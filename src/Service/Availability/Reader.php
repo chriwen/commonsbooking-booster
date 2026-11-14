@@ -44,7 +44,7 @@ class Reader {
 		$pairs = array_values(
 			array_filter(
 				$pairs,
-				fn( $pair ) => ! isset( $this->loadedPairs[ $pair[1] . ':' . $pair[0] ] )
+				fn( $pair ) => ! isset( $this->loadedPairs[ Store::key( $pair[0], $pair[1] ) ] )
 			)
 		);
 		if ( ! $pairs ) {
@@ -60,13 +60,13 @@ class Reader {
 		// same query as in Calendar::getCalendarDataArray(), for all pairs at once
 		$timeframes = Timeframe::getBookableForCurrentUser( $locationIds, $itemIds, null, true, Helper::getLastFullHourTimestamp() );
 		foreach ( $pairs as [ $itemId, $locationId ] ) {
-			$this->loadedPairs[ $locationId . ':' . $itemId ]   = true;
-			$this->bookableTimeframes[ $locationId ][ $itemId ] = [];
+			$this->loadedPairs[ Store::key( $itemId, $locationId ) ] = true;
+			$this->bookableTimeframes[ $locationId ][ $itemId ]      = [];
 		}
 		foreach ( $timeframes as $timeframe ) {
 			foreach ( $timeframe->getLocationIDs() as $locationId ) {
 				foreach ( $timeframe->getItemIDs() as $itemId ) {
-					if ( isset( $this->loadedPairs[ $locationId . ':' . $itemId ] ) ) {
+					if ( isset( $this->loadedPairs[ Store::key( $itemId, $locationId ) ] ) ) {
 						$this->bookableTimeframes[ $locationId ][ $itemId ][] = $timeframe;
 					}
 				}

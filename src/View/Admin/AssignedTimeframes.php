@@ -162,7 +162,7 @@ class AssignedTimeframes {
 		echo '<div class="cb-at-toolbar">';
 		foreach ( array( array( __( 'Item:', 'commonsbooking' ), $itemIds ), array( __( 'Location:', 'commonsbooking' ), $locationIds ) ) as list( $label, $ids ) ) {
 			echo '<span class="cb-at-bookable"><strong>' . esc_html( $label ) . '</strong> ' . self::names( $ids ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
-			if ( count( $ids ) === 1 && get_post( $ids[0] ) && self::mayEdit( get_post( $ids[0] ) ) ) {
+			if ( count( $ids ) === 1 && get_post( $ids[0] ) && Repository::canEdit( get_post( $ids[0] ) ) ) {
 				printf(
 					' (<a href="%s">%s</a>)',
 					esc_url( self::getLink( $ids[0] ) ),
@@ -511,7 +511,7 @@ class AssignedTimeframes {
 			if ( ! $post || $post->post_status === 'trash' ) {
 				continue;
 			}
-			if ( count( $names ) >= self::MAX_NAMES || ! self::mayEdit( $post ) ) {
+			if ( count( $names ) >= self::MAX_NAMES || ! Repository::canEdit( $post ) ) {
 				++$hidden;
 				continue;
 			}
@@ -523,22 +523,6 @@ class AssignedTimeframes {
 		}
 
 		return $names ? implode( ', ', $names ) : '–';
-	}
-
-	/**
-	 * @param \WP_Post $post
-	 *
-	 * @return bool
-	 */
-	private static function mayEdit( \WP_Post $post ): bool {
-		if ( commonsbooking_isCurrentUserAdmin() ) {
-			return true;
-		}
-		try {
-			return commonsbooking_isCurrentUserAllowedToEdit( $post );
-		} catch ( \Exception $e ) {
-			return false;
-		}
 	}
 
 	/**
