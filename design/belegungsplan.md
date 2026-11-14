@@ -68,7 +68,8 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
 - Details Zeitrahmen: Zeitraum, Wiederholung, Wochentage bzw. Termine, Uhrzeit, max. Buchungsdauer, Vorausbuchung,
   Rollenbeschränkung, Status (wenn nicht veröffentlicht).
 - Details Einschränkung: Zeitraum, Status, Hinweistext.
-- Details Buchung: Zeitraum, Status, Name, E-Mail, Telefon (falls vorhanden), Buchungscode, Kommentar, gebucht am.
+- Details Buchung: Zeitraum, Status, Name, E-Mail, Telefon, Kommentar (diese drei immer, leer als „–“), Buchungscode,
+  gebucht am. Telefon ist das Profilfeld `phone`, Kommentar das Buchungsfeld `comment`.
 - Nur lesend, kein Verschieben von Buchungen.
 
 ## Rechte

@@ -915,20 +915,16 @@ class OccupancyPlan {
 			[ __( 'Period', 'commonsbooking' ), self::formatDateTime( $booking->getStartDate() ) . ' – ' . self::formatDateTime( $booking->getEndDate() ) ],
 			[ __( 'Status', 'commonsbooking' ), $booking->getStatus() ],
 		];
-		if ( $user ) {
-			$details[] = [ __( 'Name', 'commonsbooking' ), $user->display_name ];
-			$details[] = [ __( 'Email', 'commonsbooking' ), $user->user_email ];
-			$phone     = get_user_meta( $user->ID, 'phone', true );
-			if ( $phone ) {
-				$details[] = [ __( 'Phone', 'commonsbooking' ), (string) $phone ];
-			}
-		}
+		// email, phone and comment always, so an empty value is visible as such
+		$empty     = '–';
+		$phone     = $user ? trim( (string) get_user_meta( $user->ID, 'phone', true ) ) : '';
+		$comment   = trim( wp_strip_all_tags( (string) $booking->getMeta( 'comment' ) ) );
+		$details[] = [ __( 'Name', 'commonsbooking' ), $user ? $user->display_name : $empty ];
+		$details[] = [ __( 'Email', 'commonsbooking' ), $user && $user->user_email ? $user->user_email : $empty ];
+		$details[] = [ __( 'Phone', 'commonsbooking' ), $phone !== '' ? $phone : $empty ];
+		$details[] = [ __( 'Comment', 'commonsbooking' ), $comment !== '' ? $comment : $empty ];
 		if ( $booking->getBookingCode() ) {
 			$details[] = [ __( 'Booking code', 'commonsbooking' ), (string) $booking->getBookingCode() ];
-		}
-		$comment = wp_strip_all_tags( (string) $booking->getMeta( 'comment' ) );
-		if ( $comment !== '' ) {
-			$details[] = [ __( 'Comment', 'commonsbooking' ), $comment ];
 		}
 		$details[] = [ __( 'Booked on', 'commonsbooking' ), self::formatDateTime( strtotime( $booking->post_date ) ) ];
 

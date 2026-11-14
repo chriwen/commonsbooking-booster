@@ -62,7 +62,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 - Timeframe details: period, repetition, weekdays or dates, time, maximum booking days, advance booking days, role
   restriction, status (if not published).
 - Restriction details: period, state, hint text.
-- Booking details: period, status, name, email, phone (if present), booking code, comment, booked on.
+- Booking details: period, status, name, email, phone, comment (these three always, "–" if empty), booking code,
+  booked on. Phone is the profile field `phone`, comment the booking field `comment`.
 - Read-only, bookings cannot be moved.
 
 ## Permissions
