@@ -382,6 +382,7 @@ class Plugin {
 		}
 
 		\CommonsBooking\View\Admin\Stats\Page::addMenu();
+		\CommonsBooking\View\Admin\OccupancyPlan::addMenu();
 
 		// Show categories only for admins
 		if ( commonsbooking_isCurrentUserAdmin() ) {
@@ -744,6 +745,7 @@ class Plugin {
 		// Performance booster: timeframe index and precomputed availability, only if switched on
 		\CommonsBooking\Service\Booster\Booster::init();
 		\CommonsBooking\Service\Stats\Stats::init();
+		\CommonsBooking\View\Admin\OccupancyPlan::init();
 
 		// Enable CB1 User Fields (needed in case of migration from cb 0.9.x)
 		add_action( 'init', array( self::class, 'maybeEnableCB1UserFields' ) );
