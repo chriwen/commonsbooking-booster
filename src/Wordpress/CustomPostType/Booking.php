@@ -367,13 +367,16 @@ class Booking extends Timeframe {
 			);
 		}
 
+		// One query for the booking with exactly this slot and all other bookings overlapping it (a booking with the
+		// exact slot always overlaps it). On large sites each of the former two queries read the whole booking history.
+		$overlapping = $repetitionStart <= $repetitionEnd
+			? \CommonsBooking\Repository\Booking::getByTimerange( $repetitionStart, $repetitionEnd, $locationId, $itemId )
+			: null;
+
 		/** @var \CommonsBooking\Model\Booking|null $booking */
-		$booking = \CommonsBooking\Repository\Booking::getByDate(
-			$repetitionStart,
-			$repetitionEnd,
-			$locationId,
-			$itemId
-		);
+		$booking = $overlapping !== null
+			? self::findExactSlot( $overlapping, $repetitionStart, $repetitionEnd )
+			: \CommonsBooking\Repository\Booking::getByDate( $repetitionStart, $repetitionEnd, $locationId, $itemId );
 
 		// Reject if the slot is already booked by another user (getExistingBookings excludes this booking by ID)
 		if ( $booking && ! commonsbooking_isCurrentUserAllowedToEdit( $booking ) ) {
@@ -393,8 +396,9 @@ class Booking extends Timeframe {
 			throw new BookingDeniedException( __( 'Invalid booking request. Please try again.', 'commonsbooking' ) );
 		}
 
-		$existingBookings =
-			\CommonsBooking\Repository\Booking::getExistingBookings(
+		$existingBookings = $overlapping !== null
+			? array_filter( $overlapping, fn( $other ) => $other->ID !== ( $booking->ID ?? null ) )
+			: \CommonsBooking\Repository\Booking::getExistingBookings(
 				$itemId,
 				$locationId,
 				$repetitionStart,
@@ -501,6 +505,33 @@ class Booking extends Timeframe {
 		}
 
 		return $postId;
+	}
+
+	/**
+	 * Picks the booking with exactly this slot from the bookings overlapping it, with the conditions of
+	 * {@see \CommonsBooking\Repository\Booking::getByDate()}: start compared as number, end as string.
+	 *
+	 * @param \CommonsBooking\Model\Booking[] $overlapping bookings of the item and location overlapping the slot
+	 * @param int                             $start
+	 * @param int                             $end
+	 *
+	 * @return \CommonsBooking\Model\Booking|null
+	 * @throws Exception if more than one booking has exactly this slot
+	 */
+	private static function findExactSlot( array $overlapping, int $start, int $end ): ?\CommonsBooking\Model\Booking {
+		$exact = array_values(
+			array_filter(
+				$overlapping,
+				fn( $booking ) => (int) $booking->getMeta( \CommonsBooking\Model\Timeframe::REPETITION_START ) === $start
+					&& (string) $booking->getMeta( \CommonsBooking\Model\Timeframe::REPETITION_END ) === (string) $end
+			)
+		);
+		if ( count( $exact ) > 1 ) {
+			// same as Repository\Booking::getByDate(), this shouldn't happen
+			throw new Exception( __CLASS__ . '::' . __LINE__ . ': Found more than one bookings' );
+		}
+
+		return $exact[0] ?? null;
 	}
 
 	/**
