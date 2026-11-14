@@ -34,9 +34,9 @@ class BookingRuleUserRangeTest extends CustomPostTypeTest {
 		$this->createSubscriber();
 		$this->otherUserId = wp_create_user( 'otheruser', 'other', 'other@example.com' );
 
-		$this->termA      = wp_insert_term( 'cat-a', Item::getTaxonomyName() )['term_id'];
-		$this->termB      = wp_insert_term( 'cat-b', Item::getTaxonomyName() )['term_id'];
-		$this->termUnused = wp_insert_term( 'cat-unused', Item::getTaxonomyName() )['term_id'];
+		$this->termA      = $this->term( 'cat-a' );
+		$this->termB      = $this->term( 'cat-b' );
+		$this->termUnused = $this->term( 'cat-unused' );
 		$itemA            = $this->createItem( 'Item A' );
 		$itemB            = $this->createItem( 'Item B' );
 		wp_set_post_terms( $itemA, [ $this->termA ], Item::getTaxonomyName() );
@@ -84,6 +84,15 @@ class BookingRuleUserRangeTest extends CustomPostTypeTest {
 			}
 		}
 		$this->assertGreaterThan( 20, $found, 'the cases find bookings at all' );
+	}
+
+	/**
+	 * Terms are not removed between tests (other tests use the same slugs).
+	 */
+	private function term( string $slug ): int {
+		$term = get_term_by( 'slug', $slug, Item::getTaxonomyName() );
+
+		return $term ? $term->term_id : wp_insert_term( $slug, Item::getTaxonomyName() )['term_id'];
 	}
 
 	/**
