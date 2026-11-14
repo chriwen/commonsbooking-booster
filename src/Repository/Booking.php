@@ -192,7 +192,37 @@ class Booking extends PostRepository {
 			return $fromIndex ? reset( $fromIndex ) : null;
 		}
 
-		// Default query
+		$bookings = self::findForItemLegacy(
+			$itemId,
+			$locationId,
+			[
+				'start_exact' => $startDateTimestamp,
+				'end_exact'   => $endDateTimestamp,
+			],
+			[ 'confirmed', 'unconfirmed' ]
+		);
+		if ( count( $bookings ) > 1 ) {
+			// This shouldn't happen.
+			throw new Exception( __CLASS__ . '::' . __LINE__ . ': Found more than one bookings' );
+		}
+
+		return $bookings ? reset( $bookings ) : null;
+	}
+
+	/**
+	 * The former default query of {@see self::getByDate()}, kept to compare the results of
+	 * {@see self::findForItemLegacy()} with it (tests, dev-bench parity check).
+	 *
+	 * @param int $startDateTimestamp
+	 * @param int $endDateTimestamp
+	 * @param int $locationId
+	 * @param int $itemId
+	 *
+	 * @return null|\CommonsBooking\Model\Booking
+	 * @throws Exception
+	 * @internal
+	 */
+	public static function getByDateWithMetaQuery( int $startDateTimestamp, int $endDateTimestamp, int $locationId, int $itemId ): ?\CommonsBooking\Model\Booking {
 		$args = array(
 			'post_type'   => \CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
 			'meta_query'  => array(
@@ -289,7 +319,44 @@ class Booking extends PostRepository {
 			return $fromIndex;
 		}
 
-		// Default query
+		if ( $itemId && ! $customArgs ) {
+			return self::findForItemLegacy(
+				(int) $itemId,
+				$locationId ? (int) $locationId : null,
+				[
+					'start_max' => $endDate,
+					'end_min'   => $startDate,
+				],
+				$postStatus
+			);
+		}
+
+		return self::getByTimerangeWithMetaQuery( $startDate, $endDate, $locationId, $itemId, $customArgs, $postStatus );
+	}
+
+	/**
+	 * The former default query of {@see self::getByTimerange()}. Still used when no item is given or with custom
+	 * WP_Query arguments, and to compare the results of {@see self::findForItemLegacy()} with it.
+	 *
+	 * @param int      $startDate
+	 * @param int      $endDate
+	 * @param mixed    $locationId
+	 * @param mixed    $itemId
+	 * @param array    $customArgs
+	 * @param string[] $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[]
+	 * @throws Exception
+	 * @internal
+	 */
+	public static function getByTimerangeWithMetaQuery(
+		int $startDate,
+		int $endDate,
+		$locationId = null,
+		$itemId = null,
+		array $customArgs = [],
+		array $postStatus = [ 'confirmed', 'unconfirmed' ]
+	): array {
 		$args = array(
 			'post_type'   => \CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
 			'meta_query'  => array(
@@ -679,6 +746,98 @@ class Booking extends PostRepository {
 	 *
 	 * @return \CommonsBooking\Model\Booking[]|null
 	 */
+	/**
+	 * Finds the bookings of one item (and location) in the postmeta, with the same conditions as the meta queries of
+	 * {@see self::getByDateWithMetaQuery()} and {@see self::getByTimerangeWithMetaQuery()}.
+	 *
+	 * Used when the index can't be read, above all by the booking check, which always runs on the original data
+	 * ({@see \CommonsBooking\Service\Booster\Booster::withoutBooster()}). WP_Query joins one postmeta alias per
+	 * condition and MySQL starts at wp_posts, so it reads every booking of the site with five postmeta lookups each
+	 * (about 1.3 and 2.2 seconds on 100,000 bookings). Starting at the item-id rows and joining the other conditions
+	 * by post id reads only the bookings of the item (0.05 to 0.16 seconds). The values are compared exactly as the
+	 * meta queries do: start and end as signed numbers, the exact end, type, item and location as strings.
+	 *
+	 * @param int                                                                       $itemId
+	 * @param int|null                                                                  $locationId null: any location
+	 * @param array{start_exact?: int, end_exact?: int, start_max?: int, end_min?: int} $range
+	 * @param string[]                                                                  $postStatus
+	 *
+	 * @return \CommonsBooking\Model\Booking[] ordered by post date, newest first (WP_Query default)
+	 * @throws Exception
+	 */
+	private static function findForItemLegacy( int $itemId, ?int $locationId, array $range, array $postStatus ): array {
+		global $wpdb;
+
+		if ( ! $postStatus ) {
+			return [];
+		}
+
+		$joins  = [];
+		$params = [];
+		if ( $locationId ) {
+			$joins[]  = "INNER JOIN {$wpdb->postmeta} ml ON ml.post_id = p.ID AND ml.meta_key = %s AND ml.meta_value = %s";
+			$params[] = \CommonsBooking\Model\Timeframe::META_LOCATION_ID;
+			$params[] = (string) $locationId;
+		}
+		$joins[]  = "INNER JOIN {$wpdb->postmeta} mt ON mt.post_id = p.ID AND mt.meta_key = 'type' AND mt.meta_value = %s";
+		$params[] = (string) Timeframe::BOOKING_ID;
+
+		if ( isset( $range['start_exact'] ) ) {
+			$joins[]  = "INNER JOIN {$wpdb->postmeta} ms ON ms.post_id = p.ID AND ms.meta_key = %s AND CAST(ms.meta_value AS SIGNED) = %d";
+			$params[] = \CommonsBooking\Model\Timeframe::REPETITION_START;
+			$params[] = $range['start_exact'];
+		} elseif ( isset( $range['start_max'] ) ) {
+			$joins[]  = "INNER JOIN {$wpdb->postmeta} ms ON ms.post_id = p.ID AND ms.meta_key = %s AND CAST(ms.meta_value AS SIGNED) <= %d";
+			$params[] = \CommonsBooking\Model\Timeframe::REPETITION_START;
+			$params[] = $range['start_max'];
+		}
+		if ( isset( $range['end_exact'] ) ) {
+			$joins[]  = "INNER JOIN {$wpdb->postmeta} me ON me.post_id = p.ID AND me.meta_key = %s AND me.meta_value = %s";
+			$params[] = \CommonsBooking\Model\Timeframe::REPETITION_END;
+			$params[] = (string) $range['end_exact'];
+		} elseif ( isset( $range['end_min'] ) ) {
+			$joins[]  = "INNER JOIN {$wpdb->postmeta} me ON me.post_id = p.ID AND me.meta_key = %s AND CAST(me.meta_value AS SIGNED) >= %d";
+			$params[] = \CommonsBooking\Model\Timeframe::REPETITION_END;
+			$params[] = $range['end_min'];
+		}
+
+		// WHERE clause
+		array_push(
+			$params,
+			\CommonsBooking\Model\Timeframe::META_ITEM_ID,
+			(string) $itemId,
+			\CommonsBooking\Wordpress\CustomPostType\Booking::$postType,
+			...array_values( $postStatus )
+		);
+		$statusFormat = implode( ',', array_fill( 0, count( $postStatus ), '%s' ) );
+
+		// STRAIGHT_JOIN keeps the join order: item-id rows first, everything else by post id
+		$sql = "SELECT STRAIGHT_JOIN DISTINCT p.ID, p.post_date
+			FROM {$wpdb->postmeta} mi
+			INNER JOIN {$wpdb->posts} p ON p.ID = mi.post_id
+			" . implode( "\n\t\t\t", $joins ) . "
+			WHERE mi.meta_key = %s AND mi.meta_value = %s
+			AND p.post_type = %s AND p.post_status IN ($statusFormat)
+			ORDER BY p.post_date DESC";
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- placeholders only, table names from $wpdb
+		$ids = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( $sql, $params ) ) );
+		if ( ! $ids ) {
+			return [];
+		}
+		_prime_post_caches( $ids, false, true );
+
+		$bookings = [];
+		foreach ( $ids as $id ) {
+			$post = get_post( $id );
+			if ( $post instanceof WP_Post ) {
+				$bookings[] = new \CommonsBooking\Model\Booking( $post );
+			}
+		}
+
+		return $bookings;
+	}
+
 	private static function findViaIndex( array $criteria, array $customArgs, array $postStatus ): ?array {
 		if ( ! Index::isAvailable() ) {
 			return null;
