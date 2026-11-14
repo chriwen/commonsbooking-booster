@@ -144,7 +144,18 @@ class OccupancyPlanTest extends CustomPostTypeTest {
 		$this->assertEquals( 'unconfirmed', $byId[ $unconfirmed ]['state'] );
 
 		$details = array_column( $plan['posts'][ $confirmed ]['details'], 1, 0 );
-		$this->assertContains( $user->user_email, $details );
+		$this->assertEquals( $user->user_email, $details['Email'] );
+		$this->assertEquals( '–', $details['Phone'], 'shown even if empty' );
+		$this->assertEquals( '–', $details['Comment'], 'shown even if empty' );
+
+		update_user_meta( self::USER_ID, 'phone', '0123 456789' );
+		update_post_meta( $confirmed, 'comment', 'Bitte <b>vor 10 Uhr</b>' );
+		\CommonsBooking\Plugin::clearCache();
+		$plan    = OccupancyPlan::build( $this->locationId, $this->today, $this->day( 20 ) );
+		$details = array_column( $plan['posts'][ $confirmed ]['details'], 1, 0 );
+		$this->assertEquals( '0123 456789', $details['Phone'] );
+		$this->assertEquals( 'Bitte vor 10 Uhr', $details['Comment'] );
+		delete_user_meta( self::USER_ID, 'phone' );
 
 		$plan = OccupancyPlan::build( $this->locationId, $this->today, $this->day( 20 ), true );
 		$this->assertCount( 1, $this->segments( $this->row( $plan, $this->itemId )['segments'], OccupancyPlan::KIND_BOOKING, $canceled ) );
