@@ -404,6 +404,34 @@ class OccupancyPlanTest extends CustomPostTypeTest {
 		$this->assertCount( 1, $beyond['result']['notes'], 'beyond the booking window' );
 	}
 
+	public function testActiveIds() {
+		// running timeframe: active
+		$this->createTimeframe( $this->locationId, $this->itemId, strtotime( '-10 days', $this->now ), strtotime( '+30 days', $this->now ) );
+		// upcoming timeframe: active
+		$upcomingLocation = $this->createLocation( 'Upcoming location' );
+		$upcomingItem     = $this->createItem( 'Upcoming item' );
+		$this->createTimeframe( $upcomingLocation, $upcomingItem, strtotime( '+40 days', $this->now ), strtotime( '+60 days', $this->now ) );
+		// ended timeframe: not active
+		$endedLocation = $this->createLocation( 'Ended location' );
+		$endedItem     = $this->createItem( 'Ended item' );
+		$this->createTimeframe( $endedLocation, $endedItem, strtotime( '-60 days', $this->now ), strtotime( '-1 day', $this->now ) );
+		// draft item: neither the item nor (via this timeframe) the location is active
+		$draftLocation = $this->createLocation( 'Location with draft item' );
+		$draftItem     = $this->createItem( 'Draft item', 'draft' );
+		$this->createTimeframe( $draftLocation, $draftItem, strtotime( '-10 days', $this->now ), strtotime( '+30 days', $this->now ) );
+		// holiday timeframe only: not active
+		$holidayItem = $this->createItem( 'Holiday only' );
+		$this->holiday( $holidayItem, strtotime( '-10 days', $this->now ), strtotime( '+30 days', $this->now ) );
+		// item without timeframe
+		$lonelyItem = $this->createItem( 'Without timeframe' );
+		\CommonsBooking\Plugin::clearCache();
+
+		$active = OccupancyPlan::activeIds();
+		$this->assertEqualsCanonicalizing( [ $this->locationId, $upcomingLocation ], $active['locations'] );
+		$this->assertEqualsCanonicalizing( [ $this->itemId, $upcomingItem ], $active['items'] );
+		$this->assertNotContains( $lonelyItem, $active['items'] );
+	}
+
 	public function testCBManagerSeesOnlyOwnLocationsWithAllBookings() {
 		$this->createCBManager();
 		$managed   = $this->createLocation( 'Managed', 'publish', [ (string) $this->cbManagerUserID ] ); // stored as strings, like CMB2 does
