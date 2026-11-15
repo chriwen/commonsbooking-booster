@@ -676,6 +676,58 @@ class BookingRule {
 	}
 
 	/**
+	 * The bookings of the booking's user in the range (ordered by post_date ascending), as
+	 * {@see self::filterBookingsForTermsAndUser()} returns them for all bookings in the range.
+	 *
+	 * Queries the user's bookings first: on large sites the bookings of all users in a week or month are thousands
+	 * (about 1.5 s per rule with 100,000 bookings), those of one user a few. Only when the rule is limited to terms and
+	 * none of the user's bookings has one of them, the result depends on the bookings of the other users (any of them
+	 * with a matching term makes all bookings of the user count), then all bookings are queried as before.
+	 *
+	 * @param DateTime    $startOfRange
+	 * @param DateTime    $endOfRange
+	 * @param Booking     $booking
+	 * @param array|false $appliedTerms
+	 * @param string[]    $postStatus
+	 *
+	 * @return Booking[]|null
+	 * @throws Exception
+	 */
+	private static function getUserBookingsInRange( DateTime $startOfRange, DateTime $endOfRange, Booking $booking, $appliedTerms, array $postStatus ): ?array {
+		$user = $booking->getUserData();
+		// Ordered by post_date in ascending order
+		$order        = [
+			'orderby' => 'date',
+			'order'   => 'ASC',
+		];
+		$userBookings = \CommonsBooking\Repository\Booking::getByTimerange(
+			$startOfRange->getTimestamp(),
+			$endOfRange->getTimestamp(),
+			null,
+			null,
+			$order + [ 'author' => $user->ID ],
+			$postStatus
+		);
+		if ( empty( $userBookings ) ) {
+			return null;
+		}
+		if ( empty( $appliedTerms ) || Booking::filterTermsApply( $userBookings, $appliedTerms ) ) {
+			return $userBookings;
+		}
+
+		$rangeBookings = \CommonsBooking\Repository\Booking::getByTimerange(
+			$startOfRange->getTimestamp(),
+			$endOfRange->getTimestamp(),
+			null,
+			null,
+			$order,
+			$postStatus
+		);
+
+		return self::filterBookingsForTermsAndUser( $rangeBookings, $user, $appliedTerms );
+	}
+
+	/**
 	 * Will check if a range of bookings exceeds the allowed amount of days.
 	 * Will also filter out bookings that are not in the same category as the booking.
 	 * Will also filter out bookings that are not made by the same user as the booking.
@@ -696,19 +748,7 @@ class BookingRule {
 		if ( Settings::getOption( 'commonsbooking_options_restrictions', 'bookingrules-count-cancelled' ) == 'on' ) {
 			$countedPostTypes[] = 'canceled';
 		}
-		$rangeBookingsArray = \CommonsBooking\Repository\Booking::getByTimerange(
-			$startOfRange->getTimestamp(),
-			$endOfRange->getTimestamp(),
-			null,
-			null,
-			[
-				// Ordered by post_date in ascending order
-				'orderby' => 'date',
-				'order'   => 'ASC',
-			],
-			$countedPostTypes
-		);
-		$rangeBookingsArray = self::filterBookingsForTermsAndUser( $rangeBookingsArray, $booking->getUserData(), $appliedTerms );
+		$rangeBookingsArray = self::getUserBookingsInRange( $startOfRange, $endOfRange, $booking, $appliedTerms, $countedPostTypes );
 		if ( empty( $rangeBookingsArray ) ) {
 			return null;
 		}
@@ -747,19 +787,7 @@ class BookingRule {
 		if ( Settings::getOption( 'commonsbooking_options_restrictions', 'bookingrules-count-cancelled' ) == 'on' ) {
 			$countedPostTypes[] = 'canceled';
 		}
-		$rangeBookingsArray = \CommonsBooking\Repository\Booking::getByTimerange(
-			$startOfRange->getTimestamp(),
-			$endOfRange->getTimestamp(),
-			null,
-			null,
-			[
-				// Ordered by post_date in ascending order
-				'orderby' => 'date',
-				'order'   => 'ASC',
-			],
-			$countedPostTypes
-		);
-		$rangeBookingsArray = self::filterBookingsForTermsAndUser( $rangeBookingsArray, $booking->getUserData(), $appliedTerms );
+		$rangeBookingsArray = self::getUserBookingsInRange( $startOfRange, $endOfRange, $booking, $appliedTerms, $countedPostTypes );
 		if ( empty( $rangeBookingsArray ) ) {
 			return null;
 		}

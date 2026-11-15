@@ -22,7 +22,7 @@ bookings becoming possible.
 | Location of the switch | Settings → Advanced → "Performance booster" (field `booster_enabled` in `commonsbooking_options_advanced-options`), plus filter `commonsbooking_booster_enabled` and WP-CLI | Fits the other cache settings. |
 | What happens when "off" | no hooks, no cron jobs, no reading from the tables. The index counts as stale, the tables remain (removal with `purge`). | Switched off it is identical to the original code. Switching on again needs no new table setup, only refilling. |
 | Switching on | create tables, **always rebuild the index completely**; original queries until it is finished | While the booster was off, nobody maintained the index. |
-| Booking validation | **always** runs with the original queries and without the plugin cache (`Booster::withoutBooster()`): booking form, admin booking, timeframe validation | A stale index can then at most cause a wrong display, never a double booking. The Symfony cache is bypassed as well, because it may contain results that come from the index. A validation concerns one pair and stays fast. |
+| Booking validation | **always** runs with the original queries and without the plugin cache (`Booster::withoutBooster()`): booking form, admin booking, timeframe validation | A stale index can then at most cause a wrong display, never a double booking. The Symfony cache is bypassed as well, because it may contain results that come from the index. The postmeta query for a pair starts at the `item-id` rows and so stays fast even with 100,000 bookings (0.05–0.16 s), see `buchungspruefung.en.md`. |
 | Detecting a downgrade | guard (`Guard`) with three checks, see below | The old version leaves no marker; the new one has to recognise the consequences in the data. |
 
 ## Guard
@@ -245,7 +245,8 @@ Tests: `tests/php/Service/Booster/SetupTest.php`.
 
 ## Double bookings with slow validation
 
-The booking validation always uses the original queries. With 167,000 bookings it takes about 3 seconds. A
+The booking validation always uses the original queries. With 167,000 bookings it took about 3 seconds (since
+`buchungspruefung.en.md` below 0.5 s). A
 second click during that time created a second unconfirmed booking (both requests found the slot free); the
 third ended with "Found more than one bookings". This already existed before the booster. Remedy:
 - `Booking::withItemLock()`: MySQL lock (`GET_LOCK`) per item around validation and saving. Requests for the same
