@@ -245,21 +245,36 @@ class AssignedTimeframes {
 
 		$shown = $open ? $entries : array_slice( $entries, 0, self::MAX_EXPIRED );
 
-		$headers = array(
-			__( 'Type', 'commonsbooking' ),
-			__( 'Title (status)', 'commonsbooking' ),
-			__( 'Period', 'commonsbooking' ),
-			__( 'Repetition', 'commonsbooking' ),
-			__( 'Grid', 'commonsbooking' ),
-			__( 'Items', 'commonsbooking' ),
-			__( 'Locations', 'commonsbooking' ),
-		);
-		if ( $entity !== 'timeframe' ) {
-			$headers[] = $entity === 'item' ? __( 'Applies at', 'commonsbooking' ) : __( 'Affects items', 'commonsbooking' );
+		// Fixed column widths (percent) so that the tables of all groups line up; long content wraps.
+		if ( $entity === 'timeframe' ) {
+			$headers = array(
+				array( __( 'Type', 'commonsbooking' ), 16 ),
+				array( __( 'Title (status)', 'commonsbooking' ), 22 ),
+				array( __( 'Period', 'commonsbooking' ), 16 ),
+				array( __( 'Repetition', 'commonsbooking' ), 10 ),
+				array( __( 'Grid', 'commonsbooking' ), 9 ),
+				array( __( 'Items', 'commonsbooking' ), 13 ),
+				array( __( 'Locations', 'commonsbooking' ), 14 ),
+			);
+		} else {
+			$headers = array(
+				array( __( 'Type', 'commonsbooking' ), 14 ),
+				array( __( 'Title (status)', 'commonsbooking' ), 20 ),
+				array( __( 'Period', 'commonsbooking' ), 14 ),
+				array( __( 'Repetition', 'commonsbooking' ), 9 ),
+				array( __( 'Grid', 'commonsbooking' ), 8 ),
+				array( __( 'Items', 'commonsbooking' ), 11 ),
+				array( __( 'Locations', 'commonsbooking' ), 12 ),
+				array( $entity === 'item' ? __( 'Applies at', 'commonsbooking' ) : __( 'Affects items', 'commonsbooking' ), 12 ),
+			);
 		}
-		echo '<div class="cb-at-scroll"><table class="cb-at-table"><thead><tr>';
+		echo '<div class="cb-at-scroll"><table class="cb-at-table"><colgroup>';
 		foreach ( $headers as $header ) {
-			echo '<th scope="col">' . esc_html( $header ) . '</th>';
+			echo '<col style="width:' . (int) $header[1] . '%">';
+		}
+		echo '</colgroup><thead><tr>';
+		foreach ( $headers as $header ) {
+			echo '<th scope="col">' . esc_html( $header[0] ) . '</th>';
 		}
 		echo '</tr></thead><tbody>';
 		foreach ( $shown as $entry ) {
@@ -341,7 +356,7 @@ class AssignedTimeframes {
 		$end   = $entry['end'] ? date_i18n( get_option( 'date_format' ), $entry['end'] ) : __( 'open end', 'commonsbooking' );
 
 		printf(
-			'<tr class="%s"><td class="cb-at-type"><span class="cb-at-badge"><span class="dashicons %s" aria-hidden="true"></span>%s</span></td><td>%s</td><td class="cb-at-nowrap">%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>%s</tr>',
+			'<tr class="%s"><td class="cb-at-type"><span class="cb-at-badge"><span class="dashicons %s" aria-hidden="true"></span>%s</span></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>%s</tr>',
 			esc_attr( implode( ' ', $classes ) ),
 			esc_attr( $icon ),
 			esc_html( $entry['type_label'] ),
@@ -548,9 +563,9 @@ class AssignedTimeframes {
 			.cb-assigned-timeframes .cb-at-group--expired .cb-at-dot { background: #a7aaad; }
 			.cb-assigned-timeframes .cb-at-count { min-width: 18px; padding: 0 6px; border-radius: 9px; background: #f0f0f1; color: #50575e; font-size: 11px; line-height: 18px; text-align: center; }
 			.cb-assigned-timeframes .cb-at-scroll { overflow-x: auto; border: 1px solid var(--cb-at-border); border-radius: 4px; }
-			.cb-assigned-timeframes .cb-at-table { width: 100%; border-collapse: collapse; background: #fff; }
-			.cb-assigned-timeframes .cb-at-table th { text-align: left; padding: 6px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--cb-at-muted); background: #f6f7f7; border-bottom: 1px solid var(--cb-at-border); white-space: nowrap; }
-			.cb-assigned-timeframes .cb-at-table td { padding: 8px 10px; vertical-align: top; border-bottom: 1px solid #f0f0f1; }
+			.cb-assigned-timeframes .cb-at-table { width: 100%; min-width: 900px; table-layout: fixed; border-collapse: collapse; background: #fff; }
+			.cb-assigned-timeframes .cb-at-table th { text-align: left; padding: 6px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--cb-at-muted); background: #f6f7f7; border-bottom: 1px solid var(--cb-at-border); overflow-wrap: break-word; hyphens: auto; }
+			.cb-assigned-timeframes .cb-at-table td { padding: 8px 10px; vertical-align: top; border-bottom: 1px solid #f0f0f1; overflow-wrap: break-word; hyphens: auto; }
 			.cb-assigned-timeframes .cb-at-table tbody tr:last-child td { border-bottom: 0; }
 			.cb-assigned-timeframes .cb-at-table tbody tr:hover td { background: #f6f7f7; }
 			.cb-assigned-timeframes .cb-at-entry { --cb-at-accent: #2271b1; --cb-at-tint: #f0f6fc; --cb-at-ink: #135e96; }
@@ -562,12 +577,12 @@ class AssignedTimeframes {
 			.cb-assigned-timeframes .cb-at-entry--inactive { --cb-at-accent: #c3c4c7; }
 			.cb-assigned-timeframes .cb-at-entry--inactive td { color: #787c82; }
 			.cb-assigned-timeframes .cb-at-entry--inactive .cb-at-badge { filter: grayscale(1); opacity: .8; }
-			.cb-assigned-timeframes .cb-at-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 3px; background: var(--cb-at-tint); color: var(--cb-at-ink); font-size: 12px; font-weight: 500; white-space: nowrap; }
+			.cb-assigned-timeframes .cb-at-badge { display: inline-flex; align-items: center; max-width: 100%; box-sizing: border-box; gap: 4px; padding: 2px 8px; border-radius: 3px; background: var(--cb-at-tint); color: var(--cb-at-ink); font-size: 12px; font-weight: 500; }
+			.cb-assigned-timeframes .cb-at-badge .dashicons { flex: none; }
 			.cb-assigned-timeframes .cb-at-title { font-weight: 600; }
-			.cb-assigned-timeframes .cb-at-pill { display: inline-flex; align-items: center; gap: 3px; padding: 0 7px; border-radius: 10px; font-size: 11px; line-height: 18px; background: #f0f0f1; color: #50575e; white-space: nowrap; }
+			.cb-assigned-timeframes .cb-at-pill { display: inline-flex; align-items: center; gap: 3px; padding: 0 7px; border-radius: 10px; font-size: 11px; line-height: 18px; background: #f0f0f1; color: #50575e; }
 			.cb-assigned-timeframes .cb-at-pill--ok { background: #edfaef; color: #007017; }
 			.cb-assigned-timeframes .cb-at-pill .dashicons { font-size: 12px; width: 12px; height: 12px; vertical-align: middle; }
-			.cb-assigned-timeframes .cb-at-nowrap { white-space: nowrap; }
 			.cb-assigned-timeframes .cb-at-applies { font-weight: 600; }
 			.cb-assigned-timeframes .cb-at-warning { margin-top: 4px; color: #8a6d00; font-size: 12px; }
 			.cb-assigned-timeframes .cb-at-hint { margin-top: 4px; color: var(--cb-at-muted); font-style: italic; font-size: 12px; }
