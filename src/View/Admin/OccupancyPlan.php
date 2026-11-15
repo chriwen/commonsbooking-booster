@@ -50,6 +50,12 @@ class OccupancyPlan {
 	private const MIN_LABEL_WIDTH = 60;
 
 	/**
+	 * User meta with the last selection (view, and per view ids, category, period, day width, canceled). Only read
+	 * by this page, so it does not affect a downgrade.
+	 */
+	public const USER_META = 'commonsbooking_occupancy_plan';
+
+	/**
 	 * @return void
 	 */
 	public static function init(): void {
@@ -147,6 +153,73 @@ class OccupancyPlan {
 	}
 
 	/**
+	 * Choices of the search field: allowed locations or items that are part of an active combination
+	 * ({@see Plan::activeIds()}), plus the ones already selected (e.g. a draft opened via the row action).
+	 *
+	 * @param bool               $isItemView
+	 * @param array<int, string> $allowed id => title
+	 * @param int[]              $selected
+	 *
+	 * @return array<int, string> id => title
+	 */
+	private static function choices( bool $isItemView, array $allowed, array $selected ): array {
+		$active  = Plan::activeIds()[ $isItemView ? 'items' : 'locations' ];
+		$choices = array_intersect_key( $allowed, array_flip( array_merge( $active, $selected ) ) );
+		natcasesort( $choices );
+
+		return $choices;
+	}
+
+	/**
+	 * @return array saved selection of the current user {@see self::USER_META}
+	 */
+	private static function savedState(): array {
+		$saved = get_user_meta( get_current_user_id(), self::USER_META, true );
+
+		return is_array( $saved ) ? $saved : [];
+	}
+
+	/**
+	 * Remembers the selection per view (not the start date, which follows today).
+	 *
+	 * @param array  $saved
+	 * @param string $view
+	 * @param array  $state
+	 *
+	 * @return void
+	 */
+	private static function saveState( array $saved, string $view, array $state ): void {
+		$new          = $saved;
+		$new['view']  = $view;
+		$new[ $view ] = [
+			'ids'      => array_values( array_map( 'intval', $state['ids'] ) ),
+			'cat'      => (int) $state['cat'],
+			'days'     => (int) $state['days'],
+			'zoom'     => (string) $state['zoom'],
+			'canceled' => (int) $state['canceled'],
+		];
+		if ( $new !== $saved ) {
+			update_user_meta( get_current_user_id(), self::USER_META, $new );
+		}
+	}
+
+	/**
+	 * @param mixed $value request value: one id, a list or a comma separated string
+	 *
+	 * @return int[]
+	 */
+	private static function parseIds( $value ): array {
+		if ( is_string( $value ) || is_int( $value ) ) {
+			$value = explode( ',', (string) $value );
+		}
+		if ( ! is_array( $value ) ) {
+			return [];
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'absint', $value ) ) ) );
+	}
+
+	/**
 	 * @param int $locationId
 	 *
 	 * @return bool
@@ -174,18 +247,33 @@ class OccupancyPlan {
 		if ( ! current_user_can( 'manage_' . COMMONSBOOKING_PLUGIN_SLUG ) ) {
 			wp_send_json_error( null, 403 );
 		}
-		$view = isset( $_POST['view'] ) && $_POST['view'] === Plan::VIEW_ITEM ? Plan::VIEW_ITEM : Plan::VIEW_LOCATION;
-		$id   = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
-		$row  = isset( $_POST['row'] ) ? absint( $_POST['row'] ) : 0;
-		$date = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
-		$ok   = $view === Plan::VIEW_ITEM ? self::isAllowedItem( $id ) : self::isAllowedLocation( $id );
-		if ( ! $ok || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
+		$view    = isset( $_POST['view'] ) && $_POST['view'] === Plan::VIEW_ITEM ? Plan::VIEW_ITEM : Plan::VIEW_LOCATION;
+		$ids     = self::parseIds( isset( $_POST['ids'] ) ? sanitize_text_field( wp_unslash( $_POST['ids'] ) ) : '' );
+		$row     = isset( $_POST['row'] ) ? absint( $_POST['row'] ) : 0;
+		$date    = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+		$allowed = $view === Plan::VIEW_ITEM ? self::allowedItems() : self::allowedLocations();
+		if ( ! $ids || array_diff_key( array_flip( $ids ), $allowed ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date ) ) {
 			wp_send_json_error( null, 403 );
 		}
 
-		$result               = Plan::explainDay( $view, $id, $date, $row ?: null );
-		$result['date_label'] = date_i18n( 'l, ' . get_option( 'date_format' ), strtotime( $result['date'] ) );
-		wp_send_json_success( $result );
+		$rows = [];
+		foreach ( $ids as $id ) {
+			$result = Plan::explainDay( $view, $id, $date, $row ?: null );
+			$date   = $result['date'];
+			foreach ( $result['rows'] as $explained ) {
+				if ( count( $ids ) > 1 ) {
+					$explained['title'] = $allowed[ $id ] . ' · ' . $explained['title'];
+				}
+				$rows[] = $explained;
+			}
+		}
+		wp_send_json_success(
+			[
+				'date'       => $date,
+				'date_label' => date_i18n( 'l, ' . get_option( 'date_format' ), strtotime( $date ) ),
+				'rows'       => $rows,
+			]
+		);
 	}
 
 	/**
@@ -197,34 +285,45 @@ class OccupancyPlan {
 		}
 
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only page, parameters only select what is shown
-		$view       = isset( $_GET['view'] ) && $_GET['view'] === Plan::VIEW_ITEM ? Plan::VIEW_ITEM : Plan::VIEW_LOCATION;
+		$saved = self::savedState();
+		if ( isset( $_GET['view'] ) ) {
+			$view = $_GET['view'] === Plan::VIEW_ITEM ? Plan::VIEW_ITEM : Plan::VIEW_LOCATION;
+		} else {
+			$view = ( $saved['view'] ?? '' ) === Plan::VIEW_ITEM ? Plan::VIEW_ITEM : Plan::VIEW_LOCATION;
+		}
 		$isItemView = $view === Plan::VIEW_ITEM;
-		$choices    = $isItemView ? self::allowedItems() : self::allowedLocations();
+		$allowed    = $isItemView ? self::allowedItems() : self::allowedLocations();
 		$param      = $isItemView ? 'item' : 'location';
-		$id         = isset( $_GET[ $param ] ) ? absint( $_GET[ $param ] ) : 0;
-		if ( ! isset( $choices[ $id ] ) ) {
-			$id = $choices ? (int) array_key_first( $choices ) : 0;
+		// Explicit selection (form, links with ids) or the remembered one (menu, tabs)
+		$explicit = isset( $_GET['sel'] ) || isset( $_GET[ $param ] );
+		$remember = $explicit ? [] : (array) ( $saved[ $view ] ?? [] );
+		$input    = fn( string $key ) => isset( $_GET[ $key ] ) ? wp_unslash( $_GET[ $key ] ) : ( $remember[ $key ] ?? null ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized below
+
+		$ids     = array_values( array_filter( self::parseIds( $explicit ? wp_unslash( $_GET[ $param ] ?? [] ) : ( $remember['ids'] ?? [] ) ), fn( $id ) => isset( $allowed[ $id ] ) ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- absint in parseIds
+		$choices = self::choices( $isItemView, $allowed, $ids );
+		if ( ! $ids && ! $explicit && $choices ) {
+			$ids = [ (int) array_key_first( $choices ) ];
 		}
 		$taxonomy = $isItemView ? Location::getTaxonomyName() : Item::getTaxonomyName();
-		$cat      = isset( $_GET['cat'] ) ? absint( $_GET['cat'] ) : 0;
-		$span     = isset( $_GET['days'] ) ? absint( $_GET['days'] ) : self::DEFAULT_SPAN;
+		$cat      = absint( $input( 'cat' ) );
+		$span     = absint( $input( 'days' ) ?? self::DEFAULT_SPAN );
 		if ( ! in_array( $span, self::SPANS, true ) ) {
 			$span = self::DEFAULT_SPAN;
 		}
-		$zoom = isset( $_GET['zoom'] ) ? sanitize_key( $_GET['zoom'] ) : '';
+		$zoom = sanitize_key( (string) $input( 'zoom' ) );
 		if ( ! isset( self::ZOOMS[ $zoom ] ) ) {
 			$zoom = '';
 		}
 		$today    = strtotime( 'today', current_time( 'timestamp' ) );
 		$from     = isset( $_GET['from'] ) ? sanitize_text_field( wp_unslash( $_GET['from'] ) ) : date( 'Y-m-d', strtotime( '-' . self::DEFAULT_DAYS_BEFORE . ' days', $today ) );
-		$canceled = ! empty( $_GET['canceled'] );
+		$canceled = ! empty( $input( 'canceled' ) );
 		// phpcs:enable
 
 		[ $from, $to ] = Plan::normalizeRange( $from, date( 'Y-m-d', strtotime( $from . ' +' . ( $span - 1 ) . ' days' ) ?: $today ) );
 
 		$state = [
 			'view'     => $view,
-			$param     => $id,
+			$param     => $ids,
 			'cat'      => $cat,
 			'from'     => $from,
 			'days'     => $span,
@@ -237,26 +336,42 @@ class OccupancyPlan {
 		self::styles();
 		self::renderTabs( $view );
 
-		if ( ! $id ) {
+		if ( ! $allowed ) {
 			echo '<p>' . esc_html( $isItemView ? __( 'No item available. You need to be admin of at least one item.', 'commonsbooking' ) : __( 'No location available. You need to be admin of at least one location.', 'commonsbooking' ) ) . '</p></div>';
 
 			return;
 		}
 
-		self::renderFilters( $state, $choices, $taxonomy );
+		self::renderFilters( $state, $choices, $allowed, $taxonomy );
+
+		if ( ! $ids ) {
+			echo '<p class="cb-plan-empty-selection">' . esc_html( $isItemView ? __( 'Select at least one item.', 'commonsbooking' ) : __( 'Select at least one location.', 'commonsbooking' ) ) . '</p></div>';
+
+			return;
+		}
+		self::saveState( $saved, $view, array_merge( $state, [ 'ids' => $ids ] ) );
 
 		$onlyRows = null;
 		if ( $cat ) {
 			$objects  = get_objects_in_term( $cat, $taxonomy );
 			$onlyRows = is_array( $objects ) ? array_map( 'intval', $objects ) : [];
 		}
-		$plan = $isItemView
-			? Plan::buildForItem( $id, $from, $to, $canceled, $onlyRows )
-			: Plan::build( $id, $from, $to, $canceled, $onlyRows );
+		$groups = [];
+		foreach ( $ids as $id ) {
+			$post     = get_post( $id );
+			$groups[] = [
+				'id'       => $id,
+				'title'    => $allowed[ $id ],
+				'edit_url' => $post ? Plan::editUrl( $post ) : null,
+				'plan'     => $isItemView
+					? Plan::buildForItem( $id, $from, $to, $canceled, $onlyRows )
+					: Plan::build( $id, $from, $to, $canceled, $onlyRows ),
+			];
+		}
 
 		self::renderLegend();
-		self::renderPlan( $plan, (int) self::dayWidth( $zoom, $span ) );
-		self::renderPanel( $plan, $view, $id );
+		self::renderPlan( $groups, (int) self::dayWidth( $zoom, $span ) );
+		self::renderPanel( $groups, $view );
 		echo '</div>';
 	}
 
@@ -301,12 +416,13 @@ class OccupancyPlan {
 
 	/**
 	 * @param array              $state current query args
-	 * @param array<int, string> $choices locations or items
+	 * @param array<int, string> $choices locations or items offered in the search field
+	 * @param array<int, string> $allowed all locations or items the user may see (titles of the selection)
 	 * @param string             $taxonomy category taxonomy of the rows
 	 *
 	 * @return void
 	 */
-	private static function renderFilters( array $state, array $choices, string $taxonomy ): void {
+	private static function renderFilters( array $state, array $choices, array $allowed, string $taxonomy ): void {
 		$isItemView = $state['view'] === Plan::VIEW_ITEM;
 		$param      = $isItemView ? 'item' : 'location';
 		$base       = array_filter( $state );
@@ -325,12 +441,11 @@ class OccupancyPlan {
 		echo '<form method="get" class="cb-plan-filters">';
 		echo '<input type="hidden" name="page" value="' . esc_attr( self::SLUG ) . '">';
 		echo '<input type="hidden" name="view" value="' . esc_attr( $state['view'] ) . '">';
+		echo '<input type="hidden" name="sel" value="1">';
 		echo '<div class="cb-plan-filter-row">';
-		echo '<label>' . esc_html( $isItemView ? __( 'Item', 'commonsbooking' ) : __( 'Location', 'commonsbooking' ) ) . ' <select name="' . esc_attr( $param ) . '" onchange="this.form.submit()">';
-		foreach ( $choices as $choiceId => $title ) {
-			echo '<option value="' . esc_attr( (string) $choiceId ) . '"' . selected( $choiceId, $state[ $param ], false ) . '>' . esc_html( $title ) . '</option>';
-		}
-		echo '</select></label>';
+		self::renderPicker( $param, $state[ $param ], $choices, $allowed, $isItemView );
+		echo '<button type="submit" class="button cb-plan-show">' . esc_html__( 'Show', 'commonsbooking' ) . '</button>';
+		echo '</div><div class="cb-plan-filter-row">';
 		if ( is_array( $terms ) && $terms ) {
 			echo '<label>' . esc_html( $isItemView ? __( 'Location category', 'commonsbooking' ) : __( 'Item category', 'commonsbooking' ) ) . ' <select name="cat" onchange="this.form.submit()">';
 			echo '<option value="0">' . esc_html__( 'All', 'commonsbooking' ) . '</option>';
@@ -365,8 +480,171 @@ class OccupancyPlan {
 		echo '<a class="button" href="' . esc_url( $today ) . '">' . esc_html__( 'Today', 'commonsbooking' ) . '</a>';
 		echo '<a class="button" href="' . esc_url( $next ) . '" aria-label="' . esc_attr__( 'Later', 'commonsbooking' ) . '">&rarr;</a>';
 		echo '</span>';
-		echo '<noscript><button class="button">' . esc_html__( 'Show', 'commonsbooking' ) . '</button></noscript>';
 		echo '</div></form>';
+	}
+
+	/**
+	 * Search field with multiple selection: chips for the selected entries (hidden inputs), a text field that filters
+	 * the choices as you type. Without JavaScript the chips still submit the current selection.
+	 *
+	 * @param string             $param location or item
+	 * @param int[]              $selected
+	 * @param array<int, string> $choices
+	 * @param array<int, string> $allowed
+	 * @param bool               $isItemView
+	 *
+	 * @return void
+	 */
+	private static function renderPicker( string $param, array $selected, array $choices, array $allowed, bool $isItemView ): void {
+		$options = [];
+		foreach ( $choices as $choiceId => $title ) {
+			$options[] = [ $choiceId, $title ];
+		}
+		$hint = $isItemView
+			? __( 'Only published items with a current or upcoming bookable timeframe are listed.', 'commonsbooking' )
+			: __( 'Only published locations with a current or upcoming bookable timeframe are listed.', 'commonsbooking' );
+		$i18n = [
+			/* translators: %s: name of a location or item */
+			'remove'    => __( 'Remove %s', 'commonsbooking' ),
+			'noMatches' => __( 'No matches', 'commonsbooking' ),
+		];
+
+		echo '<div class="cb-plan-picker" data-name="' . esc_attr( $param ) . '[]" data-i18n="' . esc_attr( (string) wp_json_encode( $i18n ) ) . '">';
+		echo '<span class="cb-plan-picker-label" id="cb-plan-picker-label">' . esc_html( $isItemView ? __( 'Items', 'commonsbooking' ) : __( 'Locations', 'commonsbooking' ) ) . '</span>';
+		echo '<div class="cb-plan-picker-box">';
+		echo '<ul class="cb-plan-chips">';
+		foreach ( $selected as $id ) {
+			echo '<li class="cb-plan-chip" data-id="' . (int) $id . '"><span>' . esc_html( $allowed[ $id ] ?? '#' . $id ) . '</span>';
+			/* translators: %s: name of a location or item */
+			echo '<button type="button" class="cb-plan-chip-remove" aria-label="' . esc_attr( sprintf( __( 'Remove %s', 'commonsbooking' ), $allowed[ $id ] ?? '#' . $id ) ) . '">&times;</button>';
+			echo '<input type="hidden" name="' . esc_attr( $param ) . '[]" value="' . (int) $id . '"></li>';
+		}
+		echo '</ul>';
+		echo '<input type="text" class="cb-plan-picker-input" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cb-plan-picker-list" aria-labelledby="cb-plan-picker-label" autocomplete="off" placeholder="' . esc_attr( $isItemView ? __( 'Search item …', 'commonsbooking' ) : __( 'Search location …', 'commonsbooking' ) ) . '" title="' . esc_attr( $hint ) . '">';
+		echo '<ul class="cb-plan-picker-list" id="cb-plan-picker-list" role="listbox" aria-multiselectable="true" hidden></ul>';
+		echo '</div>';
+		echo '<script type="application/json" class="cb-plan-picker-options">' . wp_json_encode( $options, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT ) . '</script>';
+		echo '</div>';
+		?>
+<script>
+(function(){
+	function el(tag, cls, text){
+		var e = document.createElement(tag);
+		if (cls) { e.className = cls; }
+		if (text !== undefined && text !== null) { e.textContent = text; }
+		return e;
+	}
+	document.querySelectorAll('.cb-plan-picker').forEach(function(picker){
+		var options = JSON.parse(picker.querySelector('.cb-plan-picker-options').textContent);
+		var pt = JSON.parse(picker.getAttribute('data-i18n'));
+		var chips = picker.querySelector('.cb-plan-chips');
+		var input = picker.querySelector('.cb-plan-picker-input');
+		var list = picker.querySelector('.cb-plan-picker-list');
+		var form = picker.closest('form');
+		var name = picker.getAttribute('data-name');
+		var matches = [];
+		var current = -1;
+
+		function fold(s){ return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+		function selected(){
+			var ids = {};
+			chips.querySelectorAll('.cb-plan-chip').forEach(function(c){ ids[c.getAttribute('data-id')] = true; });
+			return ids;
+		}
+		function changed(){ form.classList.add('is-dirty'); }
+		function addChip(option){
+			var li = el('li', 'cb-plan-chip');
+			li.setAttribute('data-id', option[0]);
+			li.appendChild(el('span', null, option[1]));
+			var b = el('button', 'cb-plan-chip-remove', '×');
+			b.type = 'button';
+			b.setAttribute('aria-label', pt.remove.replace('%s', option[1]));
+			li.appendChild(b);
+			var h = el('input');
+			h.type = 'hidden';
+			h.name = name;
+			h.value = option[0];
+			li.appendChild(h);
+			chips.appendChild(li);
+			changed();
+		}
+		function closeList(){
+			list.hidden = true;
+			input.setAttribute('aria-expanded', 'false');
+			input.removeAttribute('aria-activedescendant');
+			current = -1;
+		}
+		function highlight(index){
+			var items = list.querySelectorAll('[role=option]');
+			if (!items.length) { return; }
+			current = (index + items.length) % items.length;
+			items.forEach(function(li, i){ li.classList.toggle('is-current', i === current); });
+			input.setAttribute('aria-activedescendant', items[current].id);
+			items[current].scrollIntoView({block: 'nearest'});
+		}
+		function openList(){
+			var q = fold(input.value.trim());
+			var ids = selected();
+			matches = options.filter(function(o){ return !ids[o[0]] && (!q || fold(o[1]).indexOf(q) !== -1); });
+			list.textContent = '';
+			if (!matches.length) {
+				list.appendChild(el('li', 'cb-plan-picker-none', pt.noMatches));
+			}
+			matches.forEach(function(o, i){
+				var li = el('li', null, o[1]);
+				li.id = 'cb-plan-option-' + o[0];
+				li.setAttribute('role', 'option');
+				li.setAttribute('data-index', i);
+				list.appendChild(li);
+			});
+			list.hidden = false;
+			input.setAttribute('aria-expanded', 'true');
+			current = -1;
+			if (q && matches.length) { highlight(0); }
+		}
+		function choose(index){
+			if (!matches[index]) { return; }
+			addChip(matches[index]);
+			input.value = '';
+			openList();
+			input.focus();
+		}
+
+		input.addEventListener('focus', openList);
+		input.addEventListener('input', openList);
+		input.addEventListener('keydown', function(e){
+			if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) { openList(); } highlight(current + 1); }
+			else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(current - 1); }
+			else if (e.key === 'Enter') {
+				e.preventDefault();
+				if (!list.hidden && current >= 0) { choose(current); }
+				else if (!input.value.trim()) { form.submit(); }
+			}
+			else if (e.key === 'Escape') { if (!list.hidden) { e.stopPropagation(); closeList(); } }
+			else if (e.key === 'Backspace' && !input.value) {
+				var last = chips.lastElementChild;
+				if (last) { last.remove(); changed(); if (!list.hidden) { openList(); } }
+			}
+		});
+		input.addEventListener('blur', function(){ setTimeout(function(){ if (document.activeElement !== input) { closeList(); } }, 150); });
+		// mousedown keeps the focus in the input
+		list.addEventListener('mousedown', function(e){
+			e.preventDefault();
+			var li = e.target.closest('[role=option]');
+			if (li) { choose(parseInt(li.getAttribute('data-index'), 10)); }
+		});
+		chips.addEventListener('click', function(e){
+			var b = e.target.closest('.cb-plan-chip-remove');
+			if (!b) { return; }
+			b.closest('.cb-plan-chip').remove();
+			changed();
+			input.focus();
+		});
+		picker.querySelector('.cb-plan-picker-box').addEventListener('click', function(e){ if (e.target === this || e.target === chips) { input.focus(); } });
+	});
+})();
+</script>
+		<?php
 	}
 
 	/**
@@ -409,12 +687,13 @@ class OccupancyPlan {
 	}
 
 	/**
-	 * @param array $plan {@see Plan::build()}
+	 * @param array $groups one per selected location or item: id, title, edit_url, plan {@see Plan::build()}
 	 * @param int   $dayWidth px
 	 *
 	 * @return void
 	 */
-	private static function renderPlan( array $plan, int $dayWidth ): void {
+	private static function renderPlan( array $groups, int $dayWidth ): void {
+		$plan  = $groups[0]['plan'];
 		$days  = $plan['days'];
 		$count = count( $days );
 
@@ -442,9 +721,36 @@ class OccupancyPlan {
 		}
 		echo '</div>';
 
+		foreach ( $groups as $group ) {
+			self::renderGroup( $group, $dayWidth, count( $groups ) > 1 );
+		}
+
+		echo '</div></div>';
+	}
+
+	/**
+	 * Rows of one selected location or item, with a heading line if several are selected.
+	 *
+	 * @param array $group
+	 * @param int   $dayWidth
+	 * @param bool  $withHeading
+	 *
+	 * @return void
+	 */
+	private static function renderGroup( array $group, int $dayWidth, bool $withHeading ): void {
+		$plan    = $group['plan'];
+		$groupId = (int) $group['id'];
+
+		if ( $withHeading ) {
+			$title = $group['edit_url']
+				? '<a href="' . esc_url( $group['edit_url'] ) . '">' . esc_html( $group['title'] ) . '</a>'
+				: esc_html( $group['title'] );
+			echo '<div class="cb-plan-line cb-plan-group" data-group="' . (int) $groupId . '"><div class="cb-plan-label">' . $title . '</div><div class="cb-plan-group-fill"></div></div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
+		}
+
 		if ( $plan['station']['segments'] ) {
 			$label = $plan['view'] === Plan::VIEW_ITEM ? __( 'All locations of the item', 'commonsbooking' ) : __( 'All items of the location', 'commonsbooking' );
-			self::renderRow( $plan, $dayWidth, '<strong>' . esc_html( $label ) . '</strong>', $plan['station']['lanes'], $plan['station']['segments'], null, 'cb-plan-station', 0 );
+			self::renderRow( $plan, $dayWidth, '<strong>' . esc_html( $label ) . '</strong>', $plan['station']['lanes'], $plan['station']['segments'], null, 'cb-plan-station', 0, $groupId );
 		}
 
 		if ( ! $plan['rows'] ) {
@@ -459,10 +765,8 @@ class OccupancyPlan {
 				/* translators: %d: number of bookings with conflicts */
 				$label .= ' <span class="cb-plan-badge" data-tip="' . esc_attr( sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $row['conflicts'], 'commonsbooking' ), $row['conflicts'] ) ) . '">⚠ ' . (int) $row['conflicts'] . '</span>';
 			}
-			self::renderRow( $plan, $dayWidth, $label, $row['lanes'], $row['segments'], $row['window_end'], '', (int) $row['row_id'] );
+			self::renderRow( $plan, $dayWidth, $label, $row['lanes'], $row['segments'], $row['window_end'], '', (int) $row['row_id'], $groupId );
 		}
-
-		echo '</div></div>';
 	}
 
 	/**
@@ -474,11 +778,12 @@ class OccupancyPlan {
 	 * @param string|null $windowEnd Y-m-d
 	 * @param string      $class
 	 * @param int         $rowId 0 = station row
+	 * @param int         $groupId selected location or item the row belongs to
 	 *
 	 * @return void
 	 */
-	private static function renderRow( array $plan, int $dayWidth, string $labelHtml, int $lanes, array $segments, ?string $windowEnd, string $class, int $rowId ): void {
-		echo '<div class="cb-plan-line cb-plan-row ' . esc_attr( $class ) . '" style="--cb-plan-lanes:' . (int) $lanes . '" data-row="' . (int) $rowId . '">';
+	private static function renderRow( array $plan, int $dayWidth, string $labelHtml, int $lanes, array $segments, ?string $windowEnd, string $class, int $rowId, int $groupId ): void {
+		echo '<div class="cb-plan-line cb-plan-row ' . esc_attr( $class ) . '" style="--cb-plan-lanes:' . (int) $lanes . '" data-row="' . (int) $rowId . '" data-group="' . (int) $groupId . '">';
 		echo '<div class="cb-plan-label">' . $labelHtml . '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by caller
 		foreach ( $plan['days'] as $i => $date ) {
 			echo '<div class="cb-plan-cell' . esc_attr( self::dayClasses( $date, $plan['today'], $windowEnd ) ) . '" style="grid-column:' . (int) ( $i + 2 ) . '" data-date="' . esc_attr( $date ) . '"></div>';
@@ -607,20 +912,23 @@ class OccupancyPlan {
 	 * Detail panel, tooltip and script. The details of all posts are embedded as JSON (only what the user may see
 	 * anyway); day explanations are loaded via AJAX.
 	 *
-	 * @param array  $plan
+	 * @param array  $groups
 	 * @param string $view
-	 * @param int    $id
 	 *
 	 * @return void
 	 */
-	private static function renderPanel( array $plan, string $view, int $id ): void {
+	private static function renderPanel( array $groups, string $view ): void {
+		$posts = [];
+		foreach ( $groups as $group ) {
+			$posts = array_replace( $posts, $group['plan']['posts'] );
+		}
 		$config = [
 			'ajax'   => admin_url( 'admin-ajax.php' ),
 			'action' => self::AJAX_DAY,
 			'nonce'  => wp_create_nonce( self::AJAX_DAY ),
 			'view'   => $view,
-			'id'     => $id,
-			'posts'  => (object) $plan['posts'],
+			'ids'    => array_map( fn( $group ) => (int) $group['id'], $groups ),
+			'posts'  => (object) $posts,
 			'i18n'   => [
 				'edit'      => __( 'Edit', 'commonsbooking' ),
 				'loading'   => __( 'Loading …', 'commonsbooking' ),
@@ -735,11 +1043,11 @@ class OccupancyPlan {
 		});
 		show(nodes);
 	}
-	function openDay(node, date, row){
+	function openDay(node, date, row, ids){
 		setActive(node);
 		show([el('p', 'cb-plan-muted', t.loading)]);
 		var id = ++request;
-		var params = new URLSearchParams({action: cfg.action, _ajax_nonce: cfg.nonce, view: cfg.view, id: cfg.id, date: date, row: row || 0});
+		var params = new URLSearchParams({action: cfg.action, _ajax_nonce: cfg.nonce, view: cfg.view, ids: ids.join(','), date: date, row: row || 0});
 		fetch(cfg.ajax, {method: 'POST', credentials: 'same-origin', body: params})
 			.then(function(r){ return r.json(); })
 			.then(function(json){
@@ -754,11 +1062,11 @@ class OccupancyPlan {
 		var seg = e.target.closest('.cb-plan-seg[data-post]');
 		if (seg) { openPost(seg); return; }
 		var head = e.target.closest('.cb-plan-dayhead');
-		if (head) { openDay(head, head.getAttribute('data-date'), 0); return; }
+		if (head) { openDay(head, head.getAttribute('data-date'), 0, cfg.ids); return; }
 		var cell = e.target.closest('.cb-plan-cell');
 		if (cell) {
 			var row = cell.closest('.cb-plan-row');
-			openDay(cell, cell.getAttribute('data-date'), parseInt(row.getAttribute('data-row'), 10) || 0);
+			openDay(cell, cell.getAttribute('data-date'), parseInt(row.getAttribute('data-row'), 10) || 0, [row.getAttribute('data-group')]);
 		}
 	});
 	panel.querySelector('.cb-plan-close').addEventListener('click', close);
@@ -807,6 +1115,28 @@ class OccupancyPlan {
 .cb-plan-filter-row{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
 .cb-plan-filters label{display:flex;gap:6px;align-items:center}
 .cb-plan-nav{margin-left:auto;display:flex;gap:4px}
+.cb-plan-picker{display:flex;gap:6px;align-items:flex-start;flex:1 1 420px;max-width:900px}
+.cb-plan-picker-label{line-height:30px}
+.cb-plan-picker-box{position:relative;flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-height:30px;padding:2px 4px;border:1px solid #8c8f94;border-radius:4px;background:#fff;box-sizing:border-box;cursor:text}
+.cb-plan-picker-box:focus-within{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}
+.cb-plan-chips{display:contents;margin:0}
+.cb-plan-chip{display:inline-flex;align-items:center;gap:2px;margin:0;padding:0 0 0 8px;border-radius:12px;background:#e5f0fa;color:#1d2327;line-height:22px;max-width:100%}
+.cb-plan-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb-plan-chip-remove{border:0;background:transparent;width:22px;height:22px;padding:0;border-radius:11px;font-size:16px;line-height:1;cursor:pointer;color:#50575e}
+.cb-plan-chip-remove:hover,.cb-plan-chip-remove:focus{background:#c5d9ed;color:#1d2327}
+.cb-plan-filters .cb-plan-picker-input{flex:1 0 160px;min-width:0;border:0;box-shadow:none;background:transparent;min-height:24px;padding:0 4px}
+.cb-plan-filters .cb-plan-picker-input:focus{box-shadow:none;outline:0}
+.cb-plan-picker-list{position:absolute;left:-1px;right:-1px;top:100%;z-index:20;margin:2px 0 0;padding:4px 0;max-height:320px;overflow:auto;background:#fff;border:1px solid #c3c4c7;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.cb-plan-picker-list[hidden]{display:none}
+.cb-plan-picker-list li{margin:0;padding:5px 10px;cursor:pointer}
+.cb-plan-picker-list li:hover,.cb-plan-picker-list li.is-current{background:#2271b1;color:#fff}
+.cb-plan-picker-list .cb-plan-picker-none,.cb-plan-picker-list .cb-plan-picker-none:hover{color:#50575e;background:transparent;cursor:default;font-style:italic}
+.cb-plan-filters.is-dirty .cb-plan-show{background:#2271b1;border-color:#2271b1;color:#fff}
+.cb-plan-empty-selection{font-style:italic;color:#50575e}
+.cb-plan-group{background:#f0f0f1;border-top:2px solid #8c8f94}
+.cb-plan-group .cb-plan-label{background:#f0f0f1;font-weight:600;font-size:14px;padding:7px 8px}
+.cb-plan-group .cb-plan-label a{color:#1d2327}
+.cb-plan-group-fill{grid-column:2 / -1}
 .cb-plan-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 10px;padding:0;font-size:12px;color:#50575e}
 .cb-plan-legend li{display:flex;align-items:center;gap:6px;margin:0}
 .cb-plan-legend .cb-plan-hint{margin-left:auto;font-style:italic}

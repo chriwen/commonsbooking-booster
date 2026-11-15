@@ -1,7 +1,8 @@
 # Occupancy plan in the admin area
 
-Status: stages 1 to 3 implemented in branch `feature/belegungsplan` (based on `booster/index-availability`), not committed.
-No new tables, options or post meta, so downgradable. Works with and without the booster.
+Status: stages 1 to 3 implemented, plus search with multiple selection (2026-11-15, not committed) in branch `feature/belegungsplan` (based on `booster/index-availability`), not committed.
+No new tables, options or post meta, so downgradable (only one user meta entry for the last selection, read only
+by this page). Works with and without the booster.
 German version: `belegungsplan.md`.
 
 ## Goal
@@ -15,6 +16,20 @@ bookable** (holidays, repair, restriction, no timeframe, beyond the advance book
 - **CB managers may see all booking data at a location** they manage, including items they do not manage.
 - **Freely selectable period, also beyond the advance booking period**, and into the past.
 
+## Decisions of the user (2026-11-15)
+
+- **Selection via search field** (type-in) instead of a long dropdown.
+- **Only active locations or items are offered:** published and part of an active combination, i.e. with at least one
+  published bookable timeframe that has not ended (running or upcoming) whose location and item are both published.
+  Drafts and entries without a timeframe are not listed. Entries already selected (e.g. a draft via the row action)
+  stay visible; permissions still cover all allowed posts. "Running or upcoming" (instead of valid today only) is our
+  reading of "currently active", so new combinations can be planned before they start.
+- **The last selection is remembered** and loaded when the page is opened without parameters: view and, per view,
+  selection, category, period, day width, "show canceled". The start date is not remembered (always today − 3 days).
+  Stored in the user meta `commonsbooking_occupancy_plan` instead of the browser, so it applies on the first page load
+  without a redirect and on every device.
+- **Multiple selection:** several locations or items; each gets its own block with a heading in the plan.
+
 ## Presentation
 
 Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-plan`), plus row action
@@ -22,7 +37,9 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 
 - **Two views** (tabs): **By location** (rows = items of the location) and **By item** (rows = locations of the item,
   `view=item`).
-- **Selection:** location or item, category of the rows (item category or location category; only if categories with
+- **Selection:** search field with multiple selection (chips, filters while typing ignoring case and accents, arrow
+  keys, Enter selects, Backspace removes the last chip, Enter in the empty field or "Show" loads; the button is
+  highlighted when the selection changed). An empty selection shows a hint instead of a plan. Below: category of the rows (item category or location category; only if categories with
   entries exist), "Show canceled bookings"; second line: start date, period (1, 2, 4, 8 weeks, 3, 6, 12 months), day
   width, paging ← Today →. Default: 4 weeks from today − 3 days. At most 366 days.
 - **Day width:** "Automatic" depends on the period (up to 2 weeks 96 px, 4 weeks 64 px, 8 weeks 44 px, 3 months
@@ -32,6 +49,9 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   month starts as stronger lines), rows = items or locations (column sticky, link to edit with edit permission).
 - **Bar labels** by width: full name from 60 px, below that initials for bookings and no text for blocks. The tooltip
   shows the rest.
+- **Several locations or items:** one block per selected entry in a shared grid (shared day header), with a heading
+  line (name, edit link) only from two entries on. Clicking the day header explains the day for all blocks (row title
+  "Location · Item"), clicking a cell only for its block.
 - **Row "All items of the location"** or "All locations of the item" (top, only if needed): blocks that occur identically in *every* item row (same
   post, same days) are moved there instead of being repeated. Only with two or more rows.
 - **Layers per row:**
@@ -75,8 +95,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   timeframe are shown, with all bookings (in line with the decision above).
 - For an allowed location **all** bookings are shown with full data (decision above). Edit links still check
   `commonsbooking_isCurrentUserAllowedToEdit()`, so existing permissions do not change.
-- Day explanation via AJAX (`wp_ajax_cb_occupancy_day`): nonce, capability `manage_commonsbooking` and allowed
-  location or item are checked on every request.
+- Day explanation via AJAX (`wp_ajax_cb_occupancy_day`, parameter `ids` as a list): nonce, capability
+  `manage_commonsbooking` and every location or item of the list are checked on every request.
 - No cache for the page (the calendar JSON is keyed by roles only and must not contain names).
 
 ## Technical notes
@@ -105,16 +125,18 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 - **Tests** (`tests/php/Service/OccupancyPlanTest.php`): weekdays and booking window, bookings with status and
   clipping, station row, restriction without end, lanes, permissions for CB managers, comparison with `DayFacts` from
   the calendar grid, same result with and without the booster, view by item and category filter, conflicts (holiday on
-  the pickup day, block, no timeframe, clipping), day explanation (reasons, result, notes).
+  the pickup day, block, no timeframe, clipping), day explanation (reasons, result, notes), active combinations (`activeIds()`: running, upcoming, ended, draft,
+  holiday only, without timeframe).
 
 ## Stages
 
 1. **Done:** timeline per location, detail panel, permissions, tests.
 2. **Done:** "Why is this day like this?" and conflict marking.
 3. **Done:** view per item, filter by category; plus reworked layout (day width, tooltip).
+   Afterwards (2026-11-15): search field with multiple selection, active entries only, remembered selection.
 4. Optional: print/export, link with `feature/dashboard`.
 
 ## Open questions
 
-- Default period and an "all locations" selection for admins.
+- Default period. No limit on the number of selected entries; each block builds its plan separately.
 - Hourly bookings currently show only the day; the time is in the panel.
