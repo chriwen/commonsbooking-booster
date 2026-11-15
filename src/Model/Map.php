@@ -49,6 +49,26 @@ class Map extends CustomPost {
 			true
 		);
 
+		// Load everything needed for all locations and items in bulk instead of per item
+		$itemsByLocation = [];
+		$allItemIds      = [];
+		$locationIds     = [];
+		foreach ( $locationObjects as $post ) {
+			$locationIds[]                = $post->ID;
+			$itemsByLocation[ $post->ID ] = Item::getByLocation( $post->ID );
+			foreach ( $itemsByLocation[ $post->ID ] as $item ) {
+				$allItemIds[] = $item->ID;
+			}
+		}
+		$allItemIds       = array_values( array_unique( $allItemIds ) );
+		$timeframesByPair = self::getBookableTimeframesByPair( $locationIds, $allItemIds );
+		update_object_term_cache( $allItemIds, \CommonsBooking\Wordpress\CustomPostType\Item::$postType );
+		update_object_term_cache( $locationIds, Location::$postType );
+		$thumbnailIds = array_filter( array_map( 'get_post_thumbnail_id', $allItemIds ) );
+		if ( $thumbnailIds ) {
+			_prime_post_caches( array_values( array_unique( $thumbnailIds ) ), false, true );
+		}
+
 		/** @var \CommonsBooking\Model\Location $post */
 		foreach ( $locationObjects as $post ) {
 			$location_meta = get_post_meta( $post->ID, '', true );
@@ -69,7 +89,7 @@ class Map extends CustomPost {
 				}
 			}
 
-			foreach ( Item::getByLocation( $post->ID ) as $item ) {
+			foreach ( $itemsByLocation[ $post->ID ] as $item ) {
 				$item_terms = wp_get_post_terms(
 					$item->ID,
 					\CommonsBooking\Wordpress\CustomPostType\Item::getTaxonomyName()
@@ -102,12 +122,7 @@ class Map extends CustomPost {
 				}
 
 				$timeframesData = [];
-				$timeframes     = Timeframe::getBookableForCurrentUser(
-					[ $post->ID ],
-					[ $item->ID ],
-					null,
-					true
-				);
+				$timeframes     = $timeframesByPair[ $post->ID ][ $item->ID ] ?? [];
 
 				if ( ! $timeframes ) {
 					continue;
@@ -167,6 +182,38 @@ class Map extends CustomPost {
 		}
 
 		return $locations;
+	}
+
+	/**
+	 * Returns the bookable timeframes (for the current user) of all given locations and items in one query,
+	 * grouped by location id and item id.
+	 *
+	 * Equivalent to calling Timeframe::getBookableForCurrentUser( [ $locationId ], [ $itemId ], null, true )
+	 * per pair: bookable timeframes only have single item / location ids (lists are removed on save for this type),
+	 * and all filters of the repository work per timeframe.
+	 *
+	 * @param int[] $locationIds
+	 * @param int[] $itemIds
+	 *
+	 * @return array<int, array<int, \CommonsBooking\Model\Timeframe[]>>
+	 * @throws Exception
+	 */
+	public static function getBookableTimeframesByPair( array $locationIds, array $itemIds ): array {
+		if ( ! $locationIds || ! $itemIds ) {
+			return [];
+		}
+
+		$byPair = [];
+		/** @var \CommonsBooking\Model\Timeframe $timeframe */
+		foreach ( Timeframe::getBookableForCurrentUser( $locationIds, $itemIds, null, true ) as $timeframe ) {
+			foreach ( $timeframe->getLocationIDs() as $locationId ) {
+				foreach ( $timeframe->getItemIDs() as $itemId ) {
+					$byPair[ $locationId ][ $itemId ][] = $timeframe;
+				}
+			}
+		}
+
+		return $byPair;
 	}
 
 	/**

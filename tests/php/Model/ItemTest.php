@@ -216,6 +216,54 @@ class ItemTest extends CustomPostTypeTest {
 		$this->assertEquals( $recentPastBooking, $closestBooking->ID );
 	}
 
+	/**
+	 * With the index only the bookings with the latest start are loaded. The result (and thus the cloaked id, which is
+	 * the public GBFS vehicle_id) must be the same as with the legacy query over all bookings.
+	 */
+	public function testGetClosestBooking_indexMatchesLegacy() {
+		ClockMock::freeze( new \DateTime( self::CURRENT_DATE ) );
+		$day        = fn( string $modifier ) => strtotime( $modifier, strtotime( self::CURRENT_DATE ) );
+		$legacy     = function () {
+			add_filter( 'commonsbooking_use_index', '__return_false' );
+			try {
+				return \CommonsBooking\Plugin::withoutCache( fn() => $this->itemModel->getClosestBooking() );
+			} finally {
+				remove_filter( 'commonsbooking_use_index', '__return_false' );
+			}
+		};
+		$assertSame = function ( ?int $expected ) use ( $legacy ) {
+			wp_cache_flush();
+			$this->assertEquals( $expected, $legacy()->ID ?? null, 'legacy' );
+			$this->assertEquals( $expected, \CommonsBooking\Plugin::withoutCache( fn() => $this->itemModel->getClosestBooking() )->ID ?? null, 'index' );
+		};
+
+		$assertSame( null );
+
+		// not counted: unconfirmed, canceled, other location, still running
+		$this->createBooking( $this->locationId, $this->itemId, $day( '-2 days' ), $day( '-1 day' ), '12:00 AM', '23:59', 'unconfirmed' );
+		$this->createBooking( $this->locationId, $this->itemId, $day( '-2 days' ), $day( '-1 day' ), '12:00 AM', '23:59', 'canceled' );
+		$this->createBooking( $this->createLocation( 'Other' ), $this->itemId, $day( '-2 days' ), $day( '-1 day' ) );
+		$this->createBooking( $this->locationId, $this->itemId, $day( '-1 day' ), $day( '+1 day' ) );
+		$assertSame( null );
+
+		$older = $this->createBooking( $this->locationId, $this->itemId, $day( '-10 days' ), $day( '-9 days' ) );
+		$assertSame( $older );
+
+		// same start: start time decides, then the higher post id (stable sort over posts ordered by id)
+		$late  = $this->createBooking( $this->locationId, $this->itemId, $day( '-5 days' ), $day( '-4 days' ), '10:00 AM' );
+		$early = $this->createBooking( $this->locationId, $this->itemId, $day( '-5 days' ), $day( '-4 days' ), '08:00 AM' );
+		$assertSame( $late );
+		$same = $this->createBooking( $this->locationId, $this->itemId, $day( '-5 days' ), $day( '-4 days' ), '10:00 AM' );
+		$assertSame( $same );
+
+		// a booking without end counts as past (end meta read as 0), also with a later start
+		$noEnd = $this->createBooking( $this->locationId, $this->itemId, $day( '-3 days' ), $day( '-2 days' ) );
+		delete_post_meta( $noEnd, 'repetition-end' );
+		$assertSame( $noEnd );
+
+		$this->assertNotNull( $early );
+	}
+
 	public function testIsCurrentlyFreeAtLocation() {
 		ClockMock::freeze( new \DateTime( self::CURRENT_DATE ) );
 

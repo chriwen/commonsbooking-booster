@@ -134,16 +134,22 @@ class Item extends BookablePost {
 			return null;
 		}
 
-		$allBookings = \CommonsBooking\Repository\Booking::get(
-			[ $location->ID ],
-			[ $this->ID ],
-			null,
-			true,
-			null,
-			[ 'confirmed' ]
-		);
+		// With the index only the bookings with the latest start are loaded; the sort below picks among them exactly
+		// as among all bookings (see Repository\Booking::getLatestPastConfirmed()).
+		$allBookings = \CommonsBooking\Repository\Booking::getLatestPastConfirmed( $this->ID, $location->ID, current_time( 'timestamp' ) );
 
-		$allBookings = array_filter( $allBookings, fn( $b ) => $b->isPast() );
+		if ( $allBookings === null ) {
+			$allBookings = \CommonsBooking\Repository\Booking::get(
+				[ $location->ID ],
+				[ $this->ID ],
+				null,
+				true,
+				null,
+				[ 'confirmed' ]
+			);
+
+			$allBookings = array_filter( $allBookings, fn( $b ) => $b->isPast() );
+		}
 
 		if ( empty( $allBookings ) ) {
 			return null;

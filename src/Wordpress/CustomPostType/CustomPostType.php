@@ -195,6 +195,19 @@ abstract class CustomPostType {
 			unset( $actions['view'] );
 		}
 
+		// link to the metabox "Assigned timeframes" for items and locations
+		if (
+			( $post->post_type == Item::getPostType() || $post->post_type == Location::getPostType() ) &&
+			$post->post_status !== 'trash' &&
+			commonsbooking_isCurrentUserAllowedToEdit( $post )
+		) {
+			$actions['cb_assigned_timeframes'] = sprintf(
+				'<a href="%s">%s</a>',
+				esc_url( \CommonsBooking\View\Admin\AssignedTimeframes::getLink( $post->ID ) ),
+				esc_html__( 'Timeframes', 'commonsbooking' )
+			);
+		}
+
 		return $actions;
 	}
 

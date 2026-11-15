@@ -9,6 +9,11 @@ use CommonsBooking\Model\CustomPost;
 use CommonsBooking\Model\Day;
 use CommonsBooking\Model\Week;
 use CommonsBooking\Plugin;
+use CommonsBooking\Service\Availability\Availability;
+use CommonsBooking\Service\Availability\CalendarWindow;
+use CommonsBooking\Service\Availability\DayFacts;
+use CommonsBooking\Service\Availability\DayStatus;
+use CommonsBooking\Service\Availability\Reader;
 use CommonsBooking\Settings\Settings;
 use CommonsBooking\Wordpress\CustomPostType\Item;
 use CommonsBooking\Wordpress\CustomPostType\Location;
@@ -28,6 +33,19 @@ class Calendar {
 	 * Default start of calendar data.
 	 */
 	public const DEFAULT_RANGE_START = 'first day of this month';
+
+	/**
+	 * Markup of a day in the items table per {@see DayStatus}.
+	 */
+	private const TABLE_STATUS_MARKUP = [
+		DayStatus::NO_SLOTS               => "<span class='is-locked'></span>",
+		DayStatus::HOLIDAY                => "<span class='is-holiday'></span>",
+		DayStatus::BOOKED                 => "<span class='is-booked'></span>",
+		DayStatus::PARTIALLY_BOOKED_START => "<span class='is-partially-booked-start'></span>",
+		DayStatus::PARTIALLY_BOOKED_END   => "<span class='is-partially-booked-end'></span>",
+		DayStatus::LOCKED                 => "<span class='is-locked'></span>",
+		DayStatus::AVAILABLE              => '<span></span>',
+	];
 
 	/**
 	 * Renders item table.
@@ -135,6 +153,21 @@ class Calendar {
 			}
 		}
 
+		// precomputed availability: load the stored days and bookable timeframes of all rows at once
+		$reader = null;
+		if ( Availability::isEnabled() ) {
+			$reader = new Reader();
+			$pairs  = [];
+			foreach ( $timeframeByItemID as $itemId => $itemTimeframes ) {
+				foreach ( $itemTimeframes as $timeframe ) {
+					foreach ( $timeframe->getLocationIDs() as $locationId ) {
+						$pairs[] = [ (int) $itemId, (int) $locationId ];
+					}
+				}
+			}
+			$reader->preload( $pairs );
+		}
+
 		$itemRowsHTML = '';
 
 		foreach ( $items as $item ) {
@@ -156,7 +189,8 @@ class Calendar {
 
 				// loop through location
 				foreach ( $locations as $locationId => $locationName ) {
-					$customCacheKey = $item->ID . $locationId . $today;
+					// the number of days changes the row; the roles of the user are part of every cache key
+					$customCacheKey = $item->ID . '_' . $locationId . '_' . $today . '_' . $days;
 					$cacheItem      = Plugin::getCacheItem( $customCacheKey );
 					if ( $cacheItem ) {
 						$rowHtml .= $cacheItem;
@@ -168,7 +202,7 @@ class Calendar {
 							}
 						}
 
-						$locationHtml = self::renderItemLocationRow( $item, $locationId, $locationName, $today, $last_day, $days, $days_display );
+						$locationHtml = self::renderItemLocationRow( $item, $locationId, $locationName, $today, $last_day, $days, $days_display, $reader );
 						Plugin::setCacheItem( $locationHtml, [ strval( $item->ID ), strval( $locationId ) ], $customCacheKey );
 						$rowHtml .= $locationHtml;
 					}
@@ -248,89 +282,46 @@ class Calendar {
 	 * @param $last_day
 	 * @param $days
 	 * @param $days_display
+	 * @param Reader|null $reader precomputed availability, null to evaluate the calendar data
 	 *
 	 * @return string
 	 * @throws Exception
 	 */
-	protected static function renderItemLocationRow( $item, $locationId, $locationName, $today, $last_day, $days, $days_display ): string {
-		$cacheItem = Plugin::getCacheItem();
-		if ( $cacheItem ) {
-			return $cacheItem;
-		} else {
-			$divider  = '</td><td>';
-			$itemName = $item->post_title;
+	protected static function renderItemLocationRow( $item, $locationId, $locationName, $today, $last_day, $days, $days_display, ?Reader $reader = null ): string {
+		// Cached by the caller (renderTable). An own cache item would be keyed by all arguments including the reader
+		// and never be found again.
+		$divider  = '</td><td>';
+		$itemName = $item->post_title;
 
-			// Get data for current item/location combination
-			$calendarData = self::getCalendarDataArray(
-				$item->ID,
-				$locationId,
-				$today,
-				date( 'Y-m-d', strtotime( '+' . $days . ' days', time() ) ),
-				true
-			);
+		// Get the day status for current item/location combination, same days as in the calendar data
+		$endDate  = date( 'Y-m-d', strtotime( '+' . $days . ' days', time() ) );
+		$statuses = $reader
+			? $reader->getDayStatuses( (int) $item->ID, (int) $locationId, $today, $endDate, true, $today, $last_day )
+			: Reader::evaluateLive( (int) $item->ID, (int) $locationId, $today, $endDate, true, $today, $last_day );
 
-			$gotStartDate = false;
-			$gotEndDate   = false;
-			$dayIterator  = 0;
-			foreach ( $calendarData['days'] as $day => $data ) {
+		$dayIterator = 0;
+		foreach ( $statuses['days'] as $day => $status ) {
+			$days_display[ $dayIterator++ ] = self::TABLE_STATUS_MARKUP[ $status ];
 
-				// skip days until we are at today
-				if ( ! $gotStartDate ) {
-					if ( $today <= $day ) {
-						$gotStartDate = true;
-					} else {
-						continue;
-					}
-				}
-
-				if ( $gotEndDate ) {
-					continue;
-				}
-
-				if ( $day == $last_day ) {
-					$gotEndDate = true;
-				}
-
-				// Check day state
-				if ( ! count( $data['slots'] ) ) {
-					$days_display[ $dayIterator++ ] = "<span class='is-locked'></span>";
-				} elseif ( $data['holiday'] ) {
-					$days_display[ $dayIterator++ ] = "<span class='is-holiday'></span>";
-				} elseif ( $data['locked'] && $data['firstSlotBooked'] && $data['lastSlotBooked'] ) {
-					$days_display[ $dayIterator++ ] = "<span class='is-booked'></span>";
-				} elseif ( $data['locked'] && $data['partiallyBookedDay'] ) {
-					$cssClass = 'is-partially-booked-end';
-					if ( ! $data['firstSlotBooked'] && $data['lastSlotBooked'] ) {
-						$cssClass = 'is-partially-booked-start';
-					}
-					$days_display[ $dayIterator++ ] = "<span class='$cssClass'></span>";
-				} elseif ( $data['locked'] ) {
-					$days_display[ $dayIterator++ ] = "<span class='is-locked'></span>";
-				} else {
-					$days_display[ $dayIterator++ ] = '<span></span>';
-				}
-
-				// Stop when enddate (advanced booking days limit) is reached
-				if ( $day == $calendarData['endDate'] ) {
-					break;
-				}
+			// Stop when enddate (advanced booking days limit) is reached
+			if ( $day == $statuses['endDate'] ) {
+				break;
 			}
-
-			// Show item as not available outside of timeframe timerange.
-			for ( $dayIterator; $dayIterator < count( $days_display ); $dayIterator++ ) {
-				$days_display[ $dayIterator ] = "<span'is-locked'></span>";
-			}
-
-			$dayStr         = implode( $divider, $days_display );
-			$itemLink       = add_query_arg( 'cb-location', $locationId, get_permalink( $item->ID ) );
-			$locationString = '<div data-title="' . $locationName . '">' . $locationName . '</div>';
-			$locationLink   = get_permalink( $locationId );
-
-			$rowHtml = "<tr><td><b><a href='" . $itemLink . "'>" . $itemName . '</a></b>' . $divider . $locationString . $divider . $dayStr . '</td></tr>';
-			Plugin::setCacheItem( $rowHtml, [ $locationId, $item->ID ] );
-
-			return $rowHtml;
 		}
+
+		// Show item as not available outside of timeframe timerange.
+		for ( $dayIterator; $dayIterator < count( $days_display ); $dayIterator++ ) {
+			$days_display[ $dayIterator ] = self::TABLE_STATUS_MARKUP[ DayStatus::LOCKED ];
+		}
+
+		$dayStr         = implode( $divider, $days_display );
+		$itemLink       = add_query_arg( 'cb-location', $locationId, get_permalink( $item->ID ) );
+		$locationString = '<div data-title="' . $locationName . '">' . $locationName . '</div>';
+		$locationLink   = get_permalink( $locationId );
+
+		$rowHtml = "<tr><td><b><a href='" . $itemLink . "'>" . $itemName . '</a></b>' . $divider . $locationString . $divider . $dayStr . '</td></tr>';
+
+		return $rowHtml;
 	}
 
 	/**
@@ -362,11 +353,6 @@ class Calendar {
 			return [];
 		}
 
-		$startDate          = new Day( $startDateString );
-		$endDate            = new Day( $endDateString );
-		$advanceBookingDays = null;
-		$lastBookableDate   = null;
-		$firstBookableDay   = null;
 		$bookableTimeframes = \CommonsBooking\Repository\Timeframe::getBookableForCurrentUser(
 			[ $location ],
 			[ $item ],
@@ -374,44 +360,9 @@ class Calendar {
 			true,
 			Helper::getLastFullHourTimestamp()
 		);
+		$window             = CalendarWindow::forTimeframes( $bookableTimeframes, new Day( $startDateString ), new Day( $endDateString ), $keepDaterange );
 
-		if ( count( $bookableTimeframes ) ) {
-			$closestBookableTimeframe = self::getClosestBookableTimeFrameForToday( $bookableTimeframes );
-			$advanceBookingDays       = intval( $closestBookableTimeframe->getFieldValue( 'timeframe-advance-booking-days' ) );
-			$firstBookableDay         = $closestBookableTimeframe->getFirstBookableDay();
-
-			// Only if passed daterange must not be kept
-			if ( ! $keepDaterange ) {
-				// Check if start-/enddate was requested, then don't change it
-				// otherwise start with current day
-				$startDateTimestamp = time();
-				if ( $closestBookableTimeframe->getStartDate() > $startDateTimestamp ) {
-					$startDateTimestamp = $closestBookableTimeframe->getStartDate();
-				}
-
-				if ( $startDateTimestamp > $startDate->getDateObject()->getTimestamp() ) {
-					$startDate = new Day( date( 'Y-m-d', $startDateTimestamp ) );
-				}
-			}
-
-			// Last day of month after next as default for calendar view
-			// -> we just need to ensure, that pagination is possible
-			$endDateTimestamp = self::getDefaultCalendarEnddateTimestamp( $startDate );
-
-			// get max advance booking days based on user defined max days in closest bookable timeframe
-			$latestPossibleBookingDateTimestamp = $closestBookableTimeframe->getLatestPossibleBookingDateTimestamp();
-			if ( $latestPossibleBookingDateTimestamp < $endDateTimestamp ) {
-				$lastBookableDate = $endDateTimestamp = $latestPossibleBookingDateTimestamp;
-			}
-
-			// Only if passed daterange must not be kept
-			if ( ! $keepDaterange ) {
-				$endDateString = date( 'Y-m-d', $endDateTimestamp );
-				$endDate       = new Day( $endDateString );
-			}
-		}
-
-		return self::prepareJsonResponse( $startDate, $endDate, [ $location ], [ $item ], $advanceBookingDays, $lastBookableDate, $firstBookableDay );
+		return self::renderJsonResponse( $window, [ $location ], [ $item ] );
 	}
 
 	/**
@@ -490,18 +441,6 @@ class Calendar {
 	}
 
 	/**
-	 * Returns Last day of month after next as default for calendar view,
-	 * based on $startDate param.
-	 *
-	 * @param Day $startDate
-	 *
-	 * @return int
-	 */
-	private static function getDefaultCalendarEnddateTimestamp( $startDate ) {
-		return strtotime( 'last day of +3 months', $startDate->getDateObject()->getTimestamp() );
-	}
-
-	/**
 	 * The value for the amount of months shown in the Litepicker mobile view portrait mode.
 	 * Fixes #1103, an issue where one instance has issues with switching the months on mobile.
 	 * This value is configurable through a filter hook only.
@@ -545,18 +484,29 @@ class Calendar {
 		$firstBookableDay = null
 	): array {
 
-		$current_user   = wp_get_current_user();
-		$customCacheKey = serialize( $current_user->roles );
+		return self::renderJsonResponse(
+			new CalendarWindow( $startDate, $endDate, $advanceBookingDays, $lastBookableDate, $firstBookableDay ),
+			$locations,
+			$items
+		);
+	}
 
-		// we calculate the max advance booking days here to prepare the notice string in calender json.
-		if ( $advanceBookingDays == null ) {
-			$advanceBookingDays = date_diff( $startDate->getDateObject(), $endDate->getDateObject() );
-			$advanceBookingDays = (int) $advanceBookingDays->format( '%a ' ) + 1;
-		}
-
-		if ( $lastBookableDate == null ) {
-			$lastBookableDate = strtotime( '+ ' . $advanceBookingDays . ' days midnight' );
-		}
+	/**
+	 * Builds the calendar json for a window.
+	 *
+	 * @param CalendarWindow $window
+	 * @param array          $locations
+	 * @param array          $items
+	 *
+	 * @return array
+	 * @throws Exception
+	 */
+	private static function renderJsonResponse( CalendarWindow $window, array $locations, array $items ): array {
+		$startDate          = $window->getStartDate();
+		$endDate            = $window->getEndDate();
+		$advanceBookingDays = $window->getAdvanceBookingDays();
+		$current_user       = wp_get_current_user();
+		$customCacheKey     = serialize( $current_user->roles );
 
 		if ( ! ( $jsonResponse = Plugin::getCacheItem( $customCacheKey ) ) ) {
 			$calendar = new \CommonsBooking\Model\Calendar(
@@ -624,7 +574,7 @@ class Calendar {
 			foreach ( $calendar->getWeeks() as $week ) {
 				/** @var Day $day */
 				foreach ( $week->getDays() as $day ) {
-					self::mapDay( $day, $lastBookableDate, $endDate, $jsonResponse, $firstBookableDay );
+					self::mapDay( $day, $window, $jsonResponse );
 				}
 			}
 
@@ -638,203 +588,41 @@ class Calendar {
 	/**
 	 * Processes day for calendar view of json.
 	 *
-	 * @param Day $day
-	 * @param $lastBookableDate
-	 * @param $endDate
-	 * @param $jsonResponse
+	 * @param Day            $day
+	 * @param CalendarWindow $window
+	 * @param array          $jsonResponse
 	 *
 	 * @return void
 	 */
-	protected static function mapDay( $day, $lastBookableDate, $endDate, &$jsonResponse, $firstBookableDay ) {
-		$dayArray = [
-			'date'               => $day->getFormattedDate( 'd.m.Y' ),
-			'slots'              => [],
-			'locked'             => false,
-			'bookedDay'          => true,
-			'partiallyBookedDay' => false,
-			'holiday'            => true,
-			'repair'             => true,
-			'fullDay'            => false,
-			'firstSlotBooked'    => null,
-			'lastSlotBooked'     => null,
-		];
+	protected static function mapDay( Day $day, CalendarWindow $window, array &$jsonResponse ) {
+		$facts = null;
+		// Only process slots if the day is in bookingdays in advance range
+		if ( $window->isInBookingWindow( $day ) ) {
+			$facts = DayFacts::fromGrid( $day->getGrid() );
 
-		// If all slots are locked, day cannot be selected
-		$allLocked = true;
-
-		// If no slots are existing, day shall be locked
-		$noSlots = true;
-
-		// Only process slot if it's in bookingdays in advance range
-		if ( $day->getDateObject()->getTimestamp() < $lastBookableDate ) {
-			// we process all slots and check status of each slot
-			foreach ( $day->getGrid() as $slot ) {
-				self::processSlot( $slot, $dayArray, $jsonResponse, $allLocked, $noSlots );
-			}
-
-			// If there are no slots defined, there's nothing bookable.
-			if ( $noSlots || strtotime( 'today midnight' ) > strtotime( $day->getDate() ) ) {
-				$dayArray['locked']    = true;
-				$dayArray['holiday']   = false;
-				$dayArray['repair']    = false;
-				$dayArray['bookedDay'] = false;
-			} elseif ( count( $dayArray['slots'] ) === 1 ) {
-				$timeframe           = $dayArray['slots'][0]['timeframe'];
-				$dayArray['fullDay'] = get_post_meta( $timeframe->ID, 'full-day', true ) == 'on';
-			}
-
-			// if day is out max advance booking days range, day is marked as locked to avoid booking
-			if ( $day->getDate() > $endDate->getDate() ) {
-				$dayArray['locked'] = true;
-			}
-		} else { // If day is out of booking day in advance range, it's handled like a not bookable day
-			$dayArray = self::getLockedDayArray( $day );
-		}
-
-		// if day is before minium bookable offset, day is locked
-		// We need to add this here and in section predefined day types below too, because
-		// renderTable function uses only the days array to generate the calendar.
-		if ( $day->getFormattedDate( 'Y-m-d' ) < $firstBookableDay ) {
-			$dayArray['locked'] = true;
-		}
-
-		// Add day to calendar data.
-		$jsonResponse['days'][ $day->getFormattedDate( 'Y-m-d' ) ] = $dayArray;
-
-		// Add day to predefined day types
-		if ( $dayArray['locked'] || $allLocked ) {
-			if ( $allLocked ) {
-				if ( $dayArray['holiday'] ) {
-					$jsonResponse['holidays'][] = $day->getFormattedDate( 'Y-m-d' );
-					// if all slots are booked or we have a changed timeframe, where a booking was done before change
-				} elseif ( $dayArray['bookedDay'] || $dayArray['partiallyBookedDay'] ) {
-					$jsonResponse['bookedDays'][] = $day->getFormattedDate( 'Y-m-d' );
-				} else {
-					$jsonResponse['lockDays'][] = $day->getFormattedDate( 'Y-m-d' );
+			// Set max-days and start day offset based on the first found bookable timeframe
+			// TODO: This behaviour is already better defined in the timeframe model method getMaxDays which should be used here.
+			$firstBookableTimeframe = $facts->getFirstBookableTimeframe();
+			if ( $firstBookableTimeframe ) {
+				if ( $jsonResponse['maxDays'] == null ) {
+					$timeframeMaxDays        = get_post_meta( $firstBookableTimeframe->ID, \CommonsBooking\Model\Timeframe::META_MAX_DAYS, true );
+					$jsonResponse['maxDays'] = intval( $timeframeMaxDays ?: 3 );
 				}
-			} else {
-				$jsonResponse['partiallyBookedDays'][] = $day->getFormattedDate( 'Y-m-d' );
-			}
-		}
 
-		// if day is before minium bookable offset, day is locked
-		if ( $day->getFormattedDate( 'Y-m-d' ) < $firstBookableDay ) {
-			$jsonResponse['lockDays'][] = $day->getFormattedDate( 'Y-m-d' );
-		}
-	}
-
-	/**
-	 * Extracts calendar relevant data from slot.
-	 *
-	 * @param $slot
-	 * @param $dayArray
-	 * @param $jsonResponse
-	 * @param $allLocked
-	 * @param $noSlots
-	 */
-	protected static function processSlot( $slot, &$dayArray, &$jsonResponse, &$allLocked, &$noSlots ) {
-		// Add only bookable slots for time select
-		// TODO: This should be refactored to use the methods on the timeframe model.
-		if ( ! empty( $slot['timeframe'] ) && $slot['timeframe'] instanceof WP_Post ) {
-			// We have at least one slot ;)
-			$noSlots = false;
-
-			$timeFrameType = get_post_meta( $slot['timeframe']->ID, 'type', true );
-
-			if ( ! $timeFrameType ) {
-				// TODO: Can this also be a restriction in the slot?
-				$timeFrameType = get_post_meta( $slot['timeframe']->ID, \CommonsBooking\Model\Restriction::META_TYPE, true );
-			}
-
-			$isUserAllowedtoBook = commonsbooking_isCurrentUserAllowedToBook( $slot['timeframe']->ID );
-
-			// save bookable state for first and last slot
-			if ( $dayArray['firstSlotBooked'] === null ) {
-				if ( $timeFrameType == Timeframe::BOOKABLE_ID ) {
-					$dayArray['firstSlotBooked'] = false;
-
-					// Set max-days setting based on first found timeframe
-					// TODO: This behaviour is already better defined in the timeframe model method getMaxDays which should be used here.
-					if ( $jsonResponse['maxDays'] == null ) {
-						$timeframeMaxDays        = get_post_meta( $slot['timeframe']->ID, \CommonsBooking\Model\Timeframe::META_MAX_DAYS, true );
-						$jsonResponse['maxDays'] = intval( $timeframeMaxDays ?: 3 );
-					}
-
-					if ( $jsonResponse['startDayOffset'] == null ) {
-						$timeframeBookingStartDayOffset = get_post_meta( $slot['timeframe']->ID, \CommonsBooking\Model\Timeframe::META_BOOKING_START_DAY_OFFSET, true );
-						$jsonResponse['startDayOffset'] = $timeframeBookingStartDayOffset ? intval( $timeframeBookingStartDayOffset ) : null;
-					}
-				} else {
-					$dayArray['firstSlotBooked'] = true;
+				if ( $jsonResponse['startDayOffset'] == null ) {
+					$timeframeBookingStartDayOffset = get_post_meta( $firstBookableTimeframe->ID, \CommonsBooking\Model\Timeframe::META_BOOKING_START_DAY_OFFSET, true );
+					$jsonResponse['startDayOffset'] = $timeframeBookingStartDayOffset ? intval( $timeframeBookingStartDayOffset ) : null;
 				}
 			}
-
-			// Checks if last slot is booked.
-			if ( $timeFrameType == Timeframe::BOOKABLE_ID ) {
-				$dayArray['lastSlotBooked'] = false;
-			} else {
-				$dayArray['lastSlotBooked'] = true;
-			}
-
-			// Add slot to array
-			$dayArray['slots'][] = $slot;
-
-			// Remove holiday flag, if there is at least one slot that isn't of type holiday
-			if ( ! in_array( $timeFrameType, [ Timeframe::HOLIDAYS_ID, Timeframe::OFF_HOLIDAYS_ID ] ) ) {
-				$dayArray['holiday'] = false;
-			}
-
-			// Remove repair flag, if there is at least one slot that isn't of type repair
-			if ( $timeFrameType !== Timeframe::REPAIR_ID ) {
-				$dayArray['repair'] = false;
-			}
-
-			// Remove bookedDay flag, if there is at least one slot that isn't of type bookedDay
-			if ( ! in_array( $timeFrameType, [ Timeframe::BOOKING_ID, Timeframe::REPAIR_ID ] ) ) {
-				$dayArray['bookedDay'] = false;
-			}
-
-			// Set partiallyBookedDay flag, if there is at least one slot that is not bookable
-			if ( in_array(
-				$timeFrameType,
-				[
-					Timeframe::BOOKING_ID,
-					Timeframe::HOLIDAYS_ID,
-					Timeframe::REPAIR_ID,
-					\CommonsBooking\Model\Restriction::TYPE_REPAIR,
-				]
-			) ) {
-				$dayArray['partiallyBookedDay'] = true;
-			}
-
-			// If there's a locked timeframe or user ist not allowed to book based on this timeframe, nothing can be selected
-			if ( $slot['timeframe']->locked || ! $isUserAllowedtoBook ) {
-				$dayArray['locked'] = true;
-			} else {
-				// if not all slots are locked, the day should be selectable
-				$allLocked = false;
-			}
 		}
-	}
 
-	/**
-	 * @param Day $day
-	 *
-	 * @return array
-	 */
-	protected static function getLockedDayArray( Day $day ): array {
-		return [
-			'date'               => $day->getFormattedDate( 'd.m.Y' ),
-			'slots'              => [],
-			'locked'             => true,
-			'bookedDay'          => false,
-			'partiallyBookedDay' => false,
-			'holiday'            => false,
-			'repair'             => false,
-			'fullDay'            => false,
-			'firstSlotBooked'    => false,
-			'lastSlotBooked'     => false,
-		];
+		$mapped = $window->mapDay( $day, $facts );
+		$date   = $day->getFormattedDate( 'Y-m-d' );
+
+		$jsonResponse['days'][ $date ] = $mapped['day'];
+		foreach ( $mapped['types'] as $type ) {
+			$jsonResponse[ $type ][] = $date;
+		}
 	}
 
 	/**

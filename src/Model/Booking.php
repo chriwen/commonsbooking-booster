@@ -109,7 +109,13 @@ class Booking extends \CommonsBooking\Model\Timeframe {
 		);
 		$wpdb->query( $sql );
 
+		// The direct SQL update bypasses the post hooks: drop the stale cached post and update the index explicitly.
+		clean_post_cache( $this->post->ID );
+		\CommonsBooking\Service\Index\Indexer::touch( $this->post->ID );
+
 		update_post_meta( $this->post->ID, 'cancellation_time', current_time( 'timestamp' ) );
+
+		\CommonsBooking\Service\Index\Indexer::flush();
 
 		$this->sendCancellationMail();
 	}

@@ -9,6 +9,7 @@
 /node_modules/
 /tests/
 /docs/
+/design/
 /vendor/
 composer.*
 Gruntfile.js
@@ -26,3 +27,27 @@ tsconfig.*
 webpack.config.js
 phpstan.neon
 phpstan-baseline.neon
+# Booster fork: nur Laufzeitdateien ins Plugin-Zip (Quellen, Source-Maps, Entwicklungs- und Beispieldateien weglassen)
+/phpbench.json
+/screenshots/
+/assets/admin/sass/
+/assets/admin/js/src/
+/assets/public/js/src/
+/assets/global/js/vendor.min.js
+/assets/packaged/leaflet/leaflet-src.js
+/assets/packaged/leaflet/leaflet-src.esm.js
+/assets/packaged/leaflet-markercluster/leaflet.markercluster-src.js
+/assets/packaged/leaflet-markercluster/WhereAreTheJavascriptFiles.txt
+/assets/packaged/leaflet-spin/leaflet.spin.js
+/assets/packaged/leaflet-easybutton/easy-button.d.ts
+/assets/map/overscroll/jquery.overscroll.js
+*.map
+*.po
+*.pot
+/vendor-prefixed/cmb2/cmb2/readme.txt
+/vendor-prefixed/ed-itsolutions/cmb2-field-ajax-search/example.gif
+/vendor-prefixed/scssphp/scssphp/bin/
+infection.json
+puli.json
+apigen.neon
+phpstan.neon.dist

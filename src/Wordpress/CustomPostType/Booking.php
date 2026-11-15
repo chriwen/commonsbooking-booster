@@ -16,6 +16,11 @@ use function wp_verify_nonce;
  */
 class Booking extends Timeframe {
 
+	/**
+	 * Seconds a booking request waits for another request for the same item.
+	 */
+	private const ITEM_LOCK_TIMEOUT = 20;
+
 	// this is the error type for the validation that failed for the FRONTEND user
 	// TODO: Switch the error type with the one from Model/Booking, because most functions regarding backend booking are in this class
 	public const ERROR_TYPE        = COMMONSBOOKING_PLUGIN_SLUG . '-bookingValidationError';
@@ -148,7 +153,8 @@ class Booking extends Timeframe {
 			if ( array_key_exists( self::SUBMIT_BUTTON_ID, $_REQUEST ) ) {
 				try {
 					$booking = \CommonsBooking\Repository\Booking::getPostById( $post_id );
-					$booking->isValid();
+					// validation always uses the original queries, never the booster tables
+					\CommonsBooking\Service\Booster\Booster::withoutBooster( array( $booking, 'isValid' ) );
 					wp_update_post(
 						array(
 							'ID'          => $post_id,
@@ -184,11 +190,74 @@ class Booking extends Timeframe {
 	}
 
 	/**
+	 * Runs the callback while holding a database lock for the item, so that booking requests for the same item are
+	 * checked and saved one after the other. The lock is released when the callback returns or throws (and by MySQL
+	 * when the connection closes).
+	 *
+	 * @param int      $itemId
+	 * @param callable $callback
+	 *
+	 * @return mixed return value of the callback
+	 * @throws BookingDeniedException if another request holds the lock for too long
+	 */
+	private static function withItemLock( int $itemId, callable $callback ) {
+		global $wpdb;
+		if ( ! $itemId ) {
+			return $callback();
+		}
+		$name   = 'cb_booking_' . get_current_blog_id() . '_' . $itemId;
+		$locked = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, %d)', $name, self::ITEM_LOCK_TIMEOUT ) );
+		if ( $locked === '0' ) {
+			throw new BookingDeniedException( __( 'Other booking requests for this item are being processed right now. Please try again in a moment.', 'commonsbooking' ) );
+		}
+		// null: locks are not supported by the database, continue without
+		try {
+			return $callback();
+		} finally {
+			if ( $locked === '1' ) {
+				$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $name ) );
+			}
+		}
+	}
+
+	/**
 	 * Handles frontend save-Request for timeframe.
 	 *
 	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
 	 */
 	public static function handleFormRequest() {
+		$postId = self::processFormRequest();
+		if ( $postId !== null ) {
+			self::redirectToBooking( $postId );
+		}
+	}
+
+	/**
+	 * Redirects to the booking page and ends the request.
+	 *
+	 * @param int $postId
+	 *
+	 * @return void
+	 */
+	public static function redirectToBooking( int $postId ): void {
+		// get slug as parameter
+		$post_slug = get_post( $postId )->post_name;
+
+		wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
+		exit;
+	}
+
+	/**
+	 * Handles the frontend booking form without redirecting, see {@see self::handleFormRequest()}.
+	 *
+	 * Separate from the redirect so that callers can leave {@see \CommonsBooking\Service\Booster\Booster::withoutBooster()}
+	 * (and release the item lock) before the request ends: `exit` skips the `finally` blocks, the rest of the request
+	 * including the shutdown work would run without the booster.
+	 *
+	 * @return int|null id of the booking, null if the request is no valid booking form request
+	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
+	 */
+	public static function processFormRequest(): ?int {
 		if (
 			function_exists( 'wp_verify_nonce' ) &&
 			isset( $_REQUEST[ static::getWPNonceId() ] ) &&
@@ -205,25 +274,28 @@ class Booking extends Timeframe {
 			$postName        = isset( $_REQUEST['cb_booking'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cb_booking'] ) ) : null;
 			$postType        = isset( $_REQUEST['type'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['type'] ) ) : null;
 
-			$postId = self::handleBookingRequest(
-				$itemId,
-				$locationId,
-				$post_status,
-				$post_ID,
-				$comment,
-				$repetitionStart,
-				$repetitionEnd,
-				$postName,
-				$postType,
-				$overbookedDays
+			// One request per item at a time: otherwise two requests (e.g. a double click) can both find the slot free
+			// before either has saved its booking, which creates two bookings for the same slot.
+			$postId = self::withItemLock(
+				(int) $itemId,
+				fn() => self::handleBookingRequest(
+					$itemId,
+					$locationId,
+					$post_status,
+					$post_ID,
+					$comment,
+					$repetitionStart,
+					$repetitionEnd,
+					$postName,
+					$postType,
+					$overbookedDays
+				)
 			);
 
-			// get slug as parameter
-			$post_slug = get_post( $postId )->post_name;
-
-			wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
-			exit;
+			return (int) $postId;
 		}
+
+		return null;
 	}
 
 

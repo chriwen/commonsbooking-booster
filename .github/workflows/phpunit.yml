@@ -23,7 +23,7 @@ env:
 
 jobs:
   phpunit:
-    name: 'WP ${{ matrix.core.name }} on PHP ${{ matrix.php }}'
+    name: 'WP ${{ matrix.core.name }} on PHP ${{ matrix.php }}${{ matrix.use_index == ''0'' && '' (legacy queries)'' || '''' }}${{ matrix.use_availability == ''0'' && '' (live availability)'' || '''' }}${{ matrix.use_booster == ''0'' && '' (booster off)'' || '''' }}'
 
     runs-on: ubuntu-24.04
 
@@ -36,6 +36,33 @@ jobs:
           - { name: 'latest', version: 'latest' }
           - { name: 'minimum', version: '5.9' }
           - { name: 'trunk', version: 'trunk' }
+        use_index:
+          - '1'
+        use_availability:
+          - '1'
+        use_booster:
+          - '1'
+        include:
+          # Run once with the performance booster switched off: no hooks, no cron jobs, original queries
+          # (this is how the plugin behaves after the update until the booster is switched on)
+          - php: '8.1'
+            core: { name: 'latest', version: 'latest' }
+            use_index: '1'
+            use_availability: '1'
+            use_booster: '0'
+          # Run once with the timeframe index disabled, to keep the legacy postmeta queries tested
+          # (the precomputed availability needs the index and is off then, too)
+          - php: '8.1'
+            core: { name: 'latest', version: 'latest' }
+            use_index: '0'
+            use_availability: '1'
+            use_booster: '1'
+          # Run once with the index but without precomputed availability (every day computed live)
+          - php: '8.1'
+            core: { name: 'latest', version: 'latest' }
+            use_index: '1'
+            use_availability: '0'
+            use_booster: '1'
 
     steps:
     - uses: actions/checkout@v7
@@ -78,6 +105,10 @@ jobs:
         composer install --prefer-dist --no-progress --ignore-platform-reqs
 
     - name: Run test suite
+      env:
+        CB_USE_INDEX: ${{ matrix.use_index }}
+        CB_USE_AVAILABILITY: ${{ matrix.use_availability }}
+        CB_USE_BOOSTER: ${{ matrix.use_booster }}
       run: |
         composer dump-autoload -o
         php vendor/bin/phpunit

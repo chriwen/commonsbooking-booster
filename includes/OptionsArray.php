@@ -1598,6 +1598,24 @@ User Email: {{user:user_email}}',
 					),
 				],
 			),
+			'booster' => array(
+				'title'  => commonsbooking_sanitizeHTML( __( 'Performance booster', 'commonsbooking' ) ),
+				'id'     => 'booster_group',
+				'desc'   => commonsbooking_sanitizeHTML( __( 'Speeds up the map, the item lists and the availability tables on sites with many bookings. It keeps an index of all timeframes, bookings and restrictions and precomputes the availability of the next 92 days in additional database tables. Every booking updates them immediately. Booking requests are always checked with the original queries.<br>After switching on, the index is built in the background. Until it is complete, the original queries are used.<br>Switch off before downgrading to a version without the booster. After switching on again, the index is rebuilt.', 'commonsbooking' ) ),
+				'fields' => array(
+					array(
+						'name' => commonsbooking_sanitizeHTML( __( 'Enable performance booster', 'commonsbooking' ) ),
+						'id'   => \CommonsBooking\Service\Booster\Booster::SETTINGS_FIELD,
+						'type' => 'checkbox',
+					),
+					array(
+						'name'          => commonsbooking_sanitizeHTML( __( 'Status', 'commonsbooking' ) ),
+						'id'            => 'booster_status',
+						'type'          => 'text',
+						'render_row_cb' => array( \CommonsBooking\Service\Booster\SettingsView::class, 'render' ),
+					),
+				),
+			),
 			'experimental' => array(
 				'title'  => commonsbooking_sanitizeHTML( __( 'Advanced caching settings', 'commonsbooking' ) ),
 				'id'     => 'caching_group',
