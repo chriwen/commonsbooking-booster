@@ -7254,6 +7254,31 @@ msgid_plural "%d bookings with conflicts"
 msgstr[0] "%d Buchung mit Konflikt"
 msgstr[1] "%d Buchungen mit Konflikten"
 
+msgid "Select at least one item."
+msgstr "Mindestens einen Artikel wählen."
+
+msgid "Select at least one location."
+msgstr "Mindestens einen Standort wählen."
+
+msgid "Only published items with a current or upcoming bookable timeframe are listed."
+msgstr "Aufgeführt sind nur veröffentlichte Artikel mit einem laufenden oder künftigen buchbaren Zeitrahmen."
+
+msgid "Only published locations with a current or upcoming bookable timeframe are listed."
+msgstr "Aufgeführt sind nur veröffentlichte Standorte mit einem laufenden oder künftigen buchbaren Zeitrahmen."
+
+#. translators: %s: name of a location or item
+msgid "Remove %s"
+msgstr "%s entfernen"
+
+msgid "No matches"
+msgstr "Keine Treffer"
+
+msgid "Search item …"
+msgstr "Artikel suchen …"
+
+msgid "Search location …"
+msgstr "Standort suchen …"
+
 #: src/Model/Booking.php:1030
 #~ msgid "Unconfirmed"
 #~ msgstr "Unbestätigt"

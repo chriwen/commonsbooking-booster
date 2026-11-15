@@ -224,6 +224,45 @@ class OccupancyPlan {
 	}
 
 	/**
+	 * Active combinations: locations and items that have at least one published bookable timeframe that has not ended
+	 * yet (running or upcoming), where both the location and the item are published. Drafts and posts without such a
+	 * timeframe are not included.
+	 *
+	 * @return array{locations: int[], items: int[]}
+	 */
+	public static function activeIds(): array {
+		$timeframes = TimeframeRepository::getInRange(
+			strtotime( 'today', current_time( 'timestamp' ) ),
+			null,
+			[],
+			[],
+			[ TimeframeCPT::BOOKABLE_ID ],
+			true,
+			[ 'publish' ]
+		);
+		$locations  = [];
+		$items      = [];
+		foreach ( $timeframes as $timeframe ) {
+			$timeframeLocations = array_filter( array_map( 'intval', $timeframe->getLocationIDs() ), fn( $id ) => get_post_status( $id ) === 'publish' );
+			$timeframeItems     = array_filter( array_map( 'intval', $timeframe->getItemIDs() ), fn( $id ) => get_post_status( $id ) === 'publish' );
+			if ( ! $timeframeLocations || ! $timeframeItems ) {
+				continue;
+			}
+			foreach ( $timeframeLocations as $id ) {
+				$locations[ $id ] = $id;
+			}
+			foreach ( $timeframeItems as $id ) {
+				$items[ $id ] = $id;
+			}
+		}
+
+		return [
+			'locations' => array_values( $locations ),
+			'items'     => array_values( $items ),
+		];
+	}
+
+	/**
 	 * Normalizes a date range: valid dates, from <= to, at most {@see self::MAX_DAYS} days.
 	 *
 	 * @param string $from
@@ -794,7 +833,7 @@ class OccupancyPlan {
 	 *
 	 * @return string|null edit link if the current user may edit the post
 	 */
-	private static function editUrl( $post ): ?string {
+	public static function editUrl( $post ): ?string {
 		$wpPost = $post instanceof \WP_Post ? $post : $post->getPost();
 		if ( ! commonsbooking_isCurrentUserAllowedToEdit( $wpPost ) ) {
 			return null;

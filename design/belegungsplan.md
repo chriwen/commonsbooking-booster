@@ -1,7 +1,8 @@
 # Belegungsplan im Backend
 
-Status: Stufen 1 bis 3 umgesetzt im Branch `feature/belegungsplan` (Basis `booster/index-availability`), nicht committet.
-Keine neuen Tabellen, Optionen oder Postmeta, damit downgradebar. Funktioniert mit und ohne Booster.
+Status: Stufen 1 bis 3 umgesetzt, dazu Auswahl mit Suche und Mehrfachauswahl (15.11.2026, nicht committet) im Branch `feature/belegungsplan` (Basis `booster/index-availability`), nicht committet.
+Keine neuen Tabellen, Optionen oder Postmeta, damit downgradebar (nur ein Usermeta-Eintrag für die zuletzt gewählte
+Auswahl, den nur diese Seite liest). Funktioniert mit und ohne Booster.
 English version: `belegungsplan.en.md`.
 
 ## Ziel
@@ -17,6 +18,21 @@ mit direktem Sprung zur Bearbeitung.
   verwalten.
 - **Zeitraum frei wählbar, auch über den Vorausbuchungszeitraum hinaus**, ebenso in die Vergangenheit.
 
+## Entscheidungen des Nutzers (15.11.2026)
+
+- **Auswahl per Suchfeld** (Type-in) statt langer Auswahlliste.
+- **Nur aktive Stationen bzw. Artikel zur Auswahl:** veröffentlicht und Teil einer aktiven Kombination, also mit
+  mindestens einem veröffentlichten buchbaren Zeitrahmen, der noch nicht beendet ist (laufend oder künftig), dessen
+  Station und Artikel beide veröffentlicht sind. Entwürfe und Einträge ohne Zeitrahmen erscheinen nicht. Bereits
+  ausgewählte Einträge (z. B. ein Entwurf über die Zeilenaktion) bleiben sichtbar; die Rechte prüfen weiter alle
+  erlaubten Posts. Die Wahl „laufend oder künftig“ (statt nur heute gültig) ist unsere Auslegung von „aktuell aktiv“,
+  damit neu angelegte Kombinationen schon vor dem Start planbar sind.
+- **Letzte Auswahl wird gemerkt** und beim nächsten Aufruf ohne Parameter geladen: Ansicht und je Ansicht Auswahl,
+  Kategorie, Zeitraum, Tagesbreite, „Stornierte zeigen“. Nicht gemerkt wird das Startdatum (folgt immer heute − 3
+  Tage). Gespeichert im Usermeta `commonsbooking_occupancy_plan` statt im Browser, damit es ohne Umleitung beim
+  ersten Seitenaufbau greift und auf allen Geräten gilt.
+- **Mehrfachauswahl:** mehrere Stationen bzw. Artikel; jede bekommt im Plan einen eigenen Block mit Kopfzeile.
+
 ## Darstellung
 
 Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-plan`), außerdem Zeilenaktion
@@ -24,7 +40,10 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
 
 - **Zwei Ansichten** (Reiter): **Nach Station** (Zeilen = Artikel der Station) und **Nach Artikel** (Zeilen =
   Stationen des Artikels, `view=item`).
-- **Auswahl:** Station bzw. Artikel, Kategorie der Zeilen (Artikelkategorie bzw. Stationskategorie; nur wenn
+- **Auswahl:** Suchfeld mit Mehrfachauswahl (Chips, filtert beim Tippen ohne Rücksicht auf Groß-/Kleinschreibung und
+  Akzente, Pfeiltasten, Enter wählt, Rücktaste entfernt den letzten Chip, Enter im leeren Feld oder „Anzeigen“ lädt;
+  der Button wird hervorgehoben, wenn sich die Auswahl geändert hat). Leere Auswahl zeigt einen Hinweis statt eines
+  Plans. Darunter Kategorie der Zeilen (Artikelkategorie bzw. Stationskategorie; nur wenn
   Kategorien mit Einträgen existieren), „Stornierte Buchungen zeigen“; zweite Zeile: Startdatum, Zeitraum (1, 2, 4,
   8 Wochen, 3, 6, 12 Monate), Tagesbreite, Blättern ← Heute →. Standard: 4 Wochen ab heute − 3 Tage. Höchstens 366 Tage.
 - **Tagesbreite:** „Automatisch“ richtet sich nach dem Zeitraum (bis 2 Wochen 96 px, 4 Wochen 64 px, 8 Wochen 44 px,
@@ -35,6 +54,9 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   Bearbeitung bei Bearbeitungsrecht).
 - **Beschriftung der Balken** nach Breite: voller Name ab 60 px, darunter bei Buchungen Initialen, bei Sperren kein
   Text. Alles Weitere zeigt die Kurzinfo.
+- **Mehrere Stationen bzw. Artikel:** ein Block je Auswahl in einem gemeinsamen Raster (gemeinsamer Tageskopf), mit
+  Kopfzeile (Name, Link zur Bearbeitung) nur ab zwei Einträgen. Klick auf den Tageskopf erklärt den Tag für alle
+  Blöcke (Zeilentitel „Station · Artikel“), Klick auf eine Zelle nur für deren Block.
 - **Zeile „Alle Artikel der Station“** bzw. „Alle Stationen des Artikels“ (oben, nur wenn nötig): Sperren, die in *jeder* Artikelzeile gleich vorkommen
   (gleicher Post, gleiche Tage), werden dorthin verschoben, statt in jeder Zeile zu stehen. Erst ab zwei Zeilen.
 - **Ebenen pro Zeile:**
@@ -82,8 +104,8 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
 - Für eine erlaubte Station werden **alle** Buchungen mit vollen Daten gezeigt (Entscheidung oben). Die
   Bearbeiten-Links prüfen weiterhin `commonsbooking_isCurrentUserAllowedToEdit()`, an den bestehenden Rechten ändert
   sich also nichts.
-- Tageserklärung per AJAX (`wp_ajax_cb_occupancy_day`): Nonce, Recht `manage_commonsbooking` und erlaubte Station
-  bzw. erlaubter Artikel werden bei jeder Anfrage geprüft.
+- Tageserklärung per AJAX (`wp_ajax_cb_occupancy_day`, Parameter `ids` als Liste): Nonce, Recht
+  `manage_commonsbooking` und jede Station bzw. jeder Artikel der Liste werden bei jeder Anfrage geprüft.
 - Kein Zwischenspeicher für die Seite (der Kalender-JSON wird nur nach Rollen geschlüsselt und darf keine Namen
   enthalten).
 
@@ -113,16 +135,18 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
 - **Tests** (`tests/php/Service/OccupancyPlanTest.php`): Wochentage und Vorausbuchung, Buchungen mit Status und
   Zuschnitt, Stationszeile, Einschränkung ohne Ende, Spuren, Rechte für CB-Manager, Vergleich mit `DayFacts` aus dem
   Kalenderraster, gleiches Ergebnis mit und ohne Booster, Ansicht pro Artikel und Kategoriefilter, Konflikte (Feiertag
-  am Abholtag, Sperre, kein Zeitrahmen, Zuschnitt), Tageserklärung (Gründe, Ergebnis, Hinweise).
+  am Abholtag, Sperre, kein Zeitrahmen, Zuschnitt), Tageserklärung (Gründe, Ergebnis, Hinweise), aktive Kombinationen (`activeIds()`: laufend, künftig, beendet,
+  Entwurf, nur Feiertag, ohne Zeitrahmen).
 
 ## Ausbaustufen
 
 1. **Umgesetzt:** Zeitleiste pro Station, Detailpanel, Rechte, Tests.
 2. **Umgesetzt:** „Warum ist dieser Tag so?“ und Konfliktmarkierung.
 3. **Umgesetzt:** Ansicht pro Artikel, Filter nach Kategorie; dazu überarbeitetes Layout (Tagesbreite, Kurzinfo).
+   Danach (15.11.): Suchfeld mit Mehrfachauswahl, nur aktive Einträge, gemerkte Auswahl.
 4. Optional: Druck/Export, Verknüpfung mit `feature/dashboard`.
 
 ## Offene Fragen
 
-- Standardzeitraum und Stationsauswahl „alle Stationen“ für Admins.
+- Standardzeitraum. Keine Obergrenze für die Zahl gewählter Einträge; jeder Block rechnet seinen Plan einzeln.
 - Buchungen mit Stundenraster zeigen bisher nur den Tag; die Uhrzeit steht im Panel.
