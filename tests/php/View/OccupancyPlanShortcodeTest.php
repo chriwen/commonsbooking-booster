@@ -127,6 +127,7 @@ class OccupancyPlanShortcodeTest extends CustomPostTypeTest {
 
 		$this->assertStringContainsString( 'id="cb-plan-root"', $html );
 		$this->assertStringContainsString( 'cb-plan-front', $html );
+		$this->assertStringContainsString( 'cb-plan-ui', $html );
 		$this->assertStringContainsString( 'data-post="' . $this->bookingId . '"', $html );
 		$this->assertStringContainsString( $this->bookerEmail, $html, 'booking details for admins' );
 		$this->assertStringContainsString( 'name="cbp_location[]"', $html );

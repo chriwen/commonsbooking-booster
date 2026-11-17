@@ -17,10 +17,6 @@ class OccupancyPlan {
 
 	public const SLUG = 'cb-occupancy-plan';
 
-	public const AJAX_DAY = PlanView::AJAX_DAY;
-
-	public const USER_META = PlanView::USER_META;
-
 	/**
 	 * Hook suffix of the admin page.
 	 *
@@ -100,38 +96,6 @@ class OccupancyPlan {
 		$actions['cb-occupancy-plan'] = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Occupancy plan', 'commonsbooking' ) . '</a>';
 
 		return $actions;
-	}
-
-	/**
-	 * @return array<int, string> id => title {@see PlanView::allowedLocations()}
-	 */
-	public static function allowedLocations(): array {
-		return PlanView::allowedLocations();
-	}
-
-	/**
-	 * @return array<int, string> id => title {@see PlanView::allowedItems()}
-	 */
-	public static function allowedItems(): array {
-		return PlanView::allowedItems();
-	}
-
-	/**
-	 * @param int $locationId
-	 *
-	 * @return bool
-	 */
-	public static function isAllowedLocation( int $locationId ): bool {
-		return PlanView::isAllowedLocation( $locationId );
-	}
-
-	/**
-	 * @param int $itemId
-	 *
-	 * @return bool
-	 */
-	public static function isAllowedItem( int $itemId ): bool {
-		return PlanView::isAllowedItem( $itemId );
 	}
 
 	/**

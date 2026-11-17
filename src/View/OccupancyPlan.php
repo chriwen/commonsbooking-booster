@@ -156,10 +156,10 @@ class OccupancyPlan {
 	private static function markNoCache(): void {
 		foreach ( [ 'DONOTCACHEPAGE', 'DONOTCACHEOBJECT', 'DONOTCACHEDB' ] as $constant ) {
 			if ( ! defined( $constant ) ) {
-				define( $constant, true );
+				define( $constant, true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.VariableConstantNameFound -- constants of page cache plugins
 			}
 		}
-		do_action( 'litespeed_control_set_nocache', 'commonsbooking occupancy plan' );
+		do_action( 'litespeed_control_set_nocache', 'commonsbooking occupancy plan' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- hook of LiteSpeed Cache
 	}
 
 	/**
@@ -410,7 +410,7 @@ class OccupancyPlan {
 	 * @return string
 	 */
 	private static function notice( string $html ): string {
-		return '<div class="cb-plan-wrap cb-plan-front"><p class="cb-plan-notice">' . $html . '</p></div>';
+		return '<div class="cb-plan-wrap cb-plan-ui cb-plan-front"><p class="cb-plan-notice">' . $html . '</p></div>';
 	}
 
 	/**
@@ -481,11 +481,11 @@ class OccupancyPlan {
 		if ( ! isset( self::ZOOMS[ $zoom ] ) ) {
 			$zoom = '';
 		}
-		$today    = strtotime( 'today', current_time( 'timestamp' ) );
-		$from     = $get( 'from' ) !== null ? sanitize_text_field( (string) $get( 'from' ) ) : date( 'Y-m-d', strtotime( '-' . self::DEFAULT_DAYS_BEFORE . ' days', $today ) );
+		$today    = (int) strtotime( current_time( 'Y-m-d' ) );
+		$from     = $get( 'from' ) !== null ? sanitize_text_field( (string) $get( 'from' ) ) : gmdate( 'Y-m-d', strtotime( '-' . self::DEFAULT_DAYS_BEFORE . ' days', $today ) );
 		$canceled = ! empty( $input( 'canceled' ) );
 
-		[ $from, $to ] = Plan::normalizeRange( $from, date( 'Y-m-d', strtotime( $from . ' +' . ( $span - 1 ) . ' days' ) ?: $today ) );
+		[ $from, $to ] = Plan::normalizeRange( $from, gmdate( 'Y-m-d', strtotime( $from . ' +' . ( $span - 1 ) . ' days' ) ?: $today ) );
 
 		$state = [
 			'view'     => $view,
@@ -499,7 +499,7 @@ class OccupancyPlan {
 
 		$context['lock_ids'] = $lockIds;
 		$dayWidth            = self::dayWidth( $zoom, $span );
-		$wrapClass           = 'cb-plan-wrap ' . ( $context['frontend'] ? 'cb-plan-front' : 'wrap' ) . ( $context['align'] ? ' align' . $context['align'] : '' );
+		$wrapClass           = 'cb-plan-wrap cb-plan-ui ' . ( $context['frontend'] ? 'cb-plan-front' : 'wrap' ) . ( $context['align'] ? ' align' . $context['align'] : '' );
 
 		ob_start();
 		echo '<div id="cb-plan-root" class="' . esc_attr( $wrapClass ) . '" style="--cb-plan-day:' . (int) $dayWidth . 'px">';
@@ -545,7 +545,7 @@ class OccupancyPlan {
 			];
 		}
 
-		echo '<div class="cb-plan-card is-view-' . esc_attr( $view ) . '">';
+		echo '<div class="cb-plan-card">';
 		self::renderLegend();
 		self::renderPlan( $groups, $dayWidth );
 		echo '</div>';
@@ -638,8 +638,8 @@ class OccupancyPlan {
 		$p          = $context['prefix'];
 		$button     = self::buttonClass( $context );
 		$base       = array_filter( $state );
-		$prev       = self::link( $context, array_merge( $base, [ 'from' => date( 'Y-m-d', strtotime( $state['from'] . ' -' . $state['days'] . ' days' ) ) ] ) );
-		$next       = self::link( $context, array_merge( $base, [ 'from' => date( 'Y-m-d', strtotime( $state['from'] . ' +' . $state['days'] . ' days' ) ) ] ) );
+		$prev       = self::link( $context, array_merge( $base, [ 'from' => gmdate( 'Y-m-d', strtotime( $state['from'] . ' -' . $state['days'] . ' days' ) ) ] ) );
+		$next       = self::link( $context, array_merge( $base, [ 'from' => gmdate( 'Y-m-d', strtotime( $state['from'] . ' +' . $state['days'] . ' days' ) ) ] ) );
 		$todayArgs  = $base;
 		unset( $todayArgs['from'] );
 		$today = self::link( $context, $todayArgs );
@@ -664,27 +664,27 @@ class OccupancyPlan {
 		if ( empty( $context['lock_ids'] ) ) {
 			echo '<div class="cb-plan-filter-row is-selection">';
 			self::renderPicker( $p . $param, $state[ $param ], $choices, $allowed, $isItemView );
-			echo '<button type="submit" class="' . esc_attr( $button . ' cb-plan-show' ) . '">' . esc_html__( 'Show', 'commonsbooking' ) . '</button>';
+			echo '<button type="submit" class="' . esc_attr( $button . ( $context['frontend'] ? '' : ' button-primary' ) . ' cb-plan-show' ) . '">' . esc_html__( 'Show', 'commonsbooking' ) . '</button>';
 			echo '</div>';
 		}
 		echo '<div class="cb-plan-filter-row is-options">';
 		if ( is_array( $terms ) && $terms ) {
-			echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html( $isItemView ? __( 'Location category', 'commonsbooking' ) : __( 'Item category', 'commonsbooking' ) ) . '</span> <select name="' . esc_attr( $p . 'cat' ) . '" onchange="this.form.submit()">';
+			echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html( $isItemView ? __( 'Location category', 'commonsbooking' ) : __( 'Item category', 'commonsbooking' ) ) . '</span> <select name="' . esc_attr( $p . 'cat' ) . '" data-autosubmit>';
 			echo '<option value="0">' . esc_html__( 'All', 'commonsbooking' ) . '</option>';
 			foreach ( $terms as $term ) {
 				echo '<option value="' . esc_attr( (string) $term->term_id ) . '"' . selected( $term->term_id, $state['cat'], false ) . '>' . esc_html( $term->name ) . '</option>';
 			}
 			echo '</select></label>';
 		}
-		echo '<label class="cb-plan-check"><input type="checkbox" name="' . esc_attr( $p . 'canceled' ) . '" value="1"' . checked( (bool) $state['canceled'], true, false ) . ' onchange="this.form.submit()"> ' . esc_html__( 'Show canceled bookings', 'commonsbooking' ) . '</label>';
+		echo '<label class="cb-plan-check"><input type="checkbox" name="' . esc_attr( $p . 'canceled' ) . '" value="1"' . checked( (bool) $state['canceled'], true, false ) . ' data-autosubmit> ' . esc_html__( 'Show canceled bookings', 'commonsbooking' ) . '</label>';
 		echo '</div><div class="cb-plan-filter-row is-period">';
-		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'From', 'commonsbooking' ) . '</span> <input type="date" name="' . esc_attr( $p . 'from' ) . '" value="' . esc_attr( $state['from'] ) . '" onchange="this.form.submit()"></label>';
-		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'Period', 'commonsbooking' ) . '</span> <select name="' . esc_attr( $p . 'days' ) . '" onchange="this.form.submit()">';
+		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'From', 'commonsbooking' ) . '</span> <input type="date" name="' . esc_attr( $p . 'from' ) . '" value="' . esc_attr( $state['from'] ) . '" data-autosubmit></label>';
+		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'Period', 'commonsbooking' ) . '</span> <select name="' . esc_attr( $p . 'days' ) . '" data-autosubmit>';
 		foreach ( self::SPANS as $days ) {
 			echo '<option value="' . esc_attr( (string) $days ) . '"' . selected( $days, $state['days'], false ) . '>' . esc_html( self::spanLabel( $days ) ) . '</option>';
 		}
 		echo '</select></label>';
-		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'Day width', 'commonsbooking' ) . '</span> <select name="' . esc_attr( $p . 'zoom' ) . '" onchange="this.form.submit()">';
+		echo '<label class="cb-plan-field"><span class="cb-plan-field-label">' . esc_html__( 'Day width', 'commonsbooking' ) . '</span> <select name="' . esc_attr( $p . 'zoom' ) . '" data-autosubmit>';
 		$zoomLabels = [
 			''   => __( 'Automatic', 'commonsbooking' ),
 			'xs' => __( 'Very narrow', 'commonsbooking' ),
@@ -787,7 +787,7 @@ class OccupancyPlan {
 			echo '<li><span class="cb-plan-swatch cb-plan-' . esc_attr( $class ) . '"></span>' . esc_html( $label ) . '</li>';
 		}
 		echo '<li class="cb-plan-hint">' . esc_html__( 'Click a bar for details, a day for the reasons.', 'commonsbooking' ) . '</li>';
-		echo '<li class="cb-plan-help-item">';
+		echo '<li>';
 		self::renderHelp();
 		echo '</li>';
 		echo '</ul>';
@@ -845,9 +845,9 @@ class OccupancyPlan {
 		echo '<div class="cb-plan-line cb-plan-days"><div class="cb-plan-label"></div>';
 		foreach ( $days as $i => $date ) {
 			$ts      = strtotime( $date );
-			$weekday = $dayWidth >= 28 ? '<span>' . esc_html( date_i18n( $dayWidth >= 44 ? 'D' : 'D', $ts ) ) . '</span>' : '';
-			echo '<button type="button" class="cb-plan-dayhead' . esc_attr( self::dayClasses( $date, $plan['today'], null ) ) . '" style="grid-column:' . (int) ( $i + 2 ) . '" data-date="' . esc_attr( $date ) . '" data-tip="' . esc_attr( date_i18n( 'l, ' . get_option( 'date_format' ), $ts ) . ' · ' . __( 'week', 'commonsbooking' ) . ' ' . date( 'W', $ts ) ) . '">';
-			echo $weekday . '<b>' . esc_html( date( 'j', $ts ) ) . '</b></button>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
+			$weekday = $dayWidth >= 28 ? '<span>' . esc_html( date_i18n( 'D', $ts ) ) . '</span>' : '';
+			echo '<button type="button" class="cb-plan-dayhead' . esc_attr( self::dayClasses( $date, $plan['today'], null ) ) . '" style="grid-column:' . (int) ( $i + 2 ) . '" data-date="' . esc_attr( $date ) . '" data-tip="' . esc_attr( date_i18n( 'l, ' . get_option( 'date_format' ), $ts ) . ' · ' . __( 'week', 'commonsbooking' ) . ' ' . gmdate( 'W', $ts ) ) . '">';
+			echo $weekday . '<b>' . esc_html( gmdate( 'j', $ts ) ) . '</b></button>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
 		}
 		echo '</div>';
 
@@ -877,8 +877,8 @@ class OccupancyPlan {
 		}
 
 		if ( $plan['station']['segments'] ) {
-			$label = $plan['view'] === Plan::VIEW_ITEM ? __( 'All locations of the item', 'commonsbooking' ) : __( 'All items of the location', 'commonsbooking' );
-			$help  = $plan['view'] === Plan::VIEW_ITEM
+			$label = $itemView ? __( 'All locations of the item', 'commonsbooking' ) : __( 'All items of the location', 'commonsbooking' );
+			$help  = $itemView
 				? __( 'Holidays, blocks and restrictions that apply to this item at every location shown. They are collected in this row instead of being repeated in each location row below.', 'commonsbooking' )
 				: __( 'Holidays, blocks and restrictions that apply to every item at this location. They are collected in this row instead of being repeated in each item row below.', 'commonsbooking' );
 			$name  = self::icon( 'all' ) . '<strong class="cb-plan-name" data-tip="' . esc_attr( $label ) . '">' . esc_html( $label ) . '</strong>'
@@ -887,14 +887,13 @@ class OccupancyPlan {
 		}
 
 		if ( ! $plan['rows'] ) {
-			echo '<p class="cb-plan-empty" data-group="' . (int) $groupId . '">' . esc_html( $plan['view'] === Plan::VIEW_ITEM ? __( 'No locations with timeframes or bookings for this item in the selected period.', 'commonsbooking' ) : __( 'No items with timeframes or bookings at this location in the selected period.', 'commonsbooking' ) ) . '</p>';
+			echo '<p class="cb-plan-empty" data-group="' . (int) $groupId . '">' . esc_html( $itemView ? __( 'No locations with timeframes or bookings for this item in the selected period.', 'commonsbooking' ) : __( 'No items with timeframes or bookings at this location in the selected period.', 'commonsbooking' ) ) . '</p>';
 		}
 
 		foreach ( $plan['rows'] as $row ) {
 			$label = self::icon( $itemView ? 'location' : 'item' ) . self::name( $row['title'], $row['edit_url'] );
 			if ( $row['conflicts'] ) {
-				/* translators: %d: number of bookings with conflicts */
-				$label .= ' <span class="cb-plan-badge" data-tip="' . esc_attr( sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $row['conflicts'], 'commonsbooking' ), $row['conflicts'] ) ) . '">⚠ ' . (int) $row['conflicts'] . '</span>';
+				$label .= ' ' . self::conflictBadge( (int) $row['conflicts'] );
 			}
 			self::renderRow( $plan, $dayWidth, $label, $row['lanes'], $row['segments'], $row['window_end'], '', (int) $row['row_id'], $groupId );
 		}
@@ -927,11 +926,22 @@ class OccupancyPlan {
 		echo '<button type="button" class="cb-plan-toggle" aria-expanded="true" aria-label="' . esc_attr( $collapse ) . '" data-tip="' . esc_attr( $collapse ) . '"></button></div>';
 		echo '<div class="cb-plan-group-fill"><div class="cb-plan-group-meta"><span class="cb-plan-group-count">' . esc_html( $meta ) . '</span>';
 		if ( $conflicts ) {
-			/* translators: %d: number of bookings with conflicts */
-			echo '<span class="cb-plan-badge" data-tip="' . esc_attr( sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $conflicts, 'commonsbooking' ), $conflicts ) ) . '">⚠ ' . (int) $conflicts . '</span>';
+			echo self::conflictBadge( (int) $conflicts ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in conflictBadge()
 		}
 		echo '<button type="button" class="cb-plan-solo">' . esc_html__( 'Only this', 'commonsbooking' ) . '</button>';
 		echo '</div></div></div>';
+	}
+
+	/**
+	 * @param int $count bookings with conflicts
+	 *
+	 * @return string html
+	 */
+	private static function conflictBadge( int $count ): string {
+		/* translators: %d: number of bookings with conflicts */
+		$tip = sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $count, 'commonsbooking' ), $count );
+
+		return '<span class="cb-plan-badge" data-tip="' . esc_attr( $tip ) . '">⚠ ' . (int) $count . '</span>';
 	}
 
 	/**
@@ -1076,7 +1086,7 @@ class OccupancyPlan {
 	 */
 	private static function dayClasses( string $date, string $today, ?string $windowEnd ): string {
 		$classes = '';
-		$weekday = (int) date( 'N', strtotime( $date ) );
+		$weekday = (int) gmdate( 'N', (int) strtotime( $date ) );
 		if ( $weekday >= 6 ) {
 			$classes .= ' is-weekend';
 		}
@@ -1114,14 +1124,14 @@ class OccupancyPlan {
 			$posts = array_replace( $posts, $group['plan']['posts'] );
 		}
 		$config = [
-			'ajax'   => admin_url( 'admin-ajax.php' ),
-			'action' => self::AJAX_DAY,
-			'nonce'  => wp_create_nonce( self::AJAX_DAY ),
-			'view'   => $view,
+			'ajax'        => admin_url( 'admin-ajax.php' ),
+			'action'      => self::AJAX_DAY,
+			'nonce'       => wp_create_nonce( self::AJAX_DAY ),
+			'view'        => $view,
 			'buttonClass' => self::buttonClass( $context ),
-			'ids'    => array_map( fn( $group ) => (int) $group['id'], $groups ),
-			'posts'  => (object) $posts,
-			'i18n'   => [
+			'ids'         => array_map( fn( $group ) => (int) $group['id'], $groups ),
+			'posts'       => (object) $posts,
+			'i18n'        => [
 				'edit'      => __( 'Edit', 'commonsbooking' ),
 				'loading'   => __( 'Loading …', 'commonsbooking' ),
 				'error'     => __( 'Could not load the details.', 'commonsbooking' ),
@@ -1144,7 +1154,7 @@ class OccupancyPlan {
 				'resizeTip' => __( 'Drag to widen the name column, double-click to reset.', 'commonsbooking' ),
 			],
 		];
-		$front  = $context['frontend'] ? ' cb-plan-front' : '';
+		$front  = ' cb-plan-ui' . ( $context['frontend'] ? ' cb-plan-front' : '' );
 		echo '<aside class="cb-plan-panel' . esc_attr( $front ) . '" id="cb-plan-panel" hidden aria-live="polite">';
 		echo '<button type="button" class="cb-plan-close" aria-label="' . esc_attr__( 'Close', 'commonsbooking' ) . '">&times;</button>';
 		echo '<div class="cb-plan-panel-body"></div>';

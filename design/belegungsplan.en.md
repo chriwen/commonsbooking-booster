@@ -1,6 +1,7 @@
-# Occupancy plan in the admin area
+# Occupancy plan (admin area and frontend)
 
-Status: stages 1 to 3 implemented, plus search with multiple selection (2026-11-15, not committed) in branch `feature/belegungsplan` (based on `booster/index-availability`), not committed.
+Status: stages 1 to 3 and 5 implemented (admin page and shortcode `[cb_occupancy_plan]`), branch `feature/belegungsplan`
+(based on `booster/index-availability`). Admin area and frontend share data, computation, rendering and script.
 No new tables, options or post meta, so downgradable (only one user meta entry for the last selection, read only
 by this page). Works with and without the booster.
 German version: `belegungsplan.md`.
@@ -32,8 +33,6 @@ bookable** (holidays, repair, restriction, no timeframe, beyond the advance book
 
 ## Decisions of the user (2026-11-17): occupancy plan in the frontend
 
-Branch `feature/belegungsplan-frontend` (based on `feature/belegungsplan`).
-
 - **Shortcode `[cb_occupancy_plan]`** shows the occupancy plan on any page, with the same features, data and
   computations as in the admin area. The decision "admin area only" of 2026-11-12 concerned the info layer in the
   booking calendar for all users and still applies to it.
@@ -43,11 +42,14 @@ Branch `feature/belegungsplan-frontend` (based on `feature/belegungsplan`).
 - **"Edit" links in the frontend too** (they lead to the admin area), only with edit permission as before.
 - **Shared rendering:** one class renders the plan for both, no duplicate code.
 - **Attribute `lock`** for pages with a fixed selection (e.g. one page per location).
+- Further decisions of 17.11. on usage are noted in the respective section: hierarchy and rows as tracks (frontend),
+  structure of the day explanation, collapsing, scroll position, long names, short how-to.
 
 ## Presentation
 
 Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-plan`), plus row action
-"Occupancy plan" in the location and item lists.
+"Occupancy plan" in the location and item lists. In the frontend the shortcode (section "Frontend"). Everything in
+this section applies to both; what only concerns the look in the frontend is described there.
 
 - **Two views** (tabs): **By location** (rows = items of the location) and **By item** (rows = locations of the item,
   `view=item`).
@@ -64,15 +66,16 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 - **Bar labels** by width: full name from 60 px, below that initials for bookings and no text for blocks. The tooltip
   shows the rest.
 - **Several locations or items:** one block per selected entry in a shared grid (shared day header), with a heading
-  line (name, edit link) only from two entries on. Clicking the day header explains the day for all blocks (row title
-  "Location · Item"), clicking a cell only for its block.
+  line (name, edit link, number of rows, conflicts, arrow to collapse) only from two entries on. Clicking the day
+  header explains the day for all blocks (grouped by block), clicking a cell only for its block.
 - **Row "All items of the location"** or "All locations of the item" (top, only if needed): blocks that occur identically in *every* item row (same
   post, same days) are moved there instead of being repeated. Only with two or more rows.
   An "i" after the name explains this in a tooltip (hover, keyboard focus or tap; user's request of 17.11.), since
   the row would otherwise look like another item.
 - **Layers per row:**
   1. bookable timeframe as light green, semi-transparent background with a green top edge on the days it applies
-     (weekdays, manual dates, repetition); white = no timeframe;
+     (weekdays, manual dates, repetition); white = no timeframe (admin page; in the frontend green blocks on a grey
+     track, see "Rows as tracks");
   2. blocks as bars: holidays/closed (yellow), blocked/repair (dark red), restriction total breakdown (red), notice
      (yellow outline); inactive restrictions and unpublished timeframes faded;
   3. bookings as bars with the name of the booking user; unconfirmed dashed, canceled struck through.
@@ -84,6 +87,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 - **End of the advance booking period:** days after the latest booking window end of the bookable timeframes are
   hatched. If the timeframe ends earlier, there is no hatching.
 - Bars that continue outside the period have square ends on that side.
+- The label column also covers the row padding (bars used to show through above and below), and the month name stays
+  next to the label column when scrolling sideways.
 
 ## Interaction
 
@@ -129,6 +134,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   view, "Show") reloads the page. The script stores the scroll position beforehand (`sessionStorage`, key
   `cbPlanScroll`, at most 30 s, same page only) and jumps back there after loading instead of starting at the top. Once
   the user scrolls, it stops correcting. An anchor in the address takes precedence.
+  Fields that apply at once (category, cancelled, period, zoom) carry `data-autosubmit` instead of an inline handler;
+  the script submits the form with `requestSubmit()`, so scroll position and expanded state apply here as well.
 - **Long names** (decision of 17.11., at the user's request, admin page and frontend):
   - Names in the left column are shortened with "…"; on hover (or keyboard focus on the link) the tooltip shows the
     full name, but only when it is actually shortened.
@@ -187,14 +194,17 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
     card (rows selection, options, period separated by hairlines, small labels above the fields, 36 px fields with a
     focus ring, "Show" as primary button, ← Today → as a button group), legend and plan together in a white card
     (12 px radius). Borders and grid as light grey 1 px hairlines, today as a light tint instead of thick lines, bars
-    with 6 px radius. Decision of 17.11. at the user's request (lines too thick, filters poorly structured). Frontend
-    only (`.cb-plan-front`); the admin page keeps the WP style.
-  - Hierarchy in the frontend (decision of 17.11., at the user's request): group rows (location or item) with a symbol
+    with 6 px radius. Decision of 17.11. at the user's request (lines too thick, filters poorly structured).
+  - Same look in the backend (decision of 17.11., at the user's request): cards, hierarchy, tracks and panel apply to
+    the admin page and the shortcode (class `.cb-plan-ui` on wrapper, panel and tooltip). Frontend only
+    (`.cb-plan-front`) are the theme resets, the segmented control, the form fields and the own buttons; the admin
+    page keeps WordPress tabs (`nav-tab`), fields and buttons ("Show" as `button-primary`), so it matches the admin
+    colour scheme. Rendering the shortcode in admin via `do_shortcode()` was rejected: shortcodes belong in post
+    content, and both sides use the same renderer anyway (`View\OccupancyPlan::render()`).
+  - Hierarchy (decision of 17.11., at the user's request): group rows (location or item) with a symbol
     in the accent colour, bold on grey; the entries below indented, with their own symbol (pin for locations, box for
-    items, layers for "All items of the location") and a tree line that ends at the last entry. Symbols as CSS masks,
-    hidden in admin. On mobile the label column is 150 px instead of 120 px.
-  - For both pages: the label column also covers the row padding (bars used to show through above and below), and
-    the month name stays next to the label column when scrolling sideways.
+    items, layers for "All items of the location") and a tree line that ends at the last entry. Symbols as CSS masks.
+    On mobile the label column is 150 px instead of 120 px.
   - Rows as tracks (decision of 17.11., at the user's request): every row is a light grey track with a small white
     gap to the next row (`--cb-plan-gap`, 4 px above and below), so bars clearly belong to one row. Grey means "no
     timeframe" (new legend entry "No timeframe"), weekend and past slightly darker, today light blue, days separated
@@ -256,7 +266,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 - **Shortcode tests** (`tests/php/View/OccupancyPlanShortcodeTest.php`): guest, member without permission, CB manager
   without and with location (foreign ids via attribute and URL are dropped), admin, parameter prefix and `page_id` in
   the form, same grid as the admin page, URL over attribute, unchecking "canceled", `lock`, view from the ids, shared
-  remembered selection, one instance only, item view with `align`.
+  remembered selection, one instance only, item view with `align`, group rows for collapsing only with several
+  locations.
 - **Manual testing:** The timeframe variants from `tests/php/Fixtures/TimeframeVariants.php` cover most displays,
   one location "Variante: …" each: *Feiertage* (many holidays, day explanation), *Einschränkungen* (total breakdown
   and notice), *Vormittag/Nachmittag Mo–Do* (several bookings per day, conflicts, several lanes), *Lange Buchungen*
@@ -271,8 +282,9 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 3. **Done:** view per item, filter by category; plus reworked layout (day width, tooltip).
    Afterwards (2026-11-15): search field with multiple selection, active entries only, remembered selection.
 4. Optional: print/export, link with `feature/dashboard`.
-5. **Done (2026-11-17, branch `feature/belegungsplan-frontend`):** shortcode `[cb_occupancy_plan]`, shared rendering
-   for admin area and frontend.
+5. **Done (2026-11-17):** shortcode `[cb_occupancy_plan]`, shared rendering for admin area and frontend; afterwards
+   hierarchy, tracks, structured day explanation, collapsing, resizable name column, short how-to. Developed in branch
+   `feature/belegungsplan-frontend` first, then taken over into `feature/belegungsplan`.
 
 ## Open questions
 
