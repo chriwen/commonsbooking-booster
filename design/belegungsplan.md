@@ -73,6 +73,8 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   Blöcke (Zeilentitel „Station · Artikel“), Klick auf eine Zelle nur für deren Block.
 - **Zeile „Alle Artikel der Station“** bzw. „Alle Stationen des Artikels“ (oben, nur wenn nötig): Sperren, die in *jeder* Artikelzeile gleich vorkommen
   (gleicher Post, gleiche Tage), werden dorthin verschoben, statt in jeder Zeile zu stehen. Erst ab zwei Zeilen.
+  Ein „i“ hinter dem Namen erklärt das per Kurzinfo (Überfahren, Tastaturfokus oder Antippen; Wunsch des Nutzers
+  17.11.), da die Zeile sonst wie ein weiterer Artikel wirkt.
 - **Ebenen pro Zeile:**
   1. buchbarer Zeitrahmen als hellgrüner, halbtransparenter Hintergrund mit grüner Oberkante an den Tagen, an denen
      er gilt (Wochentage, Einzeltermine, Wiederholung); weiß = kein Zeitrahmen;
@@ -99,8 +101,55 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   gebucht/gesperrt, alle Zeitfenster gesperrt, Feiertag/geschlossen, kein Zeitrahmen), Hinweise auf Vergangenheit und
   Vorausbuchung, und darunter alle Gründe (Zeitrahmen, Einschränkungen, Buchungen) aufklappbar mit Details und
   Bearbeiten-Link. Geladen per AJAX.
+- **Aufbau der Tageserklärung** (Entscheidung 17.11., auf Wunsch des Nutzers: Zusammenhang Station, Artikel,
+  Zeitrahmen und Buchungen war nicht auf einen Blick zu sehen):
+  - Oben eine Zusammenfassung, wie viele Zeilen welches Ergebnis im Buchungskalender haben (z. B. „3 × Buchbar“,
+    „4 × Ganztägig gebucht oder gesperrt“), farbig nach Ergebnis.
+  - Darunter die Hierarchie wie im Plan: Station (Artikelansicht: Artikel) mit Symbol als Überschrift, die Artikel
+    (bzw. Stationen) als Karten darunter, mit einer Baumlinie verbunden. Die Karte trägt links einen Farbstreifen
+    nach dem Ergebnis (grün buchbar, gelb Hinweis, rot gesperrt/gebucht) und das Ergebnis als farbige Marke.
+  - Die Gründe in der Karte nach Art gruppiert, mit Anzahl: Zeitrahmen (buchbar, Feiertag, geblockt),
+    Einschränkungen, Buchungen. Gründe mit Konflikt zeigen ein Warnsymbol mit Anzahl und sind aufgeklappt.
+  - Technik: Die AJAX-Antwort liefert pro Zeile `group_id` und `group_title`, statt den Stationsnamen vor den
+    Artikelnamen zu setzen; das Skript gruppiert. Gleiches Skript für Admin und Frontend, im Admin im schlichten
+    WP-Stil (Überschriften, gruppierte Gründe, Zusammenfassung), Karten, Symbole und Baumlinie nur im Frontend.
 - **Kurzinfo beim Überfahren** als eigenes Element (`position: fixed`, über allem) statt `title`: Das native `title`
   wurde vom Scrollbereich und der fixierten Spalte verdeckt (Rückmeldung des Nutzers). Auch per Tastaturfokus.
+- **Kurzanleitung** (Entscheidung 17.11., auf Wunsch des Nutzers): „So funktioniert der Plan“ am Ende der Legende
+  öffnet eine Karte mit den Bedienschritten (Tag anklicken, Balken anklicken, Einklappen, Zeile „Alle Artikel der
+  Station“, Konflikte, Namensspalte, Zeitraum). Standardmäßig geschlossen, damit der Plan nicht weiter nach unten
+  rutscht; `<details>` ohne Skript, Esc oder Klick daneben schließt. Gleich in Admin-Seite und Frontend. Unter dem
+  Raster bleiben 16 px frei, damit überlagernde Scrollbalken (macOS, Touch) die letzte Zeile nicht verdecken.
+- **Stationen ein- und ausklappen** (Entscheidung 17.11., auf Wunsch des Nutzers: CB-Manager mit mehreren Stationen
+  wollen schnell eine einzelne prüfen, ohne die Auswahl zu ändern). Nur wenn mehrere Stationen (bzw. Artikel in der
+  Artikelansicht) gewählt sind:
+  - Die Gruppenzeile trägt rechts im Namensfeld einen Pfeil; Klick auf Pfeil oder Namensfeld (außer dem Link) klappt
+    ein und aus. Eingeklappte Gruppen bleiben als Zeile sichtbar, mit Zusammenfassung „n Artikel“ und Konfliktzahl,
+    damit nichts übersehen wird.
+  - „Nur diesen“ (erscheint beim Überfahren der Gruppenzeile, auf Touch-Geräten immer) klappt alle anderen Gruppen
+    ein. „Alle aufklappen“ in der linken oberen Ecke erscheint, sobald etwas eingeklappt ist.
+  - Die Tageserklärung übernimmt den Zustand: eingeklappte Gruppen stehen dort als geschlossene Abschnitte
+    (`<details>`) mit Zusammenfassung, lassen sich aber einzeln öffnen, ohne den Plan zu ändern.
+  - Gemerkt nur im Browser (`localStorage`, Schlüssel `cbPlanCollapsed`, getrennt nach Station und Artikel), nicht im
+    Konto: Einklappen ist ein kurzer Blickwechsel, keine Einstellung. Wer eine Station neu in der Suche wählt,
+    bekommt sie aufgeklappt. Mit nur einer Gruppe wirkt nichts davon.
+- **Scrollposition halten** (Entscheidung 17.11., auf Wunsch des Nutzers): Jede Änderung (←/Heute/→, Ansichtswechsel,
+  „Anzeigen“) lädt die Seite neu. Das Skript merkt sich vorher die Scrollposition (`sessionStorage`, Schlüssel
+  `cbPlanScroll`, höchstens 30 s, nur für dieselbe Seite) und springt nach dem Laden dorthin zurück, statt oben zu
+  beginnen. Sobald man selbst scrollt, korrigiert es nicht mehr nach. Ein Anker in der Adresse hat Vorrang.
+- **Lange Namen** (Entscheidung 17.11., auf Wunsch des Nutzers, Admin-Seite und Frontend):
+  - Namen in der linken Spalte werden mit „…“ gekürzt; beim Überfahren (oder Tastaturfokus auf dem Link) zeigt die
+    Kurzinfo den vollen Namen, aber nur, wenn er tatsächlich gekürzt ist.
+  - Die Namensspalte lässt sich verbreitern: Griff am rechten Rand des Tabellenkopfs ziehen (Maus, Stift, Touch),
+    per Tastatur mit ←/→ in 20-px-Schritten, Doppelklick oder Pos1/Esc setzt auf die Standardbreite zurück. Grenzen
+    100 px bis 75 % der sichtbaren Breite (höchstens 640 px). Beim Ziehen färbt sich die Spaltenkante in der
+    Akzentfarbe.
+  - Die gewählte Breite wird im Browser gespeichert (`localStorage`, Schlüssel `cbPlanLabelWidth`), gilt für Admin-Seite
+    und Frontend gleichermaßen und überlebt das Neuladen. Bewusst nicht in der gemerkten Auswahl (User-Meta): Die
+    passende Breite hängt vom Bildschirm ab, nicht vom Konto. Ohne `localStorage` (privates Fenster) funktioniert
+    das Ziehen trotzdem, nur ohne Merken.
+  - Umsetzung nur im Skript: Es setzt `--cb-plan-label` direkt auf `.cb-plan`; das Raster, die fixierte Spalte und der
+    mitlaufende Monatsname nutzen diese Variable. Ohne JavaScript bleibt die Standardbreite.
 - Details Zeitrahmen: Zeitraum, Wiederholung, Wochentage bzw. Termine, Uhrzeit, max. Buchungsdauer, Vorausbuchung,
   Rollenbeschränkung, Status (wenn nicht veröffentlicht).
 - Details Einschränkung: Zeitraum, Status, Hinweistext.
@@ -149,6 +198,19 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
     weißen Karte (12 px Radius). Rahmen und Raster als 1-px-Haarlinien in hellem Grau, der heutige Tag als leichte
     Tönung statt dicker Linien, Balken mit 6 px Radius. Entscheidung 17.11. auf Wunsch des Nutzers (zu dicke Linien,
     zu wenig gegliederte Filter). Gilt nur im Frontend (`.cb-plan-front`), die Admin-Seite bleibt im WP-Stil.
+  - Hierarchie im Frontend (Entscheidung 17.11., auf Wunsch des Nutzers): Gruppenzeilen (Station bzw. Artikel) mit
+    Symbol in Akzentfarbe, fett auf grauem Grund; die Einträge darunter eingerückt, mit eigenem Symbol (Stecknadel für
+    Stationen, Paket für Artikel, Ebenen für „Alle Artikel der Station“) und einer Baumlinie, die beim letzten Eintrag
+    endet. Symbole als CSS-Masken, im Admin ausgeblendet. Mobil Namensspalte 150 px statt 120 px.
+  - Für beide Seiten: Die Namensspalte deckt den Zeilenabstand mit ab (vorher schauten Balken oben und unten durch),
+    und der Monatsname bleibt beim seitlichen Scrollen neben der Namensspalte stehen.
+  - Zeilen als Spuren (Entscheidung 17.11., auf Wunsch des Nutzers): Jede Zeile ist eine hellgraue Spur, zwischen
+    zwei Zeilen liegt ein kleiner weißer Abstand (`--cb-plan-gap`, 4 px oben und unten), damit Balken eindeutig zu
+    einer Zeile gehören. Grau heißt „kein Zeitrahmen“ (neuer Legendeneintrag „Kein Zeitrahmen“), Wochenende und
+    Vergangenheit etwas dunkler, heute hellblau, Tage durch weiße Fugen getrennt. Buchbare Zeiträume sind grüne
+    Blöcke mit abgerundeten Ecken (am Rand des Zeitraums gerade) statt grüner Fläche mit grüner Oberkante; dadurch
+    reißt die Zeile bei Tagen ohne Zeitrahmen nicht mehr weiß ab. Beim Überfahren werden Name und Spur gemeinsam
+    hervorgehoben. Im Admin bleibt die bisherige Darstellung (nur der Legendeneintrag kommt dazu).
   - Schrift vom Theme, Grundgröße 14 px (die Tagesbreiten sind in px), eigene Reiter und Buttons statt der
     Admin-Klassen, Akzentfarbe über die CSS-Variable `--cb-plan-accent` überschreibbar. Abweichung vom Konzept: keine Größen in
     `rem` und keine Übernahme von `--wp--preset--color--primary`, weil die Themes diese Variable uneinheitlich
@@ -209,6 +271,12 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   und mit Station (fremde IDs per Attribut und URL fallen weg), Admin, Parameter-Präfix und `page_id` im Formular,
   gleiches Raster wie die Admin-Seite, URL vor Attribut, Abwählen von „Stornierte“, `lock`, Ansicht aus den IDs,
   gemeinsame gemerkte Auswahl, nur eine Instanz, Artikelansicht mit `align`.
+- **Manuell testen:** Die Zeitrahmen-Varianten aus `tests/php/Fixtures/TimeframeVariants.php` decken die meisten
+  Darstellungen ab, je eine Station „Variante: …“: *Feiertage* (viele Feiertage, Tageserklärung), *Einschränkungen*
+  (Totalausfall und Hinweis), *Vormittag/Nachmittag Mo–Do* (mehrere Buchungen pro Tag, Konflikte, mehrere Spuren),
+  *Lange Buchungen* (mehrtägig, über den Rand, storniert), *Liste Standort 1* (zwei Artikel, Stationszeile),
+  *Kurzer Vorlauf* (Ende der Vorausbuchung), *Von Manager betreut* (Rechte für CB-Manager). Für Gruppen mit vielen
+  Artikeln mehrere Stationen zusammen auswählen. Unbestätigte Buchungen kommen in den Varianten nicht vor.
 
 ## Ausbaustufen
 

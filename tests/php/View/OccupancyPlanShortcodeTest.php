@@ -228,4 +228,29 @@ class OccupancyPlanShortcodeTest extends CustomPostTypeTest {
 		$this->assertStringContainsString( 'data-post="' . $this->bookingId . '"', $html );
 		$this->assertStringNotContainsString( 'cb-plan-tabs', $html );
 	}
+
+	public function testCollapsibleGroupsOnlyWithSeveralLocations() {
+		$other = $this->createLocation( 'Other station' );
+		$this->createTimeframe( $other, $this->createItem( 'Other item' ), strtotime( '-10 days', $this->now ), strtotime( '+30 days', $this->now ) );
+		$this->asAdmin();
+		$instances = new \ReflectionProperty( OccupancyPlan::class, 'instances' );
+		$instances->setAccessible( true );
+
+		$single = $this->grid( $this->shortcode( 'location="' . $this->locationId . '"' ) );
+		$this->assertStringNotContainsString( 'cb-plan-group', $single, 'one location: no group row to collapse' );
+
+		$instances->setValue( null, 0 );
+		$_GET = [
+			'cbp_sel'      => '1',
+			'cbp_location' => [ (string) $this->locationId, (string) $other ],
+		];
+		$html = $this->grid( $this->shortcode() );
+		foreach ( [ $this->locationId, $other ] as $id ) {
+			$this->assertStringContainsString( '<div class="cb-plan-line cb-plan-group" data-group="' . $id . '">', $html );
+		}
+		$this->assertSame( 2, substr_count( $html, 'class="cb-plan-toggle" aria-expanded="true"' ) );
+		$this->assertSame( 2, substr_count( $html, 'class="cb-plan-solo"' ) );
+		$this->assertStringContainsString( '1 item</span>', $html, 'summary for the collapsed state' );
+		$this->assertMatchesRegularExpression( '/class="cb-plan-line cb-plan-row[^"]*"[^>]*data-group="' . $other . '"/', $html, 'rows carry their group for hiding' );
+	}
 }

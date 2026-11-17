@@ -307,10 +307,10 @@ class OccupancyPlan {
 			$result = Plan::explainDay( $view, $id, $date, $row ?: null );
 			$date   = $result['date'];
 			foreach ( $result['rows'] as $explained ) {
-				if ( count( $ids ) > 1 ) {
-					$explained['title'] = $allowed[ $id ] . ' · ' . $explained['title'];
-				}
-				$rows[] = $explained;
+				// The panel groups the rows by location (item view: by item)
+				$explained['group_id']    = $id;
+				$explained['group_title'] = $allowed[ $id ];
+				$rows[]                   = $explained;
 			}
 		}
 		wp_send_json_success(
@@ -545,7 +545,7 @@ class OccupancyPlan {
 			];
 		}
 
-		echo '<div class="cb-plan-card">';
+		echo '<div class="cb-plan-card is-view-' . esc_attr( $view ) . '">';
 		self::renderLegend();
 		self::renderPlan( $groups, $dayWidth );
 		echo '</div>';
@@ -772,6 +772,7 @@ class OccupancyPlan {
 	private static function renderLegend(): void {
 		$entries = [
 			'bookable'                => __( 'Bookable', 'commonsbooking' ),
+			'none'                    => __( 'No timeframe', 'commonsbooking' ),
 			'booking'                 => __( 'Booking', 'commonsbooking' ),
 			'booking is-unconfirmed'  => __( 'Booking (unconfirmed)', 'commonsbooking' ),
 			'booking has-conflict'    => __( 'Conflict', 'commonsbooking' ),
@@ -786,7 +787,33 @@ class OccupancyPlan {
 			echo '<li><span class="cb-plan-swatch cb-plan-' . esc_attr( $class ) . '"></span>' . esc_html( $label ) . '</li>';
 		}
 		echo '<li class="cb-plan-hint">' . esc_html__( 'Click a bar for details, a day for the reasons.', 'commonsbooking' ) . '</li>';
+		echo '<li class="cb-plan-help-item">';
+		self::renderHelp();
+		echo '</li>';
 		echo '</ul>';
+	}
+
+	/**
+	 * Short how-to (closed by default, opens as a card below the legend). Same for the admin page and the frontend.
+	 *
+	 * @return void
+	 */
+	private static function renderHelp(): void {
+		$steps = [
+			__( 'Day', 'commonsbooking' )                      => __( 'Click a date in the header: for every row it explains whether the day can be booked and why, with the timeframes, restrictions and bookings involved.', 'commonsbooking' ),
+			__( 'Bar', 'commonsbooking' )                      => __( 'Click a timeframe, booking or restriction in the calendar to see its details.', 'commonsbooking' ),
+			__( 'Collapse', 'commonsbooking' )                 => __( 'With several locations (or items) selected, the arrow or the name collapses a group. "Only this" collapses all others, "Expand all" at the top left brings them back. The day explanation follows.', 'commonsbooking' ),
+			__( 'All items of the location', 'commonsbooking' ) => __( 'Holidays, blocks and restrictions that apply to every row of the group are shown once in this row. The "i" explains it.', 'commonsbooking' ),
+			__( 'Conflicts', 'commonsbooking' )                => __( 'The red number counts bookings that collide with a block, holiday or restriction.', 'commonsbooking' ),
+			__( 'Names', 'commonsbooking' )                    => __( 'Drag the edge of the name column in the header to widen it, double-click to reset. Shortened names show in full on hover.', 'commonsbooking' ),
+			__( 'Period', 'commonsbooking' )                   => __( '← Today → moves the period, the filters above change start, length and day width. The selection is remembered.', 'commonsbooking' ),
+		];
+		echo '<details class="cb-plan-help"><summary>' . esc_html__( 'How to use the plan', 'commonsbooking' ) . '</summary>';
+		echo '<div class="cb-plan-help-box"><dl>';
+		foreach ( $steps as $term => $text ) {
+			echo '<dt>' . esc_html( $term ) . '</dt><dd>' . esc_html( $text ) . '</dd>';
+		}
+		echo '</dl></div></details>';
 	}
 
 	/**
@@ -808,7 +835,7 @@ class OccupancyPlan {
 		for ( $i = 1; $i <= $count; $i++ ) {
 			if ( $i === $count || substr( $days[ $i ], 0, 7 ) !== substr( $days[ $start ], 0, 7 ) ) {
 				$format = ( $i - $start ) * $dayWidth < 90 ? 'M y' : 'F Y';
-				echo '<div class="cb-plan-month" style="grid-column:' . (int) ( $start + 2 ) . ' / ' . (int) ( $i + 2 ) . '">' . esc_html( date_i18n( $format, strtotime( $days[ $start ] ) ) ) . '</div>';
+				echo '<div class="cb-plan-month" style="grid-column:' . (int) ( $start + 2 ) . ' / ' . (int) ( $i + 2 ) . '"><span>' . esc_html( date_i18n( $format, strtotime( $days[ $start ] ) ) ) . '</span></div>';
 				$start = $i;
 			}
 		}
@@ -841,35 +868,95 @@ class OccupancyPlan {
 	 * @return void
 	 */
 	private static function renderGroup( array $group, int $dayWidth, bool $withHeading ): void {
-		$plan    = $group['plan'];
-		$groupId = (int) $group['id'];
+		$plan     = $group['plan'];
+		$groupId  = (int) $group['id'];
+		$itemView = $plan['view'] === Plan::VIEW_ITEM;
 
 		if ( $withHeading ) {
-			$title = $group['edit_url']
-				? '<a href="' . esc_url( $group['edit_url'] ) . '">' . esc_html( $group['title'] ) . '</a>'
-				: esc_html( $group['title'] );
-			echo '<div class="cb-plan-line cb-plan-group" data-group="' . (int) $groupId . '"><div class="cb-plan-label">' . $title . '</div><div class="cb-plan-group-fill"></div></div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
+			self::renderGroupHeading( $group, $itemView );
 		}
 
 		if ( $plan['station']['segments'] ) {
 			$label = $plan['view'] === Plan::VIEW_ITEM ? __( 'All locations of the item', 'commonsbooking' ) : __( 'All items of the location', 'commonsbooking' );
-			self::renderRow( $plan, $dayWidth, '<strong>' . esc_html( $label ) . '</strong>', $plan['station']['lanes'], $plan['station']['segments'], null, 'cb-plan-station', 0, $groupId );
+			$help  = $plan['view'] === Plan::VIEW_ITEM
+				? __( 'Holidays, blocks and restrictions that apply to this item at every location shown. They are collected in this row instead of being repeated in each location row below.', 'commonsbooking' )
+				: __( 'Holidays, blocks and restrictions that apply to every item at this location. They are collected in this row instead of being repeated in each item row below.', 'commonsbooking' );
+			$name  = self::icon( 'all' ) . '<strong class="cb-plan-name" data-tip="' . esc_attr( $label ) . '">' . esc_html( $label ) . '</strong>'
+				. '<span class="cb-plan-info" tabindex="0" role="img" aria-label="' . esc_attr( $help ) . '" data-tip="' . esc_attr( $help ) . '">i</span>';
+			self::renderRow( $plan, $dayWidth, $name, $plan['station']['lanes'], $plan['station']['segments'], null, 'cb-plan-station', 0, $groupId );
 		}
 
 		if ( ! $plan['rows'] ) {
-			echo '<p class="cb-plan-empty">' . esc_html( $plan['view'] === Plan::VIEW_ITEM ? __( 'No locations with timeframes or bookings for this item in the selected period.', 'commonsbooking' ) : __( 'No items with timeframes or bookings at this location in the selected period.', 'commonsbooking' ) ) . '</p>';
+			echo '<p class="cb-plan-empty" data-group="' . (int) $groupId . '">' . esc_html( $plan['view'] === Plan::VIEW_ITEM ? __( 'No locations with timeframes or bookings for this item in the selected period.', 'commonsbooking' ) : __( 'No items with timeframes or bookings at this location in the selected period.', 'commonsbooking' ) ) . '</p>';
 		}
 
 		foreach ( $plan['rows'] as $row ) {
-			$label = $row['edit_url']
-				? '<a href="' . esc_url( $row['edit_url'] ) . '">' . esc_html( $row['title'] ) . '</a>'
-				: esc_html( $row['title'] );
+			$label = self::icon( $itemView ? 'location' : 'item' ) . self::name( $row['title'], $row['edit_url'] );
 			if ( $row['conflicts'] ) {
 				/* translators: %d: number of bookings with conflicts */
 				$label .= ' <span class="cb-plan-badge" data-tip="' . esc_attr( sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $row['conflicts'], 'commonsbooking' ), $row['conflicts'] ) ) . '">⚠ ' . (int) $row['conflicts'] . '</span>';
 			}
 			self::renderRow( $plan, $dayWidth, $label, $row['lanes'], $row['segments'], $row['window_end'], '', (int) $row['row_id'], $groupId );
 		}
+	}
+
+	/**
+	 * Heading of a location (item view: item) when several are shown: name, collapse toggle, number of rows and
+	 * conflicts, "only this" button. Collapsing is done by the script and only changes the view.
+	 *
+	 * @param array $group
+	 * @param bool  $itemView
+	 *
+	 * @return void
+	 */
+	private static function renderGroupHeading( array $group, bool $itemView ): void {
+		$groupId   = (int) $group['id'];
+		$rows      = $group['plan']['rows'];
+		$conflicts = array_sum( array_column( $rows, 'conflicts' ) );
+		$count     = count( $rows );
+		/* translators: %s: name of the location or item */
+		$collapse = sprintf( __( 'Collapse %s', 'commonsbooking' ), $group['title'] );
+		$meta     = $itemView
+			/* translators: %d: number of locations */
+			? sprintf( _n( '%d location', '%d locations', $count, 'commonsbooking' ), $count )
+			/* translators: %d: number of items */
+			: sprintf( _n( '%d item', '%d items', $count, 'commonsbooking' ), $count );
+
+		echo '<div class="cb-plan-line cb-plan-group" data-group="' . (int) $groupId . '">';
+		echo '<div class="cb-plan-label">' . self::icon( $itemView ? 'item' : 'location' ) . self::name( $group['title'], $group['edit_url'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in icon() and name()
+		echo '<button type="button" class="cb-plan-toggle" aria-expanded="true" aria-label="' . esc_attr( $collapse ) . '" data-tip="' . esc_attr( $collapse ) . '"></button></div>';
+		echo '<div class="cb-plan-group-fill"><div class="cb-plan-group-meta"><span class="cb-plan-group-count">' . esc_html( $meta ) . '</span>';
+		if ( $conflicts ) {
+			/* translators: %d: number of bookings with conflicts */
+			echo '<span class="cb-plan-badge" data-tip="' . esc_attr( sprintf( _n( '%d booking with conflict', '%d bookings with conflicts', $conflicts, 'commonsbooking' ), $conflicts ) ) . '">⚠ ' . (int) $conflicts . '</span>';
+		}
+		echo '<button type="button" class="cb-plan-solo">' . esc_html__( 'Only this', 'commonsbooking' ) . '</button>';
+		echo '</div></div></div>';
+	}
+
+	/**
+	 * Name in the label column: shortened with an ellipsis, the full name as tooltip (shown when shortened).
+	 *
+	 * @param string      $title
+	 * @param string|null $editUrl
+	 *
+	 * @return string
+	 */
+	private static function name( string $title, ?string $editUrl ): string {
+		$name = $editUrl ? '<a href="' . esc_url( $editUrl ) . '">' . esc_html( $title ) . '</a>' : esc_html( $title );
+
+		return '<span class="cb-plan-name" data-tip="' . esc_attr( $title ) . '">' . $name . '</span>';
+	}
+
+	/**
+	 * Symbol before a row label (shown in the frontend only).
+	 *
+	 * @param string $type location, item or all
+	 *
+	 * @return string
+	 */
+	private static function icon( string $type ): string {
+		return '<span class="cb-plan-icon is-' . esc_attr( $type ) . '" aria-hidden="true"></span>';
 	}
 
 	/**
@@ -1043,6 +1130,18 @@ class OccupancyPlan {
 				'noReasons' => __( 'No timeframes, restrictions or bookings on this day.', 'commonsbooking' ),
 				'conflicts' => __( 'Conflicts', 'commonsbooking' ),
 				'calendar'  => __( 'In the booking calendar', 'commonsbooking' ),
+				'resize'    => __( 'Width of the name column', 'commonsbooking' ),
+				/* translators: %s: name of the location or item */
+				'collapse'  => __( 'Collapse %s', 'commonsbooking' ),
+				/* translators: %s: name of the location or item */
+				'expand'    => __( 'Expand %s', 'commonsbooking' ),
+				'expandAll' => __( 'Expand all', 'commonsbooking' ),
+				'groups'    => [
+					'timeframe'   => __( 'Timeframes', 'commonsbooking' ),
+					'restriction' => __( 'Restrictions', 'commonsbooking' ),
+					'booking'     => __( 'Bookings', 'commonsbooking' ),
+				],
+				'resizeTip' => __( 'Drag to widen the name column, double-click to reset.', 'commonsbooking' ),
 			],
 		];
 		$front  = $context['frontend'] ? ' cb-plan-front' : '';

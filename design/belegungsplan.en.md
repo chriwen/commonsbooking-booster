@@ -68,6 +68,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   "Location · Item"), clicking a cell only for its block.
 - **Row "All items of the location"** or "All locations of the item" (top, only if needed): blocks that occur identically in *every* item row (same
   post, same days) are moved there instead of being repeated. Only with two or more rows.
+  An "i" after the name explains this in a tooltip (hover, keyboard focus or tap; user's request of 17.11.), since
+  the row would otherwise look like another item.
 - **Layers per row:**
   1. bookable timeframe as light green, semi-transparent background with a green top edge on the days it applies
      (weekdays, manual dates, repetition); white = no timeframe;
@@ -91,8 +93,54 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   panel shows the result as the booking calendar sees it (bookable, partially booked, booked/blocked for the whole day,
   all slots locked, holidays/closed, no timeframe), notes on the past and the advance booking period, and below all
   reasons (timeframes, restrictions, bookings) expandable with details and edit link. Loaded via AJAX.
+- **Structure of the day explanation** (decision of 17.11., at the user's request: the relation between location,
+  item, timeframes and bookings was not visible at a glance):
+  - At the top a summary of how many rows have which result in the booking calendar (e.g. "3 × Bookable",
+    "4 × Booked or blocked all day"), coloured by result.
+  - Below that the hierarchy as in the plan: location (item view: item) with a symbol as heading, the items (or
+    locations) as cards below, connected by a tree line. The card has a colour stripe on the left by result (green
+    bookable, yellow notice, red blocked/booked) and the result as a coloured tag.
+  - The reasons in the card grouped by kind, with count: timeframes (bookable, holiday, blocked), restrictions,
+    bookings. Reasons with a conflict show a warning symbol with the count and are expanded.
+  - Technical: the AJAX response returns `group_id` and `group_title` per row instead of putting the location name in
+    front of the item name; the script groups. Same script for admin and frontend; in admin in the plain WP style
+    (headings, grouped reasons, summary), cards, symbols and tree line only in the frontend.
 - **Tooltip on hover** as its own element (`position: fixed`, on top) instead of `title`: the native `title` was hidden
   by the scroll area and the sticky column (feedback of the user). Also on keyboard focus.
+- **Short how-to** (decision of 17.11., at the user's request): "How to use the plan" at the end of the legend opens a
+  card with the basic steps (click a day, click a bar, collapsing, row "All items of the location", conflicts, name
+  column, period). Closed by default so the plan does not move further down; `<details>` works without script, Esc or
+  a click outside closes it. Same on the admin page and in the frontend. 16 px stay free below the grid so overlay
+  scrollbars (macOS, touch) do not cover the last row.
+- **Collapsing locations** (decision of 17.11., at the user's request: CB managers with several locations want to
+  check a single one quickly without changing the selection). Only when several locations (or items in the item view)
+  are selected:
+  - The group row has an arrow at the right of the name cell; clicking the arrow or the name cell (except the link)
+    collapses and expands. Collapsed groups stay visible as a row with a summary "n items" and the conflict count, so
+    nothing is overlooked.
+  - "Only this" (shown when hovering the group row, always on touch devices) collapses all other groups. "Expand all"
+    in the top left corner appears as soon as something is collapsed.
+  - The day explanation follows the state: collapsed groups appear there as closed sections (`<details>`) with a
+    summary, but can be opened one by one without changing the plan.
+  - Remembered in the browser only (`localStorage`, key `cbPlanCollapsed`, separately for locations and items), not in
+    the account: collapsing is a short change of focus, not a setting. A location newly picked in the search shows up
+    expanded. With a single group none of this applies.
+- **Keeping the scroll position** (decision of 17.11., at the user's request): every change (←/Today/→, switching the
+  view, "Show") reloads the page. The script stores the scroll position beforehand (`sessionStorage`, key
+  `cbPlanScroll`, at most 30 s, same page only) and jumps back there after loading instead of starting at the top. Once
+  the user scrolls, it stops correcting. An anchor in the address takes precedence.
+- **Long names** (decision of 17.11., at the user's request, admin page and frontend):
+  - Names in the left column are shortened with "…"; on hover (or keyboard focus on the link) the tooltip shows the
+    full name, but only when it is actually shortened.
+  - The name column can be widened: drag the handle at the right edge of the table header (mouse, pen, touch), with
+    the keyboard ←/→ in 20 px steps, double-click or Home/Esc resets to the default width. Limits 100 px to 75 % of
+    the visible width (at most 640 px). While dragging, the column edge takes the accent colour.
+  - The chosen width is stored in the browser (`localStorage`, key `cbPlanLabelWidth`), applies to the admin page and
+    the frontend alike and survives reloading. Deliberately not part of the remembered selection (user meta): the right
+    width depends on the screen, not the account. Without `localStorage` (private window) dragging still works, just
+    without remembering.
+  - Implemented in the script only: it sets `--cb-plan-label` directly on `.cb-plan`; the grid, the sticky column and
+    the moving month name use this variable. Without JavaScript the default width stays.
 - Timeframe details: period, repetition, weekdays or dates, time, maximum booking days, advance booking days, role
   restriction, status (if not published).
 - Restriction details: period, state, hint text.
@@ -141,6 +189,19 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
     (12 px radius). Borders and grid as light grey 1 px hairlines, today as a light tint instead of thick lines, bars
     with 6 px radius. Decision of 17.11. at the user's request (lines too thick, filters poorly structured). Frontend
     only (`.cb-plan-front`); the admin page keeps the WP style.
+  - Hierarchy in the frontend (decision of 17.11., at the user's request): group rows (location or item) with a symbol
+    in the accent colour, bold on grey; the entries below indented, with their own symbol (pin for locations, box for
+    items, layers for "All items of the location") and a tree line that ends at the last entry. Symbols as CSS masks,
+    hidden in admin. On mobile the label column is 150 px instead of 120 px.
+  - For both pages: the label column also covers the row padding (bars used to show through above and below), and
+    the month name stays next to the label column when scrolling sideways.
+  - Rows as tracks (decision of 17.11., at the user's request): every row is a light grey track with a small white
+    gap to the next row (`--cb-plan-gap`, 4 px above and below), so bars clearly belong to one row. Grey means "no
+    timeframe" (new legend entry "No timeframe"), weekend and past slightly darker, today light blue, days separated
+    by white joints. Bookable periods are green blocks with rounded corners (straight at the edge of the range)
+    instead of a green area with a green top line, so the row no longer breaks into white on days without a timeframe.
+    On hover, the name and the track are highlighted together. The admin page keeps its look (only the legend entry
+    is added).
   - Font from the theme, base size 14 px (day widths are in px), own tabs and buttons instead of the admin classes,
     accent colour overridable via the CSS variable `--cb-plan-accent`. Deviation from the concept: no sizes in `rem` and no use of
     `--wp--preset--color--primary`, because themes use that variable inconsistently.
@@ -196,6 +257,12 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   without and with location (foreign ids via attribute and URL are dropped), admin, parameter prefix and `page_id` in
   the form, same grid as the admin page, URL over attribute, unchecking "canceled", `lock`, view from the ids, shared
   remembered selection, one instance only, item view with `align`.
+- **Manual testing:** The timeframe variants from `tests/php/Fixtures/TimeframeVariants.php` cover most displays,
+  one location "Variante: …" each: *Feiertage* (many holidays, day explanation), *Einschränkungen* (total breakdown
+  and notice), *Vormittag/Nachmittag Mo–Do* (several bookings per day, conflicts, several lanes), *Lange Buchungen*
+  (multi-day, across the edge, canceled), *Liste Standort 1* (two items, location row), *Kurzer Vorlauf* (end of the
+  advance booking period), *Von Manager betreut* (permissions for CB managers). For groups with many items select
+  several locations together. Unconfirmed bookings do not occur in the variants.
 
 ## Stages
 

@@ -95,7 +95,7 @@
 			else if (e.key === 'Enter') {
 				e.preventDefault();
 				if (!list.hidden && current >= 0) { choose(current); }
-				else if (!input.value.trim()) { form.submit(); }
+				else if (!input.value.trim()) { if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); } }
 			}
 			else if (e.key === 'Escape') { if (!list.hidden) { e.stopPropagation(); closeList(); } }
 			else if (e.key === 'Backspace' && !input.value) {
@@ -192,31 +192,87 @@
 		if (post.edit_url) { nodes.push(editLink(post.edit_url)); }
 		show(nodes);
 	}
+	// Day explanation: location (item view: item) -> one card per row with the calendar result -> reasons grouped
+	// into timeframes, restrictions and bookings
+	var KIND_GROUP = {bookable: 'timeframe', holiday: 'timeframe', repair: 'timeframe', restriction: 'restriction', booking: 'booking'};
+	function icon(type){
+		var i = el('span', 'cb-plan-icon is-' + type);
+		i.setAttribute('aria-hidden', 'true');
+		return i;
+	}
+	function reasonNode(r){
+		var d = el('details', 'cb-plan-reason cb-plan-reason-' + r.kind);
+		var s = el('summary');
+		s.appendChild(el('span', 'cb-plan-swatch cb-plan-' + r.kind));
+		s.appendChild(el('span', 'cb-plan-reason-title', r.title));
+		if (r.conflicts && r.conflicts.length) { s.appendChild(el('span', 'cb-plan-badge', '⚠ ' + r.conflicts.length)); }
+		s.appendChild(el('span', 'cb-plan-reason-type', r.type_label));
+		d.appendChild(s);
+		if (r.conflicts && r.conflicts.length) { d.appendChild(conflicts(r.conflicts)); d.open = true; }
+		d.appendChild(details(r.details));
+		if (r.edit_url) { d.appendChild(editLink(r.edit_url)); }
+		return d;
+	}
+	function dayCard(row){
+		var card = el('section', 'cb-plan-day is-' + row.result.tone);
+		var head = el('h3', 'cb-plan-day-head');
+		head.appendChild(icon(cfg.view === 'item' ? 'location' : 'item'));
+		head.appendChild(el('span', 'cb-plan-day-title', row.title));
+		var res = el('div', 'cb-plan-result is-' + row.result.tone);
+		res.appendChild(el('span', 'cb-plan-result-label', t.calendar));
+		res.appendChild(el('strong', null, row.result.label));
+		row.result.notes.forEach(function(n){ res.appendChild(el('p', null, n)); });
+		card.appendChild(head);
+		card.appendChild(res);
+		if (!row.reasons.length) {
+			card.appendChild(el('p', 'cb-plan-muted', t.noReasons));
+		}
+		['timeframe', 'restriction', 'booking'].forEach(function(key){
+			var list = row.reasons.filter(function(r){ return (KIND_GROUP[r.kind] || 'timeframe') === key; });
+			if (!list.length) { return; }
+			var box = el('div', 'cb-plan-reasons is-' + key);
+			box.appendChild(el('p', 'cb-plan-reasons-title', t.groups[key] + ' · ' + list.length));
+			list.forEach(function(r){ box.appendChild(reasonNode(r)); });
+			card.appendChild(box);
+		});
+		return card;
+	}
+	function summary(rows){
+		var counts = [], seen = {};
+		rows.forEach(function(row){
+			var key = row.result.tone + '|' + row.result.label;
+			if (!seen[key]) { seen[key] = {tone: row.result.tone, label: row.result.label, n: 0}; counts.push(seen[key]); }
+			seen[key].n++;
+		});
+		var sum = el('ul', 'cb-plan-day-summary');
+		counts.forEach(function(c){ sum.appendChild(el('li', 'cb-plan-pill is-' + c.tone, c.n + ' × ' + c.label)); });
+		return sum;
+	}
 	function renderDay(data){
 		var nodes = [el('p', 'cb-plan-panel-type', t.day), el('h2', 'cb-plan-panel-title', data.date_label)];
+		// Summary: how many rows show which result in the booking calendar
+		if (data.rows.length > 1) { nodes.push(summary(data.rows)); }
+		var groups = [], byId = {};
 		data.rows.forEach(function(row){
-			var sec = el('section', 'cb-plan-day');
-			if (data.rows.length > 1) { sec.appendChild(el('h3', null, row.title)); }
-			var res = el('div', 'cb-plan-result is-' + row.result.tone);
-			res.appendChild(el('span', 'cb-plan-result-label', t.calendar));
-			res.appendChild(el('strong', null, row.result.label));
-			row.result.notes.forEach(function(n){ res.appendChild(el('p', null, n)); });
-			sec.appendChild(res);
-			if (!row.reasons.length) {
-				sec.appendChild(el('p', 'cb-plan-muted', t.noReasons));
+			var id = String(row.group_id || '');
+			if (!byId[id]) { byId[id] = {id: id, title: row.group_title || '', rows: []}; groups.push(byId[id]); }
+			byId[id].rows.push(row);
+		});
+		groups.forEach(function(g){
+			// Several groups: collapsible, collapsed like in the plan (only here in the panel when toggled)
+			var foldable = groups.length > 1 && g.title;
+			var sec = el(foldable ? 'details' : 'div', 'cb-plan-daygroup');
+			if (foldable) { sec.open = !isCollapsed(g.id); }
+			if (g.title) {
+				var h = el(foldable ? 'summary' : 'p', 'cb-plan-daygroup-title');
+				h.appendChild(icon(cfg.view === 'item' ? 'item' : 'location'));
+				h.appendChild(el('span', 'cb-plan-daygroup-name', g.title));
+				if (foldable) { h.appendChild(summary(g.rows)); }
+				sec.appendChild(h);
 			}
-			row.reasons.forEach(function(r){
-				var d = el('details', 'cb-plan-reason cb-plan-reason-' + r.kind);
-				var s = el('summary');
-				s.appendChild(el('span', 'cb-plan-swatch cb-plan-' + r.kind));
-				s.appendChild(el('span', 'cb-plan-reason-type', r.type_label));
-				s.appendChild(el('span', 'cb-plan-reason-title', r.title));
-				d.appendChild(s);
-				if (r.conflicts && r.conflicts.length) { d.appendChild(conflicts(r.conflicts)); d.open = true; }
-				d.appendChild(details(r.details));
-				if (r.edit_url) { d.appendChild(editLink(r.edit_url)); }
-				sec.appendChild(d);
-			});
+			var list = el('div', 'cb-plan-daygroup-rows');
+			g.rows.forEach(function(row){ list.appendChild(dayCard(row)); });
+			sec.appendChild(list);
 			nodes.push(sec);
 		});
 		show(nodes);
@@ -255,6 +311,8 @@
 	function showTip(target){
 		var text = target.getAttribute('data-tip');
 		if (!text) { return; }
+		// names in the label column: only when shortened
+		if (target.classList.contains('cb-plan-name') && target.scrollWidth <= target.clientWidth) { hideTip(); return; }
 		tip.textContent = text;
 		tip.hidden = false;
 		var r = target.getBoundingClientRect();
@@ -273,4 +331,190 @@
 	root.addEventListener('focusin', function(e){ var target = e.target.closest('[data-tip]'); if (target) { showTip(target); } });
 	root.addEventListener('focusout', hideTip);
 	document.querySelector('.cb-plan-scroll').addEventListener('scroll', hideTip, {passive: true});
+
+	// Name column: width adjustable by dragging the handle in the header (or arrow keys), remembered in this browser
+	var scroller = document.querySelector('.cb-plan-scroll');
+	var headLabel = root.querySelector('.cb-plan-days > .cb-plan-label');
+	var storeKey = 'cbPlanLabelWidth';
+	function defaultWidth(){
+		var saved = root.style.getPropertyValue('--cb-plan-label');
+		root.style.removeProperty('--cb-plan-label');
+		var w = headLabel.getBoundingClientRect().width;
+		if (saved) { root.style.setProperty('--cb-plan-label', saved); }
+		return w;
+	}
+	function clampWidth(w){
+		var max = Math.max(160, Math.min(640, scroller.clientWidth * 0.75));
+		return Math.round(Math.min(Math.max(w, 100), max));
+	}
+	function setWidth(w, save){
+		w = clampWidth(w);
+		root.style.setProperty('--cb-plan-label', w + 'px');
+		handle.setAttribute('aria-valuenow', String(w));
+		if (save) { try { localStorage.setItem(storeKey, String(w)); } catch (e) {} }
+	}
+	function resetWidth(){
+		root.style.removeProperty('--cb-plan-label');
+		handle.setAttribute('aria-valuenow', String(Math.round(headLabel.getBoundingClientRect().width)));
+		try { localStorage.removeItem(storeKey); } catch (e) {}
+	}
+	var handle = null;
+	if (headLabel) {
+		handle = el('div', 'cb-plan-resize');
+		handle.setAttribute('role', 'separator');
+		handle.setAttribute('aria-orientation', 'vertical');
+		handle.setAttribute('aria-label', t.resize);
+		handle.setAttribute('aria-valuemin', '100');
+		handle.setAttribute('tabindex', '0');
+		handle.setAttribute('data-tip', t.resizeTip);
+		headLabel.appendChild(handle);
+		var stored = null;
+		try { stored = parseInt(localStorage.getItem(storeKey), 10); } catch (e) {}
+		if (stored > 0) { setWidth(stored, false); } else { handle.setAttribute('aria-valuenow', String(Math.round(defaultWidth()))); }
+
+		var startX = 0, startW = 0;
+		handle.addEventListener('pointerdown', function(e){
+			if (e.button !== 0) { return; }
+			e.preventDefault();
+			startX = e.clientX;
+			startW = headLabel.getBoundingClientRect().width;
+			handle.setPointerCapture(e.pointerId);
+			root.classList.add('is-resizing');
+			hideTip();
+		});
+		handle.addEventListener('pointermove', function(e){
+			if (!root.classList.contains('is-resizing')) { return; }
+			setWidth(startW + e.clientX - startX, false);
+		});
+		function endDrag(e){
+			if (!root.classList.contains('is-resizing')) { return; }
+			root.classList.remove('is-resizing');
+			setWidth(startW + e.clientX - startX, true);
+		}
+		handle.addEventListener('pointerup', endDrag);
+		handle.addEventListener('pointercancel', endDrag);
+		handle.addEventListener('dblclick', resetWidth);
+		handle.addEventListener('keydown', function(e){
+			var w = headLabel.getBoundingClientRect().width;
+			if (e.key === 'ArrowRight') { setWidth(w + 20, true); }
+			else if (e.key === 'ArrowLeft') { setWidth(w - 20, true); }
+			else if (e.key === 'Home' || e.key === 'Escape') { resetWidth(); }
+			else { return; }
+			e.preventDefault();
+		});
+	}
+
+	// Collapse locations (item view: items): view only, remembered in this browser per view, no reload
+	var foldKey = 'cbPlanCollapsed';
+	var folded = {};
+	try { folded = JSON.parse(localStorage.getItem(foldKey) || '{}') || {}; } catch (e) { folded = {}; }
+	var foldList = (folded[cfg.view] || []).map(String);
+	var headings = Array.prototype.slice.call(root.querySelectorAll('.cb-plan-group[data-group]'));
+	function isCollapsed(id){ return headings.length > 1 && foldList.indexOf(String(id)) !== -1; }
+	function saveFolds(){
+		folded[cfg.view] = foldList;
+		try { localStorage.setItem(foldKey, JSON.stringify(folded)); } catch (e) {}
+	}
+	var expandAll = null;
+	function applyFolds(){
+		headings.forEach(function(head){
+			var id = head.getAttribute('data-group');
+			var closed = isCollapsed(id);
+			head.classList.toggle('is-collapsed', closed);
+			root.querySelectorAll('[data-group="' + id + '"]:not(.cb-plan-group)').forEach(function(line){ line.hidden = closed; });
+			var toggle = head.querySelector('.cb-plan-toggle');
+			var nameNode = head.querySelector('.cb-plan-name');
+			var name = nameNode ? nameNode.getAttribute('data-tip') : '';
+			var label = (closed ? t.expand : t.collapse).replace('%s', name);
+			toggle.setAttribute('aria-expanded', closed ? 'false' : 'true');
+			toggle.setAttribute('aria-label', label);
+			toggle.setAttribute('data-tip', label);
+		});
+		if (expandAll) { expandAll.hidden = !headings.some(function(h){ return isCollapsed(h.getAttribute('data-group')); }); }
+	}
+	function setFold(id, closed){
+		id = String(id);
+		foldList = foldList.filter(function(x){ return x !== id; });
+		if (closed) { foldList.push(id); }
+	}
+	if (headings.length > 1) {
+		var corner = root.querySelector('.cb-plan-months > .cb-plan-label');
+		if (corner) {
+			expandAll = el('button', 'cb-plan-expand-all', t.expandAll);
+			expandAll.type = 'button';
+			expandAll.hidden = true;
+			corner.appendChild(expandAll);
+			expandAll.addEventListener('click', function(){ foldList = []; saveFolds(); applyFolds(); });
+		}
+		root.addEventListener('click', function(e){
+			var head = e.target.closest('.cb-plan-group');
+			if (!head || e.target.closest('a')) { return; }
+			var id = head.getAttribute('data-group');
+			if (e.target.closest('.cb-plan-solo')) {
+				foldList = headings.map(function(h){ return h.getAttribute('data-group'); }).filter(function(x){ return x !== id; });
+			} else if (e.target.closest('.cb-plan-label')) {
+				setFold(id, !isCollapsed(id));
+			} else {
+				return;
+			}
+			hideTip();
+			saveFolds();
+			applyFolds();
+		});
+		// Selecting a location again in the search field shows it expanded
+		var form = document.querySelector('.cb-plan-filters');
+		if (form) {
+			form.addEventListener('submit', function(){
+				var current = cfg.ids.map(String);
+				new FormData(form).forEach(function(value, key){
+					if (/(location|item)\[\]$/.test(key) && current.indexOf(String(value)) === -1) { setFold(value, false); }
+				});
+				saveFolds();
+			});
+		}
+		applyFolds();
+	}
+})();
+
+/*
+ * Keep the scroll position when the plan reloads itself (earlier/today/later, view tabs, "Show"): every change is a
+ * page load, which would otherwise start at the top. Stored per tab for a short time and only for the same page.
+ */
+(function(){
+	var root = document.getElementById('cb-plan-root');
+	if (!root) { return; }
+	var key = 'cbPlanScroll';
+	function remember(){
+		try { sessionStorage.setItem(key, JSON.stringify({ path: location.pathname, y: window.pageYOffset, t: Date.now() })); } catch (e) {}
+	}
+	root.addEventListener('click', function(e){
+		var a = e.target.closest('a[href]');
+		if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target) { return; }
+		if (!a.closest('.cb-plan-nav, .cb-plan-tabs')) { return; }
+		remember();
+	});
+	var form = root.querySelector('.cb-plan-filters');
+	if (form) { form.addEventListener('submit', remember); }
+	var saved = null;
+	try { saved = JSON.parse(sessionStorage.getItem(key) || 'null'); sessionStorage.removeItem(key); } catch (e) {}
+	if (!saved || saved.path !== location.pathname || Date.now() - saved.t > 30000 || location.hash) { return; }
+	if ('scrollRestoration' in history) { history.scrollRestoration = 'manual'; }
+	var moved = false;
+	function restore(){ if (!moved) { window.scrollTo(0, saved.y); } }
+	restore();
+	// Fonts and images can still change the height above the plan; stop correcting once the user scrolls
+	window.addEventListener('wheel', function(){ moved = true; }, { passive: true, once: true });
+	window.addEventListener('touchstart', function(){ moved = true; }, { passive: true, once: true });
+	window.addEventListener('keydown', function(){ moved = true; }, { once: true });
+	window.addEventListener('load', restore);
+})();
+
+/* How-to card: closes with Esc or a click outside */
+(function(){
+	var help = document.querySelector('#cb-plan-root .cb-plan-help');
+	if (!help) { return; }
+	document.addEventListener('click', function(e){ if (help.open && !help.contains(e.target)) { help.open = false; } });
+	document.addEventListener('keydown', function(e){
+		if (e.key === 'Escape' && help.open) { help.open = false; help.querySelector('summary').focus(); }
+	});
 })();
