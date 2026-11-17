@@ -30,6 +30,20 @@ bookable** (holidays, repair, restriction, no timeframe, beyond the advance book
   without a redirect and on every device.
 - **Multiple selection:** several locations or items; each gets its own block with a heading in the plan.
 
+## Decisions of the user (2026-11-17): occupancy plan in the frontend
+
+Branch `feature/belegungsplan-frontend` (based on `feature/belegungsplan`).
+
+- **Shortcode `[cb_occupancy_plan]`** shows the occupancy plan on any page, with the same features, data and
+  computations as in the admin area. The decision "admin area only" of 2026-11-12 concerned the info layer in the
+  booking calendar for all users and still applies to it.
+- **Admins and CB managers only**, with their existing permissions; guests get a notice with a login link, other
+  members the notice "The occupancy plan is only available to administrators and CB managers." without any data.
+- **Remembered selection shared with the admin page** (same user meta).
+- **"Edit" links in the frontend too** (they lead to the admin area), only with edit permission as before.
+- **Shared rendering:** one class renders the plan for both, no duplicate code.
+- **Attribute `lock`** for pages with a fixed selection (e.g. one page per location).
+
 ## Presentation
 
 Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-plan`), plus row action
@@ -86,9 +100,58 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   booked on. Phone is the profile field `phone`, comment the booking field `comment`.
 - Read-only, bookings cannot be moved.
 
+## Frontend (shortcode)
+
+```
+[cb_occupancy_plan]
+[cb_occupancy_plan view="item" days="56"]
+[cb_occupancy_plan location="12,15" lock="1" align="wide"]
+```
+
+| Attribute | Meaning | Default |
+|---|---|---|
+| `view` | `location` or `item`; if omitted, derived from `location`/`item`, otherwise from the remembered selection | `location` |
+| `location` / `item` | preselection (ids, comma separated), always intersected with the permissions | remembered selection |
+| `days` | 7, 14, 28, 56, 91, 182, 365 | 28 |
+| `zoom` | `xs`, `s`, `m`, `l`, `xl` or empty (automatic) | automatic |
+| `canceled` | `1` = show canceled bookings | `0` |
+| `tabs` | `0` = hide the view tabs | `1` |
+| `lock` | `1` = fixed selection: search field and tabs hidden, view and selection from the URL or the remembered selection are ignored, the remembered selection is not overwritten. Period, category etc. stay usable. Affects the selection only together with `location` or `item`. | `0` |
+| `align` | `wide` or `full` (classes `alignwide`/`alignfull` for block themes) | – |
+
+- **Precedence:** URL parameters (after submitting the form or paging) over attributes over the remembered selection.
+- **URL parameters with prefix `cbp_`** (`cbp_view`, `cbp_location[]`, `cbp_item[]`, `cbp_cat`, `cbp_from`,
+  `cbp_days`, `cbp_zoom`, `cbp_canceled`, `cbp_sel`): without the prefix WordPress would read `cat` as category query.
+  The admin page keeps its names. The page's own query (e.g. `page_id` with plain permalinks) is kept as hidden field
+  in the GET form.
+- **One instance per page** (fixed element ids); a second one shows a notice.
+- **No page cache:** on pages with the shortcode `nocache_headers()` (via `template_redirect`) and
+  `DONOTCACHEPAGE`/`DONOTCACHEOBJECT`/`DONOTCACHEDB` plus `litespeed_control_set_nocache`, since the plan contains
+  names, email and phone.
+- **Display in themes:**
+  - All rules are scoped to the ids `#cb-plan-root` (wrapper), `#cb-plan-panel` and `#cb-plan-tip`. The script moves
+    panel and tooltip to `<body>`, so `position: fixed` does not depend on ancestors with `transform` or `overflow`.
+    Theme rules such as `.entry-content button` (specificity 0,1,1) therefore cannot override the plan.
+  - In the frontend, reset rules with `#cb-plan-root:where(.cb-plan-front) button` (1,0,1) undo typical theme styles
+    (buttons, lists, links, form fields, headings in the panel). They rank above theme rules and below the plan's own
+    rules (1,1,0).
+  - Built from cards instead of one wrapper: the view as a segmented control, the filters as a light grey toolbar
+    card (rows selection, options, period separated by hairlines, small labels above the fields, 36 px fields with a
+    focus ring, "Show" as primary button, ← Today → as a button group), legend and plan together in a white card
+    (12 px radius). Borders and grid as light grey 1 px hairlines, today as a light tint instead of thick lines, bars
+    with 6 px radius. Decision of 17.11. at the user's request (lines too thick, filters poorly structured). Frontend
+    only (`.cb-plan-front`); the admin page keeps the WP style.
+  - Font from the theme, base size 14 px (day widths are in px), own tabs and buttons instead of the admin classes,
+    accent colour overridable via the CSS variable `--cb-plan-accent`. Deviation from the concept: no sizes in `rem` and no use of
+    `--wp--preset--color--primary`, because themes use that variable inconsistently.
+  - Scroll area at most 75 % of the window height, panel above theme headers (`z-index` 99999), below the admin bar,
+    full width below 600 px.
+  - Checked in the browser with Twenty Twenty-Five (block theme) and Twenty Twenty-One (classic), desktop and 375 px.
+
 ## Permissions
 
-- Page: capability `manage_commonsbooking` (admins and CB managers).
+- Page and shortcode: capability `manage_commonsbooking` (admins and CB managers). In the frontend without it only a
+  notice, no data, no list of choices, no nonce.
 - Locations: `Repository\Location::getByCurrentUser()`, i.e. all for admins, otherwise the locations the user manages
   or authored. Another location in the URL falls back to the first allowed one.
 - Items (view by item): `Repository\Item::getByCurrentUser()` accordingly. All locations where the item has a
@@ -107,8 +170,10 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   the category filter (ids from `get_objects_in_term()`).
 - `explainDay( $view, $id, $date, $rowId )` builds the plan for one day and returns per row `dayResult()` (result via
   `DayFacts::fromGrid()` of `Model\Day`, i.e. the same evaluation as the calendar) and the reasons.
-  `View\Admin\OccupancyPlan` renders a CSS grid (subgrid per row); the panel is a small inline script without
-  dependencies.
+- `View\OccupancyPlan::render( $context )` renders a CSS grid (subgrid per row) for the admin page and the shortcode;
+  the context only sets base url, parameter prefix, tabs, button classes and the wrapper. `View\Admin\OccupancyPlan`
+  is the thin layer for menu, row actions and admin page. CSS and script (no dependencies) live in
+  `assets/occupancy-plan/` without a build step and are loaded only on the admin page or on pages with the shortcode.
 - **Plan rendered on the server** (deviation from the concept): the page reloads via GET. Only the day explanation
   uses AJAX, because it computes the calendar grid per day, which would be too expensive for all days on page load. The details of all visible posts are embedded as JSON, for permitted users only.
 - **Data sources:**
@@ -127,6 +192,10 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
   the calendar grid, same result with and without the booster, view by item and category filter, conflicts (holiday on
   the pickup day, block, no timeframe, clipping), day explanation (reasons, result, notes), active combinations (`activeIds()`: running, upcoming, ended, draft,
   holiday only, without timeframe).
+- **Shortcode tests** (`tests/php/View/OccupancyPlanShortcodeTest.php`): guest, member without permission, CB manager
+  without and with location (foreign ids via attribute and URL are dropped), admin, parameter prefix and `page_id` in
+  the form, same grid as the admin page, URL over attribute, unchecking "canceled", `lock`, view from the ids, shared
+  remembered selection, one instance only, item view with `align`.
 
 ## Stages
 
@@ -135,6 +204,8 @@ Admin page **Commons Booking → Occupancy plan** (`admin.php?page=cb-occupancy-
 3. **Done:** view per item, filter by category; plus reworked layout (day width, tooltip).
    Afterwards (2026-11-15): search field with multiple selection, active entries only, remembered selection.
 4. Optional: print/export, link with `feature/dashboard`.
+5. **Done (2026-11-17, branch `feature/belegungsplan-frontend`):** shortcode `[cb_occupancy_plan]`, shared rendering
+   for admin area and frontend.
 
 ## Open questions
 

@@ -5569,3 +5569,16 @@ msgstr "Artikel suchen …"
 
 msgid "Search location …"
 msgstr "Standort suchen …"
+
+#: src/View/OccupancyPlan.php
+#, php-format
+msgid "Please <a href=\"%s\">log in</a> to see the occupancy plan."
+msgstr "Bitte <a href=\"%s\">anmelden</a>, um den Belegungsplan zu sehen."
+
+#: src/View/OccupancyPlan.php
+msgid "The occupancy plan is only available to administrators and CB managers."
+msgstr "Der Belegungsplan ist nur für Admins und CB-Manager verfügbar."
+
+#: src/View/OccupancyPlan.php
+msgid "The occupancy plan can only be shown once per page."
+msgstr "Der Belegungsplan kann nur einmal pro Seite angezeigt werden."

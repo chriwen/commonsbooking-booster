@@ -33,6 +33,20 @@ mit direktem Sprung zur Bearbeitung.
   ersten Seitenaufbau greift und auf allen Geräten gilt.
 - **Mehrfachauswahl:** mehrere Stationen bzw. Artikel; jede bekommt im Plan einen eigenen Block mit Kopfzeile.
 
+## Entscheidungen des Nutzers (17.11.2026): Belegungsplan im Frontend
+
+Branch `feature/belegungsplan-frontend` (Basis `feature/belegungsplan`).
+
+- **Shortcode `[cb_occupancy_plan]`** zeigt den Belegungsplan auf einer beliebigen Seite, mit denselben Funktionen,
+  Daten und Berechnungen wie im Backend. Die Entscheidung „Nur Backend“ vom 12.11. betraf die Info-Schicht im
+  Buchungskalender für alle Nutzer und gilt dafür weiter.
+- **Nur Admins und CB-Manager** mit ihren bisherigen Rechten; Gäste bekommen einen Hinweis mit Anmeldelink, andere
+  Mitglieder den Hinweis „Der Belegungsplan ist nur für Admins und CB-Manager verfügbar.“ ohne Daten.
+- **Gemerkte Auswahl gemeinsam mit dem Backend** (dasselbe Usermeta).
+- **„Bearbeiten“-Links auch im Frontend** (führen ins Backend), nur mit Bearbeitungsrecht wie bisher.
+- **Gemeinsame Darstellung:** Das Rendering liegt in einer Klasse für beide Oberflächen, nicht doppelt.
+- **Attribut `lock`** für Seiten mit fester Auswahl (z. B. eine Seite je Station).
+
 ## Darstellung
 
 Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-plan`), außerdem Zeilenaktion
@@ -94,9 +108,59 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   gebucht am. Telefon ist das Profilfeld `phone`, Kommentar das Buchungsfeld `comment`.
 - Nur lesend, kein Verschieben von Buchungen.
 
+## Frontend (Shortcode)
+
+```
+[cb_occupancy_plan]
+[cb_occupancy_plan view="item" days="56"]
+[cb_occupancy_plan location="12,15" lock="1" align="wide"]
+```
+
+| Attribut | Bedeutung | Standard |
+|---|---|---|
+| `view` | `location` oder `item`; ohne Angabe ergibt sich die Ansicht aus `location`/`item`, sonst aus der gemerkten Auswahl | `location` |
+| `location` / `item` | Vorauswahl (IDs, Komma-getrennt), immer mit den Rechten geschnitten | gemerkte Auswahl |
+| `days` | 7, 14, 28, 56, 91, 182, 365 | 28 |
+| `zoom` | `xs`, `s`, `m`, `l`, `xl` oder leer (automatisch) | automatisch |
+| `canceled` | `1` = stornierte Buchungen zeigen | `0` |
+| `tabs` | `0` = Ansichtsreiter ausblenden | `1` |
+| `lock` | `1` = Auswahl fest: Suchfeld und Reiter ausgeblendet, Ansicht und Auswahl aus URL oder gemerkter Auswahl werden ignoriert, die gemerkte Auswahl wird nicht überschrieben. Zeitraum, Kategorie usw. bleiben bedienbar. Wirkt auf die Auswahl nur mit `location` bzw. `item`. | `0` |
+| `align` | `wide` oder `full` (Klassen `alignwide`/`alignfull` für Block-Themes) | – |
+
+- **Vorrang:** URL-Parameter (nach Absenden des Formulars oder Blättern) vor Attributen vor gemerkter Auswahl.
+- **URL-Parameter mit Präfix `cbp_`** (`cbp_view`, `cbp_location[]`, `cbp_item[]`, `cbp_cat`, `cbp_from`, `cbp_days`,
+  `cbp_zoom`, `cbp_canceled`, `cbp_sel`): Ohne Präfix würde `cat` als WordPress-Kategorieabfrage gelesen. Das Backend
+  behält seine Namen. Die Abfrage der Seite (z. B. `page_id` bei einfachen Permalinks) bleibt im GET-Formular als
+  verstecktes Feld erhalten.
+- **Eine Instanz pro Seite** (feste Element-IDs); eine zweite zeigt einen Hinweis.
+- **Kein Seiten-Cache:** Auf Seiten mit dem Shortcode `nocache_headers()` (über `template_redirect`) und
+  `DONOTCACHEPAGE`/`DONOTCACHEOBJECT`/`DONOTCACHEDB` sowie `litespeed_control_set_nocache`, weil der Plan Namen,
+  E-Mail und Telefon enthält.
+- **Darstellung in Themes:**
+  - Alle Regeln gelten unter den IDs `#cb-plan-root` (Hülle), `#cb-plan-panel` und `#cb-plan-tip`. Panel und Kurzinfo
+    hängt das Skript an `<body>`, damit `position: fixed` nicht von Vorfahren mit `transform` oder `overflow`
+    abhängt. Theme-Regeln wie `.entry-content button` (Spezifität 0,1,1) können den Plan so nicht überschreiben.
+  - Im Frontend setzen Reset-Regeln mit `#cb-plan-root:where(.cb-plan-front) button` (1,0,1) die typischen
+    Theme-Vorgaben zurück (Buttons, Listen, Links, Formularfelder, Überschriften im Panel). Sie liegen über
+    Theme-Regeln und unter den eigenen Regeln des Plans (1,1,0).
+  - Aufbau aus Karten statt einer Hülle: die Ansicht als Segmentschalter, die Filter als hellgraue Werkzeugkarte
+    (Zeilen Auswahl, Optionen, Zeitraum durch Haarlinien getrennt, Beschriftungen klein über den Feldern, Felder 36 px
+    hoch mit Fokusring, „Anzeigen“ als Hauptbutton, ← Heute → als Buttongruppe), Legende und Plan zusammen in einer
+    weißen Karte (12 px Radius). Rahmen und Raster als 1-px-Haarlinien in hellem Grau, der heutige Tag als leichte
+    Tönung statt dicker Linien, Balken mit 6 px Radius. Entscheidung 17.11. auf Wunsch des Nutzers (zu dicke Linien,
+    zu wenig gegliederte Filter). Gilt nur im Frontend (`.cb-plan-front`), die Admin-Seite bleibt im WP-Stil.
+  - Schrift vom Theme, Grundgröße 14 px (die Tagesbreiten sind in px), eigene Reiter und Buttons statt der
+    Admin-Klassen, Akzentfarbe über die CSS-Variable `--cb-plan-accent` überschreibbar. Abweichung vom Konzept: keine Größen in
+    `rem` und keine Übernahme von `--wp--preset--color--primary`, weil die Themes diese Variable uneinheitlich
+    belegen.
+  - Scrollbereich höchstens 75 % der Fensterhöhe, Panel über Theme-Kopfzeilen (`z-index` 99999), mit Admin-Leiste
+    darunter, unter 600 px volle Breite.
+  - Geprüft im Browser mit Twenty Twenty-Five (Block-Theme) und Twenty Twenty-One (klassisch), Desktop und 375 px.
+
 ## Rechte
 
-- Seite: Recht `manage_commonsbooking` (Admins und CB-Manager).
+- Seite und Shortcode: Recht `manage_commonsbooking` (Admins und CB-Manager). Im Frontend ohne Recht nur ein Hinweis,
+  keine Daten, keine Auswahlliste, kein Nonce.
 - Stationen: `Repository\Location::getByCurrentUser()`, also alle für Admins, sonst die Stationen, die der Nutzer
   verwaltet oder angelegt hat. Eine andere Station per URL fällt auf die erste erlaubte zurück.
 - Artikel (Ansicht pro Artikel): `Repository\Item::getByCurrentUser()` entsprechend. Gezeigt werden alle Stationen,
@@ -116,8 +180,12 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   Segmente (`kind`, `post_id`, `from`/`to` als Tagesindex, `clip_start`/`clip_end`, `lane`, `label`, `state`,
   `conflict`) und die Details je Post. `$onlyRows` ist der Kategoriefilter (IDs aus `get_objects_in_term()`).
 - `explainDay( $view, $id, $date, $rowId )` baut den Plan für einen Tag und liefert je Zeile `dayResult()` (Ergebnis
-  über `DayFacts::fromGrid()` des `Model\Day`, also dieselbe Auswertung wie der Kalender) und die Gründe. `View\Admin\OccupancyPlan` rendert daraus ein CSS-Grid (Subgrid je Zeile), das Panel ist ein kleines
-  Inline-Skript ohne Abhängigkeiten.
+  über `DayFacts::fromGrid()` des `Model\Day`, also dieselbe Auswertung wie der Kalender) und die Gründe.
+- `View\OccupancyPlan::render( $context )` rendert daraus für Backend und Shortcode ein CSS-Grid (Subgrid je Zeile);
+  der Kontext legt nur Basis-URL, Parameter-Präfix, Reiter, Button-Klassen und die Hülle fest.
+  `View\Admin\OccupancyPlan` ist die dünne Hülle für Menü, Zeilenaktionen und Admin-Seite. CSS und Skript (ohne
+  Abhängigkeiten) liegen in `assets/occupancy-plan/` ohne Build-Schritt und werden nur auf der Admin-Seite bzw. auf
+  Seiten mit dem Shortcode geladen.
 - **Plan serverseitig gerendert** (Abweichung vom Konzept): Die Seite lädt per GET neu. Nur die Tageserklärung kommt
   per AJAX, weil sie pro Tag das Kalenderraster rechnet und das für alle Tage beim Seitenaufbau zu teuer wäre. Die Details aller sichtbaren Posts stehen als JSON in der Seite, nur für
   berechtigte Nutzer.
@@ -137,6 +205,10 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
   Kalenderraster, gleiches Ergebnis mit und ohne Booster, Ansicht pro Artikel und Kategoriefilter, Konflikte (Feiertag
   am Abholtag, Sperre, kein Zeitrahmen, Zuschnitt), Tageserklärung (Gründe, Ergebnis, Hinweise), aktive Kombinationen (`activeIds()`: laufend, künftig, beendet,
   Entwurf, nur Feiertag, ohne Zeitrahmen).
+- **Tests Shortcode** (`tests/php/View/OccupancyPlanShortcodeTest.php`): Gast, Mitglied ohne Recht, CB-Manager ohne
+  und mit Station (fremde IDs per Attribut und URL fallen weg), Admin, Parameter-Präfix und `page_id` im Formular,
+  gleiches Raster wie die Admin-Seite, URL vor Attribut, Abwählen von „Stornierte“, `lock`, Ansicht aus den IDs,
+  gemeinsame gemerkte Auswahl, nur eine Instanz, Artikelansicht mit `align`.
 
 ## Ausbaustufen
 
@@ -145,6 +217,8 @@ Admin-Seite **Commons Booking → Belegungsplan** (`admin.php?page=cb-occupancy-
 3. **Umgesetzt:** Ansicht pro Artikel, Filter nach Kategorie; dazu überarbeitetes Layout (Tagesbreite, Kurzinfo).
    Danach (15.11.): Suchfeld mit Mehrfachauswahl, nur aktive Einträge, gemerkte Auswahl.
 4. Optional: Druck/Export, Verknüpfung mit `feature/dashboard`.
+5. **Umgesetzt (17.11.2026, Branch `feature/belegungsplan-frontend`):** Shortcode `[cb_occupancy_plan]`, gemeinsame
+   Darstellung für Backend und Frontend.
 
 ## Offene Fragen
 
