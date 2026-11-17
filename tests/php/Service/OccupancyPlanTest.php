@@ -7,13 +7,13 @@ use CommonsBooking\Model\Restriction;
 use CommonsBooking\Service\Availability\DayFacts;
 use CommonsBooking\Service\OccupancyPlan;
 use CommonsBooking\Tests\Wordpress\CustomPostTypeTest;
-use CommonsBooking\View\Admin\OccupancyPlan as OccupancyPlanView;
+use CommonsBooking\View\OccupancyPlan as OccupancyPlanView;
 use CommonsBooking\Wordpress\CustomPostType\Timeframe;
 use SlopeIt\ClockMock\ClockMock;
 
 /**
  * @covers \CommonsBooking\Service\OccupancyPlan
- * @covers \CommonsBooking\View\Admin\OccupancyPlan
+ * @covers \CommonsBooking\View\OccupancyPlan
  */
 class OccupancyPlanTest extends CustomPostTypeTest {
 

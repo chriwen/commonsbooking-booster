@@ -7279,6 +7279,114 @@ msgstr "Artikel suchen …"
 msgid "Search location …"
 msgstr "Standort suchen …"
 
+#: src/View/OccupancyPlan.php
+#, php-format
+msgid "Please <a href=\"%s\">log in</a> to see the occupancy plan."
+msgstr "Bitte <a href=\"%s\">anmelden</a>, um den Belegungsplan zu sehen."
+
+#: src/View/OccupancyPlan.php
+msgid "The occupancy plan is only available to administrators and CB managers."
+msgstr "Der Belegungsplan ist nur für Admins und CB-Manager verfügbar."
+
+#: src/View/OccupancyPlan.php
+msgid "The occupancy plan can only be shown once per page."
+msgstr "Der Belegungsplan kann nur einmal pro Seite angezeigt werden."
+
+#: src/View/OccupancyPlan.php
+msgid "Width of the name column"
+msgstr "Breite der Namensspalte"
+
+#: src/View/OccupancyPlan.php
+msgid "Drag to widen the name column, double-click to reset."
+msgstr "Ziehen verbreitert die Namensspalte, Doppelklick setzt sie zurück."
+
+#: src/View/OccupancyPlan.php
+msgid "No timeframe"
+msgstr "Kein Zeitrahmen"
+
+#. translators: %s: name of the location or item
+#: src/View/OccupancyPlan.php
+msgid "Collapse %s"
+msgstr "%s einklappen"
+
+#: src/View/OccupancyPlan.php
+msgid "Expand %s"
+msgstr "%s aufklappen"
+
+#: src/View/OccupancyPlan.php
+msgid "Expand all"
+msgstr "Alle aufklappen"
+
+#: src/View/OccupancyPlan.php
+msgid "Only this"
+msgstr "Nur diesen"
+
+#. translators: %d: number of items
+#: src/View/OccupancyPlan.php
+msgid "%d item"
+msgid_plural "%d items"
+msgstr[0] "%d Artikel"
+msgstr[1] "%d Artikel"
+
+#. translators: %d: number of locations
+#: src/View/OccupancyPlan.php
+msgid "%d location"
+msgid_plural "%d locations"
+msgstr[0] "%d Standort"
+msgstr[1] "%d Standorte"
+
+#: src/View/OccupancyPlan.php
+msgid "Holidays, blocks and restrictions that apply to every item at this location. They are collected in this row instead of being repeated in each item row below."
+msgstr "Feiertage, Sperrungen und Einschränkungen, die für alle Artikel dieser Station gelten. Diese stehen gesammelt in dieser Zeile, statt in jeder Artikelzeile darunter wiederholt zu werden."
+
+#: src/View/OccupancyPlan.php
+msgid "Holidays, blocks and restrictions that apply to this item at every location shown. They are collected in this row instead of being repeated in each location row below."
+msgstr "Feiertage, Sperrungen und Einschränkungen, die für diesen Artikel an allen gezeigten Stationen gelten. Diese stehen gesammelt in dieser Zeile, statt in jeder Stationszeile darunter wiederholt zu werden."
+
+#: src/View/OccupancyPlan.php
+msgid "How to use the plan"
+msgstr "So funktioniert der Plan"
+
+#: src/View/OccupancyPlan.php
+msgid "Bar"
+msgstr "Balken"
+
+#: src/View/OccupancyPlan.php
+msgid "Collapse"
+msgstr "Einklappen"
+
+#: src/View/OccupancyPlan.php
+msgid "Names"
+msgstr "Namen"
+
+#: src/View/OccupancyPlan.php
+msgid "Click a date in the header: for every row it explains whether the day can be booked and why, with the timeframes, restrictions and bookings involved."
+msgstr "Klick auf ein Datum im Tabellenkopf: Für jede Zeile steht dann, ob und warum der Tag buchbar ist, mit den beteiligten Zeitrahmen, Einschränkungen und Buchungen."
+
+#: src/View/OccupancyPlan.php
+msgid "Click a timeframe, booking or restriction in the calendar to see its details."
+msgstr "Klick auf einen Zeitrahmen, eine Buchung oder Einschränkung im Kalender zeigt die Details."
+
+#: src/View/OccupancyPlan.php
+msgid "With several locations (or items) selected, the arrow or the name collapses a group. \"Only this\" collapses all others, \"Expand all\" at the top left brings them back. The day explanation follows."
+msgstr "Bei mehreren gewählten Stationen (oder Artikeln) klappt der Pfeil oder der Name eine Gruppe ein. „Nur diesen“ klappt alle anderen ein, „Alle aufklappen“ oben links holt sie zurück. Die Tageserklärung folgt dem."
+
+#: src/View/OccupancyPlan.php
+msgid "Holidays, blocks and restrictions that apply to every row of the group are shown once in this row. The \"i\" explains it."
+msgstr "Feiertage, Sperrungen und Einschränkungen, die für jede Zeile der Gruppe gelten, stehen einmal in dieser Zeile. Das „i“ erklärt es."
+
+#: src/View/OccupancyPlan.php
+msgid "The red number counts bookings that collide with a block, holiday or restriction."
+msgstr "Die rote Zahl zählt Buchungen, die mit einer Sperrung, einem Feiertag oder einer Einschränkung kollidieren."
+
+#: src/View/OccupancyPlan.php
+msgid "Drag the edge of the name column in the header to widen it, double-click to reset. Shortened names show in full on hover."
+msgstr "Rand der Namensspalte im Tabellenkopf ziehen verbreitert sie, Doppelklick setzt zurück. Gekürzte Namen erscheinen beim Überfahren vollständig."
+
+#: src/View/OccupancyPlan.php
+msgid "← Today → moves the period, the filters above change start, length and day width. The selection is remembered."
+msgstr "← Heute → verschiebt den Zeitraum, die Felder oben ändern Beginn, Länge und Tagesbreite. Die Auswahl wird gemerkt."
+
 #: src/Model/Booking.php:1030
 #~ msgid "Unconfirmed"
 #~ msgstr "Unbestätigt"

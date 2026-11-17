@@ -232,7 +232,7 @@ class OccupancyPlan {
 	 */
 	public static function activeIds(): array {
 		$timeframes = TimeframeRepository::getInRange(
-			strtotime( 'today', current_time( 'timestamp' ) ),
+			(int) strtotime( current_time( 'Y-m-d' ) ),
 			null,
 			[],
 			[],
@@ -271,7 +271,7 @@ class OccupancyPlan {
 	 * @return array{0: string, 1: string}
 	 */
 	public static function normalizeRange( string $from, string $to ): array {
-		$fromTs = self::parseDate( $from ) ?? strtotime( 'today', current_time( 'timestamp' ) );
+		$fromTs = self::parseDate( $from ) ?? (int) strtotime( current_time( 'Y-m-d' ) );
 		$toTs   = self::parseDate( $to ) ?? strtotime( '+55 days', $fromTs );
 		if ( $toTs < $fromTs ) {
 			$toTs = $fromTs;
@@ -281,7 +281,7 @@ class OccupancyPlan {
 			$toTs = $maxTs;
 		}
 
-		return [ date( 'Y-m-d', $fromTs ), date( 'Y-m-d', $toTs ) ];
+		return [ gmdate( 'Y-m-d', $fromTs ), gmdate( 'Y-m-d', $toTs ) ];
 	}
 
 	/**
@@ -302,7 +302,7 @@ class OccupancyPlan {
 		$this->startTs = strtotime( $from );
 		$this->endTs   = strtotime( $to . ' +1 day' ) - 1;
 		for ( $ts = $this->startTs; $ts <= $this->endTs; $ts = strtotime( '+1 day', $ts ) ) {
-			$date                    = date( 'Y-m-d', $ts );
+			$date                    = gmdate( 'Y-m-d', $ts );
 			$this->dayIndex[ $date ] = count( $this->days );
 			$this->days[]            = $date;
 		}
@@ -348,7 +348,7 @@ class OccupancyPlan {
 		return [
 			'view'    => $view,
 			'days'    => $this->days,
-			'today'   => date( 'Y-m-d', current_time( 'timestamp' ) ),
+			'today'   => current_time( 'Y-m-d' ),
 			'station' => [
 				'lanes'    => $stationLanes,
 				'segments' => $station,
@@ -611,8 +611,8 @@ class OccupancyPlan {
 		}
 		$clipStart = $start < $this->startTs;
 		$clipEnd   = $end === null || $end > $this->endTs;
-		$from      = $clipStart ? 0 : $this->dayIndex[ date( 'Y-m-d', $start ) ];
-		$to        = $clipEnd ? count( $this->days ) - 1 : $this->dayIndex[ date( 'Y-m-d', $end ) ];
+		$from      = $clipStart ? 0 : $this->dayIndex[ gmdate( 'Y-m-d', $start ) ];
+		$to        = $clipEnd ? count( $this->days ) - 1 : $this->dayIndex[ gmdate( 'Y-m-d', $end ) ];
 
 		return [ $from, $to, $clipStart, $clipEnd ];
 	}
@@ -788,7 +788,7 @@ class OccupancyPlan {
 			return null; // the timeframe ends before, so the window does not limit anything
 		}
 
-		return date( 'Y-m-d', $latest );
+		return gmdate( 'Y-m-d', $latest );
 	}
 
 	/**
