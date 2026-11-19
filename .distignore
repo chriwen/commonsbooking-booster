@@ -51,3 +51,4 @@ infection.json
 puli.json
 apigen.neon
 phpstan.neon.dist
+/dev-changelog/

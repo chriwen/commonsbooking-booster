@@ -112,3 +112,46 @@ runs the suite once this way).
 
 After adding classes under `src/`, run `composer prefix-namespaces`: the plugin only loads the Strauss autoloader in
 `vendor-prefixed/`.
+
+### Conventions for changes (booster fork)
+
+These rules apply to every change in this fork (booster and feature branches). They are derived from `.phpcs.xml.dist`,
+`.editorconfig` and the existing code. Their purpose: other developers must be able to see what was changed, why, and
+whether the change can be downgraded.
+
+**Follow the existing code.** Use the layers of the original plugin: data access in `src/Repository/`, domain objects in
+`src/Model/`, logic in `src/Service/`, output in `src/View/` and `templates/`, post types in
+`src/Wordpress/CustomPostType/`. Reuse existing helpers (`Helper\Helper`, `Helper\Wordpress`, `Service\Cache`, ...)
+instead of adding parallel ones. New booster parts live in `src/Service/<Area>/` with static methods and an `init()`
+that registers the hooks.
+
+**Code style.** WordPress Coding Standards with the exceptions of `.phpcs.xml.dist`: tabs in PHP, max. 120 characters
+per line, short array syntax, no Yoda conditions, camelCase for methods and variables, PHP 8.1, WordPress 5.9.
+Prefix globals, hooks, options and tables with `cb_` / `commonsbooking_`. Texts use the text domain `commonsbooking`;
+keep the German translation in `languages/` up to date (neutral wording, no formal "Sie"). Validate input, escape
+output, use `$wpdb->prepare()`; every `phpcs:ignore` gets a reason after `--`. After adding classes run
+`composer prefix-namespaces`. New logic gets tests in `tests/php/`.
+
+**Comments.** Comments are written in English and explain purpose and reasoning, not just what the code does.
+- Every new class: docblock with its purpose, how it works together with other classes, its behaviour while the
+  feature is switched off and the consequences for a downgrade (example: `src/Service/Booster/Guard.php`).
+- Every new or changed method: docblock with purpose and typed `@param` / `@return` / `@throws` with their meaning.
+- Inline comments for every decision that is not obvious: why it is done this way, which bug or edge case it handles.
+- Changes in files of the original plugin are marked so they stand out when comparing with upstream:
+  `@since 2.11.4 Booster: <what and why>` in the docblock, or `// Booster: <why>` at the changed lines. Feature
+  branches use their feature name instead (e.g. `Occupancy plan:`).
+- Keep comments up to date when changing code.
+
+**Downgrade.** Every change must be downgradable to the current version:
+- no new meaning, no rewriting and no deletion of existing post meta, options, user meta or tables;
+- new data only in own, prefixed tables and options that an older version safely ignores;
+- switched off means the behaviour of the original version (no hooks, no cron jobs, no reads from own tables);
+- a downgrade followed by an upgrade works (see `Service\Booster\Guard`); `purge` / uninstall removes own data;
+- booking validation never depends on derived data (`Booster::withoutBooster()`).
+
+The only accepted exception is `feature/multi-item-timeframes` (new post meta `item-id-wanted` /
+`item-id-conflicts`); it is documented in its design file and changelog entries.
+
+**Developer changelog.** Every change gets an entry in `dev-changelog/` (German and English), committed together with
+the code. Format and template: `dev-changelog/README.md`. The user changelog in `readme.txt` keeps the format of the
+original project and is only updated for releases.
