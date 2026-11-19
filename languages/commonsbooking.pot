@@ -1614,7 +1614,7 @@ msgid "from %s"
 msgstr ""
 
 #: src/Model/Timeframe.php:343
-msgid "permanently"
+msgid "Permanently available here"
 msgstr ""
 
 #. translators: %s = enddate in WordPress defined format

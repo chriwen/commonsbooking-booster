@@ -1204,8 +1204,8 @@ msgid "from %s"
 msgstr "von %s"
 
 #: src/Model/Timeframe.php:343
-msgid "permanently"
-msgstr "dauerhaft"
+msgid "Permanently available here"
+msgstr "Hier dauerhaft verfügbar"
 
 #. translators: %1 = startdate, %2 = enddate in WordPress defined format
 #. translators: %1$s = startdate, second %2$s = enddate in WordPress defined format

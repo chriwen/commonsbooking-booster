@@ -373,7 +373,9 @@ class Timeframe extends CustomPost {
 						$startDateFormatted
 					);
 				} else { // start has passed, no end date, probably a fixed location
-					$availableString = commonsbooking_sanitizeHTML( __( 'permanently', 'commonsbooking' ) );
+					// Full sentence instead of label + 'permanently', so translations can reorder it
+					// (de: "Hier dauerhaft verfügbar" instead of "Hier verfügbar dauerhaft").
+					return commonsbooking_sanitizeHTML( __( 'Permanently available here', 'commonsbooking' ) );
 				}
 			} elseif ( $startDate === $endDate ) { // available only one day
 				/* translators: %s = date in WordPress defined format */
