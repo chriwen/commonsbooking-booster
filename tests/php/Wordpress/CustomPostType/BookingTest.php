@@ -300,6 +300,56 @@ class BookingTest extends CustomPostTypeTest {
 	}
 
 	/**
+	 * Unconfirmed bookings of other users at an item the current user manages (item admin) don't count against
+	 * the current user. Only the user's own unconfirmed bookings are checked.
+	 * @return void
+	 */
+	public function testHandleBookingRequest_onlyOneUnconfirmedBooking_managedItem() {
+		Settings::updateOption(
+			'commonsbooking_options_restrictions',
+			'rules_group',
+			[
+				[
+					'rule-applies-all' => 'on',
+					'rule-type' => 'noSimultaneousBooking',
+				],
+			]
+		);
+		$this->createSubscriber();
+		$otherUser = wp_create_user( 'otherbooker', 'pw', 'other@booker.test' );
+
+		// subscriber manages a second item, another user has an unconfirmed booking there
+		$managedItem = $this->createItem( 'Managed Item', 'publish', [ (string) $this->subscriberId ] );
+		$this->createBookableTimeFrameIncludingCurrentDay( $this->locationId, $managedItem );
+		$this->bookingIds[] = $this->createBooking(
+			$this->locationId,
+			$managedItem,
+			strtotime( self::CURRENT_DATE ),
+			strtotime( '+1 day', strtotime( self::CURRENT_DATE ) ),
+			'12:00 AM',
+			'23:59',
+			'unconfirmed',
+			$otherUser
+		);
+
+		wp_set_current_user( $this->subscriberId );
+		// if this test fails, an exception would be thrown
+		$bookingId          = Booking::handleBookingRequest(
+			$this->itemId,
+			$this->locationId,
+			'unconfirmed',
+			null,
+			null,
+			strtotime( self::CURRENT_DATE ),
+			strtotime( '+1 day', strtotime( self::CURRENT_DATE ) ),
+			null,
+			null
+		);
+		$this->bookingIds[] = $bookingId;
+		$this->assertIsInt( $bookingId );
+	}
+
+	/**
 	 * edge case for #1518
 	 * check, that unconfirmed bookings of other users are not counted against the current user.
 	 * This might be the case for admins or cb_manager.

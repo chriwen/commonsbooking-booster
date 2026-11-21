@@ -336,6 +336,9 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Filters admin list by type (e.g. bookable, repair etc. )
 	 *
+	 * @since 2.11.4 Booster: the item / location filter also finds holidays and repair timeframes that select the post
+	 *               in a list. Also active without the booster.
+	 *
 	 * @param \WP_Query $query for admin list objects
 	 *
 	 * @return void
@@ -357,15 +360,36 @@ class Timeframe extends CustomPostType {
 				\CommonsBooking\Model\Timeframe::META_ITEM_ID     => 'admin_filter_item',
 				\CommonsBooking\Model\Timeframe::META_LOCATION_ID => 'admin_filter_location',
 			];
+			$list_keys                       = [
+				\CommonsBooking\Model\Timeframe::META_ITEM_ID     => \CommonsBooking\Model\Timeframe::META_ITEM_ID_LIST,
+				\CommonsBooking\Model\Timeframe::META_LOCATION_ID => \CommonsBooking\Model\Timeframe::META_LOCATION_ID_LIST,
+			];
 			foreach ( $meta_filters as $key => $filter ) {
 				if (
 					isset( $_GET[ $filter ] ) &&
 					$_GET[ $filter ] != ''
 				) {
-					$query->query_vars['meta_query'][] = array(
-						'key'   => $key,
-						'value' => sanitize_text_field( $_GET[ $filter ] ),
-					);
+					$value = sanitize_text_field( $_GET[ $filter ] );
+					if ( isset( $list_keys[ $key ] ) ) {
+						// items / locations can also be selected in a list (holidays, repair), incl. category / all
+						$query->query_vars['meta_query'][] = array(
+							'relation' => 'OR',
+							array(
+								'key'   => $key,
+								'value' => $value,
+							),
+							array(
+								'key'     => $list_keys[ $key ],
+								'value'   => ':"' . intval( $value ) . '";',
+								'compare' => 'LIKE',
+							),
+						);
+					} else {
+						$query->query_vars['meta_query'][] = array(
+							'key'   => $key,
+							'value' => $value,
+						);
+					}
 				}
 			}
 
@@ -952,13 +976,16 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Validates timeframe and sets state to draft if invalid.
 	 *
+	 * @since 2.11.4 Booster: validation inside Booster::withoutBooster(), never reads booster tables.
+	 *
 	 * @param \CommonsBooking\Model\Timeframe $timeframe
 	 *
 	 * @return bool
 	 */
 	protected static function validateTimeFrame( $timeframe ): bool {
 		try {
-			$timeframe->isValid();
+			// validation always uses the original queries, never the booster tables
+			\CommonsBooking\Service\Booster\Booster::withoutBooster( array( $timeframe, 'isValid' ) );
 		} catch ( TimeframeInvalidException $e ) {
 			set_transient(
 				\CommonsBooking\Model\Timeframe::ERROR_TYPE,
@@ -1226,6 +1253,9 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Adds data to custom columns
 	 *
+	 * @since 2.11.4 Booster: shows list / category / "all" selection of holidays and repair timeframes. Also active
+	 *               without the booster.
+	 *
 	 * @param $column
 	 * @param $post_id
 	 */
@@ -1236,6 +1266,26 @@ class Timeframe extends CustomPostType {
 			$post           = get_post( $post_id );
 			$timeframe_user = get_user_by( 'id', $post->post_author );
 			echo '<a href="' . get_edit_user_link( $timeframe_user->ID ) . '">' . commonsbooking_sanitizeHTML( $timeframe_user->user_login ) . '</a>';
+		}
+
+		// multi selection (list, category, all) of holidays / repair timeframes
+		if ( $column === \CommonsBooking\Model\Timeframe::META_ITEM_ID || $column === \CommonsBooking\Model\Timeframe::META_LOCATION_ID ) {
+			$type = intval( get_post_meta( $post_id, 'type', true ) );
+			if ( $type === self::HOLIDAYS_ID || $type === self::REPAIR_ID ) {
+				$isItem     = $column === \CommonsBooking\Model\Timeframe::META_ITEM_ID;
+				$assignment = \CommonsBooking\Repository\AssignedTimeframes::assignment(
+					new \CommonsBooking\Model\Timeframe( $post_id ),
+					$isItem ? 'item' : 'location'
+				);
+				if ( $assignment['mode'] !== \CommonsBooking\Repository\AssignedTimeframes::ASSIGNMENT_DIRECT ) {
+					echo \CommonsBooking\View\Admin\AssignedTimeframes::assignmentHtml( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside
+						$assignment,
+						$isItem ? Item::getTaxonomyName() : Location::getTaxonomyName()
+					);
+
+					return;
+				}
+			}
 		}
 
 		if ( $value = get_post_meta( $post_id, $column, true ) ) {
@@ -1377,6 +1427,9 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Initiates needed hooks.
 	 *
+	 * @since 2.11.4 Booster: registers the box "Timeframes of the same item and location". Also active without the
+	 *               booster.
+	 *
 	 * @return void
 	 */
 	public function initHooks() {
@@ -1385,6 +1438,14 @@ class Timeframe extends CustomPostType {
 		add_action( 'cmb2_save_field_' . \CommonsBooking\View\BookingCodes::CRON_EMAIL_CODES, [ '\CommonsBooking\View\BookingCodes','cronEmailCodesSaved' ], 10, 3 );
 		// Add Meta Boxes
 		add_action( 'cmb2_admin_init', array( $this, 'registerMetabox' ) );
+
+		// Metabox "Timeframes of the same item and location" as first box of the edit page
+		add_action(
+			'add_meta_boxes_' . self::$postType,
+			function () {
+				\CommonsBooking\View\Admin\AssignedTimeframes::addMetaBox( self::$postType );
+			}
+		);
 
 		// must be 'save_post' only because of priority in relation to cmb2
 		add_action( 'save_post', array( $this, 'savePost' ), 11, 2 );

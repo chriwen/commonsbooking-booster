@@ -29,9 +29,10 @@
 		<?php
 		// if pickup instructions are set in location meta
 		if ( $location->formattedPickupInstructionsOneLine() ) {
+			// Booster update (2.11.4, fix, also without booster): no whitespace around the text: line breaks of the meta field are kept with white-space: pre-wrap
 			?>
 		<strong><?php echo esc_html__( 'Pickup instructions:', 'commonsbooking' ); ?></strong>
-			<?php echo commonsbooking_sanitizeHTML( $location->formattedPickupInstructionsOneLine() ); ?>
+		<span class="cb-location-pickupinstructions-text"><?php echo commonsbooking_sanitizeHTML( trim( $location->formattedPickupInstructionsOneLine() ) ); ?></span>
 			<?php
 		} // end if pickup instructions
 		?>

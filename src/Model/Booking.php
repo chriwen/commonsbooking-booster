@@ -92,6 +92,9 @@ class Booking extends \CommonsBooking\Model\Timeframe {
 	/**
 	 * Cancel the current booking and send a cancellation mail to the user.
 	 * Because we are directly updating the database, we need another function to flush the database cache (wp_cache_flush()) to test this function.
+	 *
+	 * @since 2.11.4 Booster: the direct SQL update bypasses the post hooks, so the index is updated explicitly
+	 *               (Indexer::touch()/flush(), no effect without booster tables) and the post cache is cleared.
 	 */
 	public function cancel(): void {
 
@@ -109,7 +112,13 @@ class Booking extends \CommonsBooking\Model\Timeframe {
 		);
 		$wpdb->query( $sql );
 
+		// The direct SQL update bypasses the post hooks: drop the stale cached post and update the index explicitly.
+		clean_post_cache( $this->post->ID );
+		\CommonsBooking\Service\Index\Indexer::touch( $this->post->ID );
+
 		update_post_meta( $this->post->ID, 'cancellation_time', current_time( 'timestamp' ) );
+
+		\CommonsBooking\Service\Index\Indexer::flush();
 
 		$this->sendCancellationMail();
 	}

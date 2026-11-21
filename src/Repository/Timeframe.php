@@ -104,6 +104,9 @@ class Timeframe extends PostRepository {
 	 * TODO: Investigate
 	 *       This function is not based on the WP_Query class, probably because of performance reasons.
 	 *
+	 * @since 2.11.4 Booster: posts via {@see self::queryPosts()}: index if available, otherwise the original
+	 *               getPostIdsByType() + getPostsByBaseParams().
+	 *
 	 * @param array       $locations
 	 * @param array       $items
 	 * @param array       $types
@@ -140,20 +143,7 @@ class Timeframe extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = [];
-
-			// Get Post-IDs considering types, items and locations
-			$postIds = self::getPostIdsByType( $types, $items, $locations );
-
-			if ( $postIds ) {
-				$posts = self::getPostsByBaseParams(
-					$date,
-					$minTimestamp,
-					null,
-					$postIds,
-					$postStatus
-				);
-			}
+			$posts = self::queryPosts( $types, $items, $locations, $date, $minTimestamp, null, $postStatus );
 
 			if ( $posts ) {
 				$posts = self::filterTimeframes( $posts, $date );
@@ -171,6 +161,123 @@ class Timeframe extends PostRepository {
 			);
 			return $posts;
 		}
+	}
+
+	/**
+	 * Returns timeframe and booking posts of one author. Same filters and result as {@see self::get()} without
+	 * item / location filter, restricted to posts with post_author = $authorId.
+	 * Uses the index if available, otherwise a query on posts + postmeta for the author's posts.
+	 *
+	 * @since 2.11.4 Booster: timeframes / bookings of one author for Booking::getForUser(), with the index or one SQL
+	 *               query on post_author.
+	 *
+	 * @param int      $authorId
+	 * @param int[]    $types
+	 * @param bool     $returnAsModel
+	 * @param int|null $minTimestamp
+	 * @param string[] $postStatus
+	 *
+	 * @return \WP_Post[]|\CommonsBooking\Model\Timeframe[]|\CommonsBooking\Model\Booking[] ordered by post id
+	 * @throws Exception
+	 */
+	public static function getByAuthor(
+		int $authorId,
+		array $types,
+		bool $returnAsModel = false,
+		?int $minTimestamp = null,
+		array $postStatus = [ 'confirmed', 'unconfirmed', 'publish', 'inherit' ]
+	): array {
+		global $wpdb;
+
+		if ( Index::isAvailable() ) {
+			$criteria = [
+				'post_types' => \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes(),
+				'types'      => $types,
+				'statuses'   => $postStatus,
+				'authors'    => [ $authorId ],
+			];
+			if ( $minTimestamp ) {
+				$criteria['end_min'] = Helper::getLastFullDayTimestamp( $minTimestamp );
+			}
+			$posts = Index::loadPosts( Index::findPostIds( $criteria ) );
+		} else {
+			$postTypes = "'" . implode( "','", array_map( 'esc_sql', \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes() ) ) . "'";
+			$typeList  = implode( ',', array_map( 'intval', $types ) );
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- post types are escaped, types cast to int
+			$postIds = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT DISTINCT p.ID FROM $wpdb->posts p
+					INNER JOIN $wpdb->postmeta pm ON pm.post_id = p.ID AND pm.meta_key = 'type' AND pm.meta_value IN ($typeList)
+					WHERE p.post_author = %d AND p.post_type IN ($postTypes)",
+					$authorId
+				)
+			);
+			// phpcs:enable
+			$posts = $postIds ? self::getPostsByBaseParams( null, $minTimestamp, null, array_map( 'intval', $postIds ), $postStatus ) : [];
+			usort( $posts, fn( $a, $b ) => $a->ID <=> $b->ID );
+		}
+
+		if ( $posts ) {
+			$posts = self::filterTimeframes( $posts, null );
+		}
+		if ( $returnAsModel ) {
+			self::castPostsToModels( $posts );
+		}
+
+		return array_values( $posts );
+	}
+
+	/**
+	 * Returns timeframe and booking posts by types, items, locations, date filter and status.
+	 * Uses the index if available, otherwise the legacy postmeta queries.
+	 *
+	 * Date filter modes (same as {@see self::getPostsByBaseParams()}):
+	 * - $date without $minTimestamp: posts active on that day
+	 * - $minTimestamp without $maxTimestamp: posts ending at or after the start of that day (or open end)
+	 * - $minTimestamp and $maxTimestamp: posts overlapping the range
+	 *
+	 * @since 2.11.4 Booster: translates the date filters of get() and getInRange() into index criteria; without index
+	 *               the original queries run.
+	 *
+	 * @param int[]       $types
+	 * @param int[]       $items
+	 * @param int[]       $locations
+	 * @param string|null $date YYYY-mm-dd
+	 * @param int|null    $minTimestamp
+	 * @param int|null    $maxTimestamp
+	 * @param string[]    $postStatus
+	 *
+	 * @return \WP_Post[]
+	 */
+	private static function queryPosts( array $types, array $items, array $locations, ?string $date, ?int $minTimestamp, ?int $maxTimestamp, array $postStatus ): array {
+		if ( ! Index::isAvailable() ) {
+			// Get Post-IDs considering types, items and locations
+			$postIds = self::getPostIdsByType( $types, $items, $locations );
+
+			return $postIds ? self::getPostsByBaseParams( $date, $minTimestamp, $maxTimestamp, $postIds, $postStatus ) : [];
+		}
+
+		$criteria = [
+			'post_types' => \CommonsBooking\Wordpress\CustomPostType\Timeframe::getSimilarPostTypes(),
+			'types'      => $types,
+			'statuses'   => $postStatus,
+			'items'      => $items,
+			'locations'  => $locations,
+		];
+
+		if ( $date && ! $minTimestamp ) {
+			$criteria['start_min'] = 0;
+			$criteria['start_max'] = strtotime( $date . 'T23:59' );
+			$criteria['end_min']   = strtotime( $date );
+			$criteria['end_max']   = 3000000000;
+		} elseif ( $minTimestamp && ! $maxTimestamp ) {
+			$criteria['end_min'] = Helper::getLastFullDayTimestamp( $minTimestamp );
+		} elseif ( $minTimestamp && $maxTimestamp ) {
+			$criteria['start_max'] = $maxTimestamp;
+			$criteria['end_min']   = $minTimestamp;
+		}
+
+		return Index::loadPosts( Index::findPostIds( $criteria ) );
 	}
 
 	/**
@@ -844,6 +951,9 @@ class Timeframe extends PostRepository {
 	 * Why? We often need timeframes for a specific timerange. For example in the calendar the default range is
 	 *      three months. Another example is the table view.
 	 *
+	 * @since 2.11.4 Booster: posts via {@see self::queryPosts()}: index if available, otherwise the original
+	 *               getPostIdsByType() + getPostsByBaseParams().
+	 *
 	 * @param $minTimestamp
 	 * @param $maxTimestamp
 	 * @param int[]    $locations
@@ -879,20 +989,7 @@ class Timeframe extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = [];
-
-			// Get Post-IDs considering types, items and locations
-			$postIds = self::getPostIdsByType( $types, $items, $locations );
-
-			if ( $postIds ) {
-				$posts = self::getPostsByBaseParams(
-					null,
-					$minTimestamp,
-					$maxTimestamp,
-					$postIds,
-					$postStatus
-				);
-			}
+			$posts = self::queryPosts( $types, $items, $locations, null, $minTimestamp, $maxTimestamp, $postStatus );
 
 			// if returnAsModel == TRUE the result is a timeframe model instead of a WordPress object
 			if ( $returnAsModel ) {

@@ -12,6 +12,9 @@ class Restriction extends PostRepository {
 	/**
 	 * Returns active restrictions.
 	 *
+	 * @since 2.11.4 Booster: reads from the index if available ({@see self::queryPostsFromIndex()}), otherwise
+	 *               queryPosts() as before.
+	 *
 	 * @param array       $locations one or more location ids to filter
 	 * @param array       $items     one or more item ids to filter
 	 * @param string|null $date if provided, filters restrictions to be valid on the given date
@@ -36,10 +39,14 @@ class Restriction extends PostRepository {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
-			$posts = self::queryPosts( $date, $minTimestamp, $postStatus );
+			if ( Index::isAvailable() ) {
+				$posts = self::queryPostsFromIndex( $date, $minTimestamp, $postStatus );
+			} else {
+				$posts = self::queryPosts( $date, $minTimestamp, $postStatus );
+				$posts = $posts ? Wordpress::flattenWpdbResult( $posts ) : [];
+			}
 
-			if ( $posts && count( $posts ) ) {
-				$posts = Wordpress::flattenWpdbResult( $posts );
+			if ( $posts ) {
 
 				// If there are locations or items to be filtered, we iterate through
 				// query result because wp_query is too slow for meta-querying them.
@@ -58,6 +65,36 @@ class Restriction extends PostRepository {
 
 			return $posts;
 		}
+	}
+
+	/**
+	 * Same as {@see self::queryPosts()}, but uses the index. Returns WP_Post objects.
+	 *
+	 * @since 2.11.4 Booster: index variant of queryPosts() (active restrictions in the range).
+	 *
+	 * @param string|null $date
+	 * @param int|null    $minTimestamp end must be > minTimestamp (or open end)
+	 * @param string[]    $postStatus
+	 *
+	 * @return \WP_Post[]
+	 */
+	private static function queryPostsFromIndex( $date, $minTimestamp, array $postStatus ): array {
+		$criteria = [
+			'post_types'         => [ \CommonsBooking\Wordpress\CustomPostType\Restriction::getPostType() ],
+			'statuses'           => $postStatus,
+			'restriction_states' => [ \CommonsBooking\Model\Restriction::STATE_ACTIVE ],
+		];
+
+		if ( $minTimestamp ) {
+			$criteria['end_min'] = (int) $minTimestamp + 1;
+		} elseif ( $date ) {
+			$criteria['start_min'] = 0;
+			$criteria['start_max'] = strtotime( $date . 'T23:59' );
+			$criteria['end_min']   = strtotime( $date );
+			$criteria['end_max']   = \CommonsBooking\Model\Restriction::NO_END_TIMESTAMP;
+		}
+
+		return Index::loadPosts( Index::findPostIds( $criteria ) );
 	}
 
 	/**

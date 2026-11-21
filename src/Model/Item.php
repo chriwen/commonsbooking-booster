@@ -125,6 +125,11 @@ class Item extends BookablePost {
 	/**
 	 * Gets the closest Booking for a given Item.
 	 *
+	 * @since 2.11.4 Booster: with the index only the bookings with the latest start are loaded
+	 *               (Repository\Booking::getLatestPastConfirmed()) instead of all confirmed bookings of the pair, which
+	 *               exceeded the memory limit in vehicle_availability.json. Without index the original path runs, the
+	 *               result is identical.
+	 *
 	 * @return ?Booking the booking that is past and closest to the current time, null if no booking is present
 	 */
 	public function getClosestBooking(): ?Booking {
@@ -134,16 +139,22 @@ class Item extends BookablePost {
 			return null;
 		}
 
-		$allBookings = \CommonsBooking\Repository\Booking::get(
-			[ $location->ID ],
-			[ $this->ID ],
-			null,
-			true,
-			null,
-			[ 'confirmed' ]
-		);
+		// With the index only the bookings with the latest start are loaded; the sort below picks among them exactly
+		// as among all bookings (see Repository\Booking::getLatestPastConfirmed()).
+		$allBookings = \CommonsBooking\Repository\Booking::getLatestPastConfirmed( $this->ID, $location->ID, current_time( 'timestamp' ) );
 
-		$allBookings = array_filter( $allBookings, fn( $b ) => $b->isPast() );
+		if ( $allBookings === null ) {
+			$allBookings = \CommonsBooking\Repository\Booking::get(
+				[ $location->ID ],
+				[ $this->ID ],
+				null,
+				true,
+				null,
+				[ 'confirmed' ]
+			);
+
+			$allBookings = array_filter( $allBookings, fn( $b ) => $b->isPast() );
+		}
 
 		if ( empty( $allBookings ) ) {
 			return null;

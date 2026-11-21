@@ -47,6 +47,8 @@ class Plugin {
 
 	/**
 	 * Plugin activation tasks.
+	 *
+	 * @since 2.11.4 Booster: rebuilds the index after a phase of inactivity (only if the booster is switched on).
 	 */
 	public static function activation() {
 		// Register custom user roles (e.g. cb_manager)
@@ -58,14 +60,20 @@ class Plugin {
 		// Init booking codes table
 		BookingCodes::initBookingCodesTable();
 
+		// Performance booster (if switched on): the index may be outdated after a phase of inactivity, rebuild it
+		\CommonsBooking\Service\Booster\Booster::onPluginActivation();
+
 		self::clearCache();
 	}
 
 	/**
 	 * Plugin deactivation tasks.
+	 *
+	 * @since 2.11.4 Booster: removes the cron jobs of the booster.
 	 */
 	public static function deactivation() {
 		do_action( Scheduler::UNSCHEDULER_HOOK );
+		\CommonsBooking\Service\Booster\Booster::onPluginDeactivation();
 	}
 
 	/**
@@ -415,11 +423,23 @@ class Plugin {
 	 * Handles the validation of booking forms. We customize the transient so that only the user that is supposed to see the transient will
 	 * actually see it.
 	 *
+	 * @since 2.11.4 Booster: validation runs inside Booster::withoutBooster() and never reads booster tables; the
+	 *               redirect happens only afterwards, because its exit would skip the finally block of
+	 *               withoutBooster().
+	 *
 	 * @return void
 	 */
 	public static function handleBookingForms(): void {
 		try {
-			\CommonsBooking\Wordpress\CustomPostType\Booking::handleFormRequest();
+			// booking validation always uses the original queries, never the booster tables
+			$postId = \CommonsBooking\Service\Booster\Booster::withoutBooster(
+				array( \CommonsBooking\Wordpress\CustomPostType\Booking::class, 'processFormRequest' )
+			);
+			// redirect (exit) only after leaving withoutBooster(): exit would skip its finally block and the rest of the
+			// request, e.g. the recomputation of the availability on shutdown, would run without the booster
+			if ( $postId !== null ) {
+				\CommonsBooking\Wordpress\CustomPostType\Booking::redirectToBooking( $postId );
+			}
 		} catch ( BookingDeniedException $e ) {
 			set_transient(
 				\CommonsBooking\Wordpress\CustomPostType\Booking::ERROR_TYPE . '-' . get_current_user_id(),
@@ -723,9 +743,14 @@ class Plugin {
 
 	/**
 	 *  Init hooks.
+	 *
+	 * @since 2.11.4 Booster: starts the booster (hooks, cron and reads only if it is switched on).
 	 */
 	public function init() {
 		do_action( 'cmb2_init' );
+
+		// Performance booster: timeframe index and precomputed availability, only if switched on
+		\CommonsBooking\Service\Booster\Booster::init();
 
 		// Enable CB1 User Fields (needed in case of migration from cb 0.9.x)
 		add_action( 'init', array( self::class, 'maybeEnableCB1UserFields' ) );

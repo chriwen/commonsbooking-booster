@@ -14,6 +14,8 @@ class Item extends CustomPostType {
 
 	/**
 	 * Initiates needed hooks.
+	 *
+	 * @since 2.11.4 Booster: registers the box "Assigned timeframes". Also active without the booster.
 	 */
 	public function initHooks() {
 		add_filter( 'the_content', array( $this, 'getTemplate' ) );
@@ -30,6 +32,14 @@ class Item extends CustomPostType {
 
 		// Save-handling
 		add_action( 'save_post', array( $this, 'savePost' ), 11, 2 );
+
+		// Metabox "Assigned timeframes" (timeframes and restrictions controlling this post)
+		add_action(
+			'add_meta_boxes_' . self::$postType,
+			function () {
+				\CommonsBooking\View\Admin\AssignedTimeframes::addMetaBox( self::$postType );
+			}
+		);
 	}
 
 	/**

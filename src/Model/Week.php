@@ -47,16 +47,30 @@ class Week {
 	private array $timeframes = [];
 
 	/**
+	 * Restrictions that might be relevant for this week, null = days query them themselves.
+	 *
+	 * @since 2.11.4 Booster: preloaded once per calendar. Also active without the booster.
+	 *
+	 * @var Restriction[]|null
+	 */
+	private ?array $restrictions = null;
+
+	/**
 	 * Week constructor.
+	 *
+	 * @since 2.11.4 Booster: optional $possibleRestrictions, passed to the days (see Day::__construct()). Also active
+	 *               without the booster.
 	 *
 	 * @param $year
 	 * @param $dayOfYear
-	 * @param array       $locations
-	 * @param array       $items
-	 * @param array       $types
-	 * @param Timeframe[] $possibleTimeframes Timeframes that might be relevant for this week, need to be filtered.
+	 * @param array              $locations
+	 * @param array              $items
+	 * @param array              $types
+	 * @param Timeframe[]        $possibleTimeframes Timeframes that might be relevant for this week, need to be filtered.
+	 * @param Restriction[]|null $possibleRestrictions Restrictions that might be relevant for this week, null = days query them themselves.
 	 */
-	public function __construct( $year, $dayOfYear, array $locations = [], array $items = [], array $types = [], array $possibleTimeframes = [] ) {
+	public function __construct( $year, $dayOfYear, array $locations = [], array $items = [], array $types = [], array $possibleTimeframes = [], ?array $possibleRestrictions = null ) {
+		$this->restrictions = $possibleRestrictions;
 		if ( $year === null ) {
 			$year = date( 'Y' );
 		}
@@ -75,6 +89,8 @@ class Week {
 	 * Helper function for Calendar.
 	 *
 	 * Uses the cache and expires at midnight on a daily basis.
+	 *
+	 * @since 2.11.4 Booster: passes the preloaded restrictions to the days. Also active without the booster.
 	 *
 	 * @return array
 	 * @throws Exception
@@ -100,7 +116,7 @@ class Week {
 			$days = array();
 			for ( $i = 0; $i < 7; $i++ ) {
 				$dayDate   = $dto->format( 'Y-m-d' );
-				$days[]    = new Day( $dayDate, $this->locations, $this->items, $this->types, $this->timeframes ?: [] );
+				$days[]    = new Day( $dayDate, $this->locations, $this->items, $this->types, $this->timeframes ?: [], $this->restrictions );
 				$dayOfWeek = $dto->format( 'w' );
 				if ( $dayOfWeek === '0' ) {
 					break;

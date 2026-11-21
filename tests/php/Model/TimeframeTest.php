@@ -948,9 +948,9 @@ class TimeframeTest extends CustomPostTypeTest {
 				false,
 			),
 			// case: start passed, open end date
-			'Available here permanently' => array(
+			'Permanently available here' => array(
 				'2021-01-25',
-				'Available here permanently',
+				'Permanently available here',
 				strtotime( '2021-01-24' ),
 				false,
 			),

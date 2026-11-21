@@ -177,6 +177,9 @@ abstract class CustomPostType {
 	/**
 	 * Modifies Row Actions (like quick edit, trash etc) in CPT listings
 	 *
+	 * @since 2.11.4 Booster: row action "Timeframes" for items and locations, links to the box "Assigned timeframes".
+	 *               Also active without the booster.
+	 *
 	 * @param mixed $actions
 	 *
 	 * @return mixed
@@ -193,6 +196,19 @@ abstract class CustomPostType {
 		// remove preview for timeframes and restrictions
 		if ( $post->post_type == Timeframe::getPostType() or $post->post_type == Restriction::getPostType() ) {
 			unset( $actions['view'] );
+		}
+
+		// link to the metabox "Assigned timeframes" for items and locations
+		if (
+			( $post->post_type == Item::getPostType() || $post->post_type == Location::getPostType() ) &&
+			$post->post_status !== 'trash' &&
+			commonsbooking_isCurrentUserAllowedToEdit( $post )
+		) {
+			$actions['cb_assigned_timeframes'] = sprintf(
+				'<a href="%s">%s</a>',
+				esc_url( \CommonsBooking\View\Admin\AssignedTimeframes::getLink( $post->ID ) ),
+				esc_html__( 'Timeframes', 'commonsbooking' )
+			);
 		}
 
 		return $actions;

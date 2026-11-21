@@ -2,9 +2,9 @@
 
 namespace CommonsBooking\Model;
 
-use CommonsBooking\Helper\Wordpress;
 use CommonsBooking\Plugin;
-use stdClass;
+use CommonsBooking\Service\Availability\SlotReader;
+use CommonsBooking\Service\Availability\Slots;
 
 /**
  * Represents a span of weeks, which is used to display a calendar.
@@ -39,11 +39,20 @@ class Calendar {
 	protected $types;
 
 	/**
-	 * The timeframes that are relevant for this calendar.
+	 * The timeframes that are relevant for this calendar, loaded with the first uncached {@see self::getWeeks()}.
 	 *
-	 * @var Timeframe[]
+	 * @since 2.11.4 Booster: nullable, loaded lazily (before: in the constructor). Also active without the booster.
+	 *
+	 * @var Timeframe[]|null
 	 */
-	protected array $timeframes;
+	protected ?array $timeframes = null;
+
+	/**
+	 * Active restrictions overlapping the calendar range, loaded once and handed to the days.
+	 *
+	 * @var Restriction[]
+	 */
+	protected array $restrictions = [];
 
 	/**
 	 * When this is enabled, @see Timeframe::META_BOOKING_START_DAY_OFFSET is ignored.
@@ -69,6 +78,9 @@ class Calendar {
 	/**
 	 * Calendar constructor.
 	 *
+	 * @since 2.11.4 Booster: no longer loads timeframes here (moved to {@see self::loadPosts()}), so a cache hit of
+	 *               getWeeks() needs no queries. Also active without the booster.
+	 *
 	 * @param Day   $startDate
 	 * @param Day   $endDate
 	 * @param int[] $locations
@@ -89,6 +101,22 @@ class Calendar {
 		$this->items     = $items;
 		$this->locations = $locations;
 		$this->types     = $types;
+	}
+
+	/**
+	 * Loads the timeframes and restrictions of the range. Not done in the constructor because a calendar answered
+	 * from the cache or from the precomputed availability doesn't need them.
+	 *
+	 * @since 2.11.4 Booster: loads the timeframes and the restrictions of the whole period once (before: restrictions
+	 *               once per day), only when the weeks are not cached. Also active without the booster.
+	 *
+	 * @return void
+	 * @throws \Exception
+	 */
+	protected function loadPosts(): void {
+		if ( $this->timeframes !== null ) {
+			return;
+		}
 
 		$this->timeframes = \CommonsBooking\Repository\Timeframe::getInRange(
 			$this->startDate->getStartTimestamp(),
@@ -99,12 +127,26 @@ class Calendar {
 			true,
 			[ 'confirmed', 'publish' ]
 		);
+
+		// Superset for all days of the range (end after the day before the start or open end).
+		// Each day filters for itself, see Day::getRestrictions().
+		$this->restrictions = \CommonsBooking\Repository\Restriction::get(
+			$this->locations,
+			$this->items,
+			null,
+			true,
+			$this->startDate->getStartTimestamp() - 1,
+			Day::RESTRICTION_STATUSES
+		);
 	}
 
 	/**
 	 * Returns weeks for calendar time range.
 	 *
 	 * Uses cache and expires at midnight on a daily basis.
+	 *
+	 * @since 2.11.4 Booster: loads the posts only on a cache miss and passes the preloaded restrictions to the weeks.
+	 *               Also active without the booster.
 	 *
 	 * @return array
 	 */
@@ -124,6 +166,7 @@ class Calendar {
 		if ( $cacheItem ) {
 			return $cacheItem;
 		} else {
+			$this->loadPosts();
 			$weeks = array();
 			while ( $startDate <= $endDate ) {
 				$dayOfYear = date( 'z', $startDate );
@@ -134,7 +177,8 @@ class Calendar {
 					$this->locations,
 					$this->items,
 					$this->types,
-					$this->timeframes
+					$this->timeframes,
+					$this->restrictions
 				);
 				$startDate = strtotime( 'next monday', $startDate );
 			}
@@ -153,10 +197,38 @@ class Calendar {
 	 * Because we process the calendar by weeks, at least two days are needed to get a valid calendar.
 	 * The calendar does not consider the individual boundaries set by $startDate and $endDate but will always return a full week.
 	 *
+	 * Read from the precomputed availability if possible ({@see SlotReader}), otherwise computed live.
+	 *
+	 * @since 2.11.4 Booster: answers from the precomputed slots ({@see
+	 *               \CommonsBooking\Service\Availability\SlotReader}) if possible, otherwise computes them live with
+	 *               {@see self::getAvailabilitySlotsLive()}.
+	 *
 	 * @return array
 	 * @throws \Exception
 	 */
 	public function getAvailabilitySlots(): array {
+		$slots = SlotReader::getAvailabilitySlots(
+			$this->startDate->getDate(),
+			$this->endDate->getDate(),
+			$this->locations,
+			$this->items,
+			$this->ignoreStartDayOffset,
+			$this->ignoreRestrictions
+		);
+
+		return $slots ?? $this->getAvailabilitySlotsLive();
+	}
+
+	/**
+	 * Computes the availability slots from the day grids.
+	 *
+	 * @since 2.11.4 Booster: the original calculation of getAvailabilitySlots(), logic unchanged; the slot generation
+	 *               moved to {@see \CommonsBooking\Service\Availability\Slots}, shared with the precomputation.
+	 *
+	 * @return array
+	 * @throws \Exception
+	 */
+	public function getAvailabilitySlotsLive(): array {
 		$slots     = [];
 		$doneSlots = [];
 		/** @var Week $week */
@@ -164,47 +236,17 @@ class Calendar {
 			/** @var Day $day */
 			foreach ( $week->getDays() as $day ) {
 				$day->setIgnoreRestrictions( $this->ignoreRestrictions );
-				foreach ( $day->getGrid() as $slot ) {
-					$timeframe     = new Timeframe( $slot['timeframe'] );
-					$timeFrameType = get_post_meta( $slot['timeframe']->ID, 'type', true );
-
-					// Skip everything where the most important slot is not bookable. We are only interested in direct availability.
-					if ( $timeFrameType != \CommonsBooking\Wordpress\CustomPostType\Timeframe::BOOKABLE_ID ) {
-						continue;
-					}
+				// Skip everything where the most important slot is not bookable. We are only interested in direct availability.
+				foreach ( Slots::bookableSlots( $day->getGrid() ) as $slot ) {
+					$timeframe = new Timeframe( $slot['timeframe'] );
 
 					// Skip timeframes that are not bookable today
 					if ( ! $this->ignoreStartDayOffset && $timeframe->getFirstBookableDay() > $day->getDate() ) {
 						continue;
 					}
 
-					$availabilitySlot = new stdClass();
-
-					// Init DateTime object for start
-					$dateTimeStart = Wordpress::getUTCDateTime( 'now' );
-					$dateTimeStart->setTimestamp( $slot['timestampstart'] );
-					$availabilitySlot->start = $dateTimeStart->format( 'Y-m-d\TH:i:sP' );
-
-					// Init DateTime object for end
-					$dateTimeend = Wordpress::getUTCDateTime( 'now' );
-					$dateTimeend->setTimestamp( $slot['timestampend'] );
-					$availabilitySlot->end = $dateTimeend->format( 'Y-m-d\TH:i:sP' );
-
-					$availabilitySlot->locationId = '';
-					if ( $timeframe->getLocation() ) {
-						$availabilitySlot->locationId = $timeframe->getLocationID() . '';
-					}
-
-					$availabilitySlot->itemId = '';
-					if ( $timeframe->getItem() ) {
-						$availabilitySlot->itemId = $timeframe->getItemID() . '';
-					}
-
-					$slotId = md5( serialize( $availabilitySlot ) );
-					if ( ! in_array( $slotId, $doneSlots ) ) {
-						$doneSlots[] = $slotId;
-						$slots[]     = $availabilitySlot;
-					}
+					[ $locationId, $itemId ] = Slots::getEntityIds( $timeframe );
+					Slots::addUnique( $slots, $doneSlots, Slots::toApiSlot( $slot['start'], $slot['end'], $locationId, $itemId ) );
 				}
 			}
 		}

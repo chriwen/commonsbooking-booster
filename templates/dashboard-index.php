@@ -26,7 +26,7 @@
 			<div style="clear:both;">
 			<hr style="border-top: 8px solid #bbb; border-radius: 5px; border-color:#67b32a;">
 			</div>
-			<div class="cb_welcome-panel-column-container" style="margin-top: 10px;">
+			<div class="cb_welcome-panel-column-container<?php echo commonsbooking_isCurrentUserAdmin() ? ' cb-dashboard-four-columns' : ''; ?>" style="margin-top: 10px;">
 				<div class="cb_welcome-panel-column">
 					<h3 style="padding-bottom:20px"><?php echo esc_html__( 'Setup and manage Items, Locations and Timeframes', 'commonsbooking' ); ?></h3>
 					<ul>
@@ -59,6 +59,12 @@
 						<?php } ?>
 					</ul>
 				</div><!-- .cb_welcome-panel-column -->
+				<?php
+				// Booster (2.11.4): fourth column with the state of the booster, only for admins
+				if ( commonsbooking_isCurrentUserAdmin() ) {
+					\CommonsBooking\Service\Booster\SettingsView::renderDashboardColumn();
+				}
+				?>
 			</div><!-- .cb_welcome-panel-column-container -->
 		</div> <!-- .cb_welcome-panel-content -->
 	</div> <!-- .cb_welcome-panel -->
