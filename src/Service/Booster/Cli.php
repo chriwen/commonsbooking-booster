@@ -18,6 +18,9 @@ use WP_CLI;
  *     wp commonsbooking booster check --deep
  *     wp commonsbooking booster disable
  *     wp commonsbooking booster purge --yes
+ *
+ * Always registered (so the booster can be switched on via WP-CLI). Downgrade: `purge` removes tables, options
+ * and cron jobs of the booster.
  */
 class Cli {
 
@@ -161,6 +164,8 @@ class Cli {
 	}
 
 	/**
+	 * Builds index and precomputed availability completely in this process, without waiting for WP-Cron.
+	 *
 	 * @return void
 	 */
 	private function buildNow(): void {

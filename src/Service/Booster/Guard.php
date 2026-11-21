@@ -64,6 +64,8 @@ class Guard {
 	}
 
 	/**
+	 * Schedules the hourly deep check.
+	 *
 	 * @return void
 	 */
 	public static function schedule(): void {
@@ -73,6 +75,8 @@ class Guard {
 	}
 
 	/**
+	 * Removes the hourly deep check (booster switched off).
+	 *
 	 * @return void
 	 */
 	public static function unschedule(): void {
@@ -146,7 +150,7 @@ class Guard {
 		$limit      = self::REPAIR_LIMIT + 1;
 		$graceEnd   = gmdate( 'Y-m-d H:i:s', time() - self::GRACE_SECONDS );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- only table names are interpolated; the IN list consists of placeholders filled by prepare()
 		$sql               = $wpdb->prepare(
 			"SELECT p.ID FROM {$wpdb->posts} p LEFT JOIN $table i ON i.post_id = p.ID
 			WHERE p.post_type IN ($typeMarker) AND p.post_status <> 'auto-draft' AND p.post_modified_gmt < %s
@@ -158,7 +162,7 @@ class Guard {
 			LIMIT %d",
 			array_merge( $postTypes, [ $graceEnd, $limit ] )
 		);
-		$result['changed'] = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$result['changed'] = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 		$result['orphans'] = array_map(
 			'intval',
 			$wpdb->get_col( $wpdb->prepare( "SELECT i.post_id FROM $table i LEFT JOIN {$wpdb->posts} p ON p.ID = i.post_id WHERE p.ID IS NULL LIMIT %d", $limit ) )
@@ -298,6 +302,8 @@ class Guard {
 	}
 
 	/**
+	 * Highest post id of all post types. Used as limit of the cheap check and for the rebuild progress.
+	 *
 	 * @return int highest post id (any type)
 	 */
 	public static function getMaxPostId(): int {
@@ -307,6 +313,8 @@ class Guard {
 	}
 
 	/**
+	 * Plugin version stored by the upgrade routine of CommonsBooking.
+	 *
 	 * @return string the plugin version stored by the upgrade routine of whichever plugin version runs
 	 */
 	public static function getStoredPluginVersion(): string {
@@ -328,7 +336,7 @@ class Guard {
 		$postTypes  = Projector::getPostTypes();
 		$typeMarker = implode( ',', array_fill( 0, count( $postTypes ), '%s' ) );
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- only table names are interpolated; the IN list consists of placeholders filled by prepare()
 		$sql = $wpdb->prepare(
 			"SELECT p.ID, p.post_modified_gmt FROM {$wpdb->posts} p LEFT JOIN $table i ON i.post_id = p.ID
 			WHERE p.ID > %d AND p.ID <= %d AND p.post_type IN ($typeMarker) AND p.post_status <> 'auto-draft' AND i.post_id IS NULL
@@ -337,6 +345,6 @@ class Guard {
 		);
 		// phpcs:enable
 
-		return $wpdb->get_results( $sql, ARRAY_A ) ?: []; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		return $wpdb->get_results( $sql, ARRAY_A ) ?: []; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 	}
 }

@@ -12,6 +12,8 @@ use WP_CLI;
  *     wp commonsbooking availability status
  *     wp commonsbooking availability rebuild
  *     wp commonsbooking availability verify --repair
+ *
+ * Only registered while the booster is on. Downgrade: only touches the booster tables.
  */
 class Cli {
 

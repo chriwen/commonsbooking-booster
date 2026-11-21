@@ -104,6 +104,9 @@ class Timeframe extends PostRepository {
 	 * TODO: Investigate
 	 *       This function is not based on the WP_Query class, probably because of performance reasons.
 	 *
+	 * @since 2.11.4 Booster: posts via {@see self::queryPosts()}: index if available, otherwise the original
+	 *               getPostIdsByType() + getPostsByBaseParams().
+	 *
 	 * @param array       $locations
 	 * @param array       $items
 	 * @param array       $types
@@ -164,6 +167,9 @@ class Timeframe extends PostRepository {
 	 * Returns timeframe and booking posts of one author. Same filters and result as {@see self::get()} without
 	 * item / location filter, restricted to posts with post_author = $authorId.
 	 * Uses the index if available, otherwise a query on posts + postmeta for the author's posts.
+	 *
+	 * @since 2.11.4 Booster: timeframes / bookings of one author for Booking::getForUser(), with the index or one SQL
+	 *               query on post_author.
 	 *
 	 * @param int      $authorId
 	 * @param int[]    $types
@@ -229,6 +235,9 @@ class Timeframe extends PostRepository {
 	 * - $date without $minTimestamp: posts active on that day
 	 * - $minTimestamp without $maxTimestamp: posts ending at or after the start of that day (or open end)
 	 * - $minTimestamp and $maxTimestamp: posts overlapping the range
+	 *
+	 * @since 2.11.4 Booster: translates the date filters of get() and getInRange() into index criteria; without index
+	 *               the original queries run.
 	 *
 	 * @param int[]       $types
 	 * @param int[]       $items
@@ -941,6 +950,9 @@ class Timeframe extends PostRepository {
 	 * Returns timeframes in explicit timerange. Does not consider weekday configurations!!
 	 * Why? We often need timeframes for a specific timerange. For example in the calendar the default range is
 	 *      three months. Another example is the table view.
+	 *
+	 * @since 2.11.4 Booster: posts via {@see self::queryPosts()}: index if available, otherwise the original
+	 *               getPostIdsByType() + getPostsByBaseParams().
 	 *
 	 * @param $minTimestamp
 	 * @param $maxTimestamp

@@ -177,6 +177,9 @@ abstract class CustomPostType {
 	/**
 	 * Modifies Row Actions (like quick edit, trash etc) in CPT listings
 	 *
+	 * @since 2.11.4 Booster: row action "Timeframes" for items and locations, links to the box "Assigned timeframes".
+	 *               Also active without the booster.
+	 *
 	 * @param mixed $actions
 	 *
 	 * @return mixed

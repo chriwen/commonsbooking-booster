@@ -15,6 +15,9 @@ use CommonsBooking\Wordpress\CustomPostType\Timeframe;
  * The marking (gen + 1) happens synchronously while the index is updated, so a reader never uses days computed
  * before the change. The recomputation follows at the end of the request (after the response was sent, if possible),
  * for large changes in the cron job ({@see Maintenance}).
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries).
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class Invalidator {
 
@@ -33,6 +36,8 @@ class Invalidator {
 	private static bool $overflow = false;
 
 	/**
+	 * Registers the hooks (only while the precomputed availability is enabled).
+	 *
 	 * @return void
 	 */
 	public static function init(): void {
@@ -42,6 +47,9 @@ class Invalidator {
 	}
 
 	/**
+	 * Called for every changed index row: increases the gen of all pairs the post affects before and after
+	 * the change, so stored rows of these pairs are no longer used, and queues them for recomputation.
+	 *
 	 * @param array|null $old index rows before the change
 	 * @param array|null $new index rows after the change
 	 *
@@ -184,6 +192,9 @@ class Invalidator {
 	}
 
 	/**
+	 * Adds pairs to the queue of this request. Beyond the sync limit only an overflow flag is set and cron
+	 * recomputes the pairs later (they are already invalidated, so nothing outdated is shown meanwhile).
+	 *
 	 * @param array<int, array{0:int,1:int}> $pairs
 	 *
 	 * @return void
@@ -199,6 +210,8 @@ class Invalidator {
 	}
 
 	/**
+	 * Maximum number of pairs recomputed at the end of a request (filter commonsbooking_availability_sync_limit).
+	 *
 	 * @return int
 	 */
 	private static function getSyncLimit(): int {

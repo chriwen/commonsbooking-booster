@@ -16,6 +16,9 @@ use WP_Post;
  *
  * Writes that bypass WordPress hooks (direct SQL) must call {@see self::touch()} explicitly,
  * e.g. {@see \CommonsBooking\Model\Booking::cancel()}.
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries). Changes made meanwhile are caught up by the full rebuild on switching on and by the
+ * {@see \CommonsBooking\Service\Booster\Guard}. Downgrade: never writes posts or postmeta.
  */
 class Indexer {
 
@@ -81,6 +84,8 @@ class Indexer {
 	}
 
 	/**
+	 * Status changes (publish, cancel, trash, ...) change the index row: remember the post.
+	 *
 	 * @param string $newStatus
 	 * @param string $oldStatus
 	 * @param mixed  $post WP_Post, typed loosely because third parties may call the hook with other values
@@ -109,6 +114,8 @@ class Indexer {
 	}
 
 	/**
+	 * Removes the index rows of a deleted post immediately (the post cannot be projected anymore).
+	 *
 	 * @param int $postId
 	 *
 	 * @return void
@@ -168,6 +175,8 @@ class Indexer {
 	}
 
 	/**
+	 * Returns true for the post types projected into the index (timeframes, bookings, restrictions).
+	 *
 	 * @param string|false|null $postType
 	 *
 	 * @return bool

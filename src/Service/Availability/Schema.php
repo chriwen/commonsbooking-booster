@@ -11,6 +11,8 @@ namespace CommonsBooking\Service\Availability;
  * The tables are a cache. Every row can be recomputed from the posts at any time, rows that are missing or
  * outdated ({@see Store::isUsable()}, {@see AccessStore::isUsable()}) are computed live.
  *
+ * Booster off: tables stay untouched until `booster purge`. Downgrade: an older version ignores the tables.
+ *
  * @see design/availability-precompute.md
  * @see design/role-restricted-availability.md
  */
@@ -29,6 +31,8 @@ class Schema {
 	public const ACCESS_TABLE = 'cb_availability_access';
 
 	/**
+	 * Fully qualified name of the availability table (one row per pair).
+	 *
 	 * @return string fully qualified table name
 	 */
 	public static function table(): string {
@@ -37,6 +41,8 @@ class Schema {
 	}
 
 	/**
+	 * Fully qualified name of the table of the access profiles.
+	 *
 	 * @return string fully qualified name of the table of the access profiles
 	 */
 	public static function accessTable(): string {
@@ -45,6 +51,8 @@ class Schema {
 	}
 
 	/**
+	 * Returns true if the tables exist in the current schema version (autoloaded option, no query).
+	 *
 	 * @return bool
 	 */
 	public static function isInstalled(): bool {
@@ -108,11 +116,13 @@ class Schema {
 	}
 
 	/**
+	 * Removes both tables. Only used by purge and before a schema change; the data can always be recomputed.
+	 *
 	 * @return void
 	 */
 	private static function dropTables(): void {
 		global $wpdb;
-		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::table() . ', ' . self::accessTable() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::table() . ', ' . self::accessTable() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name of this plugin, DDL cannot use placeholders
 	}
 
 	/**

@@ -49,12 +49,17 @@ class Week {
 	/**
 	 * Restrictions that might be relevant for this week, null = days query them themselves.
 	 *
+	 * @since 2.11.4 Booster: preloaded once per calendar. Also active without the booster.
+	 *
 	 * @var Restriction[]|null
 	 */
 	private ?array $restrictions = null;
 
 	/**
 	 * Week constructor.
+	 *
+	 * @since 2.11.4 Booster: optional $possibleRestrictions, passed to the days (see Day::__construct()). Also active
+	 *               without the booster.
 	 *
 	 * @param $year
 	 * @param $dayOfYear
@@ -84,6 +89,8 @@ class Week {
 	 * Helper function for Calendar.
 	 *
 	 * Uses the cache and expires at midnight on a daily basis.
+	 *
+	 * @since 2.11.4 Booster: passes the preloaded restrictions to the days. Also active without the booster.
 	 *
 	 * @return array
 	 * @throws Exception

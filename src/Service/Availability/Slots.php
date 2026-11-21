@@ -20,6 +20,10 @@ use WP_Post;
  *           location / item id 0 = timeframe has no location / item (empty string in the API)
  *   per day: uint8 number of slots S, then S × (uint32 start offset, uint32 end offset, uint16 timeframe index)
  *           offsets in seconds from strtotime( date ), the same base as {@see \CommonsBooking\Model\Day::getGrid()}
+ *
+ * Also used while the booster is off: the live API calculation uses {@see self::bookableSlots()} and
+ * {@see self::toApiSlot()} (refactoring of the original code, same results). Downgrade: the packed format only
+ * lives in the booster tables.
  */
 class Slots {
 

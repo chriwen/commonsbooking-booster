@@ -37,6 +37,9 @@ class Booking extends PostRepository {
 	/**
 	 * Returns bookings ending at day of timestamp.
 	 *
+	 * @since 2.11.4 Booster: uses the index via {@see self::findViaIndex()} if available, otherwise (or for unsupported
+	 *               $customArgs) the original WP_Query.
+	 *
 	 * @param int   $timestamp
 	 * @param array $customArgs
 	 *
@@ -95,6 +98,9 @@ class Booking extends PostRepository {
 
 	/**
 	 * Returns bookings beginning at day of timestamp.
+	 *
+	 * @since 2.11.4 Booster: uses the index via {@see self::findViaIndex()} if available, otherwise (or for unsupported
+	 *               $customArgs) the original WP_Query.
 	 *
 	 * @param int   $timestamp
 	 * @param array $customArgs
@@ -163,6 +169,9 @@ class Booking extends PostRepository {
 	}
 
 	/**
+	 * @since 2.11.4 Booster: uses the index via {@see self::findViaIndex()} if available, otherwise (or for unsupported
+	 *               $customArgs) the original WP_Query.
+	 *
 	 * @param int $startDateTimestamp
 	 * @param int $endDateTimestamp
 	 * @param int $locationId
@@ -254,6 +263,9 @@ class Booking extends PostRepository {
 	}
 
 	/**
+	 * @since 2.11.4 Booster: uses the index via {@see self::findViaIndex()} if available, otherwise (or for unsupported
+	 *               $customArgs) the original WP_Query.
+	 *
 	 * @param int   $startDate
 	 * @param int   $endDate
 	 * @param $locationId
@@ -342,6 +354,10 @@ class Booking extends PostRepository {
 	 * Returns all bookings, allowed to see for user.
 	 * This are not just the bookings owned by the user but also managed items for admins / cb-managers.
 	 *
+	 * @since 2.11.4 Booster: loads only candidate bookings (own bookings and bookings of managed items/locations, {@see
+	 *               self::getVisibleCandidates()}) instead of all bookings; the visibility filter is unchanged, the
+	 *               result identical. Also active without the booster.
+	 *
 	 * @param bool     $asModel if true, returns as Booking array, if false, return int array (defaults to false)
 	 * @param int|null $minTimestamp
 	 *
@@ -388,6 +404,8 @@ class Booking extends PostRepository {
 	 * - bookings of locations the user manages (location author or listed in the location admins)
 	 * This matches {@see \CommonsBooking\Model\Timeframe::getAdmins()}, which merges item and location admins.
 	 *
+	 * @since 2.11.4 Booster: candidates for getForUser(), see there. Also active without the booster.
+	 *
 	 * @param \WP_User $user
 	 * @param bool     $asModel
 	 * @param int|null $minTimestamp
@@ -432,6 +450,9 @@ class Booking extends PostRepository {
 	 * Returns ids of the items or locations the user manages: posts the user is author of or listed in the
 	 * admins meta (`_{post type}_admins`, a serialized list or a single id, see Location::getAdmins()).
 	 * Post status is not checked, as in getAdmins().
+	 *
+	 * @since 2.11.4 Booster: items/locations the user manages (author or _cb_*_admins), for getForUser(). Also active
+	 *               without the booster.
 	 *
 	 * @param \WP_User $user
 	 * @param string   $postType cb_item or cb_location
@@ -630,6 +651,9 @@ class Booking extends PostRepository {
 	 * Same semantics as the legacy path: Booking::isPast() compares the end meta as integer, so a missing end (index
 	 * NULL) counts as past; a missing start counts as 0.
 	 *
+	 * @since 2.11.4 Booster: index query for Model\Item::getClosestBooking(); null without index, then the caller uses
+	 *               the original path.
+	 *
 	 * @param int $itemId item of the pair
 	 * @param int $locationId location of the pair
 	 * @param int $now local timestamp, as current_time( 'timestamp' )
@@ -672,6 +696,9 @@ class Booking extends PostRepository {
 	 * the caller then runs the legacy WP_Query.
 	 *
 	 * Supported custom args (same semantics as in WP_Query): author (single id), post_status, orderby=date, order.
+	 *
+	 * @since 2.11.4 Booster: shared index query of the date based getters; null if the index is not available or
+	 *               $customArgs are not supported.
 	 *
 	 * @param array    $criteria see {@see Index::findPostIds()}
 	 * @param array    $customArgs WP_Query args passed by the caller

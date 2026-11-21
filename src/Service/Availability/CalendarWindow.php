@@ -13,6 +13,10 @@ use CommonsBooking\View\Calendar;
  * Combined with the date independent {@see DayFacts} it yields the day arrays of the calendar json.
  * Extracted from \CommonsBooking\View\Calendar::getCalendarDataArray(), prepareJsonResponse() and mapDay().
  *
+ * Also used while the booster is off: the calendar json ({@see \CommonsBooking\View\Calendar}) always computes
+ * its window here (refactoring of the original code, same results, pinned by tests/php/View/CalendarSnapshotTest.php).
+ * Downgrade: pure calculation, no data.
+ *
  * @see design/availability-precompute.md
  */
 final class CalendarWindow {
@@ -34,6 +38,9 @@ final class CalendarWindow {
 	private ?string $firstBookableDay;
 
 	/**
+	 * Calculates the displayed and bookable range of a calendar. Missing values are derived from the
+	 * range like in the original implementation of {@see \CommonsBooking\View\Calendar}.
+	 *
 	 * @param Day         $startDate
 	 * @param Day         $endDate
 	 * @param mixed       $advanceBookingDays null (or 0) to use the length of the range
@@ -110,18 +117,38 @@ final class CalendarWindow {
 		return new self( $startDate, $endDate, $advanceBookingDays, $lastBookableDate, $firstBookableDay );
 	}
 
+	/**
+	 * First displayed day of the calendar.
+	 *
+	 * @return Day
+	 */
 	public function getStartDate(): Day {
 		return $this->startDate;
 	}
 
+	/**
+	 * Last displayed day of the calendar.
+	 *
+	 * @return Day
+	 */
 	public function getEndDate(): Day {
 		return $this->endDate;
 	}
 
+	/**
+	 * Number of days in advance that can be booked.
+	 *
+	 * @return int
+	 */
 	public function getAdvanceBookingDays(): int {
 		return $this->advanceBookingDays;
 	}
 
+	/**
+	 * First bookable day (Y-m-d) if the timeframe defines one, otherwise null.
+	 *
+	 * @return string|null
+	 */
 	public function getFirstBookableDay(): ?string {
 		return $this->firstBookableDay;
 	}
@@ -207,6 +234,8 @@ final class CalendarWindow {
 	}
 
 	/**
+	 * Day array (calendar json format) of a day outside of the booking window: locked, without slots.
+	 *
 	 * @param Day $day
 	 *
 	 * @return array day array of a day that can not be booked

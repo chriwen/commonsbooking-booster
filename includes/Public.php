@@ -7,6 +7,12 @@ use CommonsBooking\View\Calendar;
 use CommonsBooking\View\View;
 
 
+/**
+ * Enqueues the styles and scripts of the frontend and adds the inline scripts of the booking forms.
+ *
+ * @since 2.11.4 Booster: inline script submits booking forms only once ("Please wait ..."), a double click created two
+ *               booking requests. Also active without the booster.
+ */
 function commonsbooking_public() {
 
 	wp_enqueue_style(

@@ -55,6 +55,8 @@ class Day {
 
 	/**
 	 * Post status of restrictions which are considered for availabilities.
+	 *
+	 * @since 2.11.4 Booster: shared by the per day query and the preloaded restrictions of the calendar.
 	 */
 	public const RESTRICTION_STATUSES = [ 'publish', 'confirmed', 'unconfirmed' ];
 
@@ -67,6 +69,9 @@ class Day {
 
 	/**
 	 * Day constructor.
+	 *
+	 * @since 2.11.4 Booster: optional $possibleRestrictions preloaded by the calendar (null: the day queries them
+	 *               itself as before). Also active without the booster.
 	 *
 	 * @param string             $date
 	 * @param array              $locations
@@ -176,6 +181,9 @@ class Day {
 	/**
 	 * Returns array with restrictions.
 	 *
+	 * @since 2.11.4 Booster: filters the preloaded restrictions in PHP instead of one query per day. Also active
+	 *               without the booster.
+	 *
 	 * @return Restriction[]
 	 * @throws Exception
 	 */
@@ -197,6 +205,9 @@ class Day {
 	/**
 	 * Same date condition as {@see \CommonsBooking\Repository\Restriction::get()} with a date:
 	 * a start is set and before the end of the day, the end is after the start of the day (or not set).
+	 *
+	 * @since 2.11.4 Booster: same date condition as the SQL query of Repository\Restriction::get(), applied in PHP to
+	 *               the preloaded restrictions.
 	 *
 	 * @param Restriction $restriction
 	 *

@@ -11,6 +11,9 @@ use CommonsBooking\Service\Index\Schema;
  *
  * Only use when {@see self::isAvailable()} returns true, otherwise fall back to the postmeta based queries.
  *
+ * Booster off, index incomplete or {@see \CommonsBooking\Service\Booster\Booster::withoutBooster()}: not used,
+ * the repositories run their original postmeta queries. Downgrade: reads only the booster tables.
+ *
  * @see \CommonsBooking\Service\Index\Projector for the meaning of the columns
  */
 class Index {
@@ -191,6 +194,8 @@ class Index {
 	}
 
 	/**
+	 * Quotes and escapes string values with $wpdb->prepare() and joins them for an SQL IN (...) list.
+	 *
 	 * @param string[] $values
 	 *
 	 * @return string comma separated, escaped and quoted

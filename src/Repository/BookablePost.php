@@ -316,6 +316,9 @@ abstract class BookablePost extends PostRepository {
 	 * Returns the timeframes (cb_timeframe, any type) whose single "{$originType}-id" meta equals $postId,
 	 * ordered like WP_Query (post_date DESC).
 	 *
+	 * @since 2.11.4 Booster: finds the candidates with the index if available, then keeps the original semantics (only
+	 *               the single item-id / location-id meta value counts); without index the original WP_Query.
+	 *
 	 * @param int    $postId
 	 * @param string $originType item|location
 	 *
@@ -365,6 +368,9 @@ abstract class BookablePost extends PostRepository {
 	/**
 	 * Returns array with related posts for post with post id and origin type.
 	 * Works only for locations and items!
+	 *
+	 * @since 2.11.4 Booster: timeframes via {@see self::getTimeframesByRelation()}, related posts are loaded with one
+	 *               query (_prime_post_caches).
 	 *
 	 * @param $postId
 	 * @param $originType

@@ -14,6 +14,8 @@ use WP_Post;
  *
  * All methods are idempotent: projecting the same post twice yields the same rows.
  * If the post does not exist (anymore) or is not indexable, its rows are removed.
+ *
+ * Only reads posts and postmeta, only writes the index tables. Booster off: not loaded (no hooks, no cron, no queries).
  */
 class Projector {
 
@@ -125,7 +127,7 @@ class Projector {
 	 */
 	public static function load( int $postId ): ?array {
 		global $wpdb;
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . Schema::table() . ' WHERE post_id = %d', $postId ), ARRAY_A );
 		if ( ! $row ) {
 			return null;
@@ -191,6 +193,8 @@ class Projector {
 	}
 
 	/**
+	 * Deletes the index row and the relation rows of a post.
+	 *
 	 * @param int $postId
 	 *
 	 * @return void
@@ -272,7 +276,7 @@ class Projector {
 		$post     = get_post( $postId );
 		$expected = $post instanceof WP_Post ? self::buildRow( $post ) : null;
 
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$actualRow = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . Schema::table() . ' WHERE post_id = %d', $postId ), ARRAY_A );
 		$actualRel = $wpdb->get_results( $wpdb->prepare( 'SELECT entity_type, entity_id FROM ' . Schema::relTable() . ' WHERE post_id = %d ORDER BY entity_type, entity_id', $postId ), ARRAY_A );
 		// phpcs:enable
@@ -551,6 +555,8 @@ class Projector {
 	}
 
 	/**
+	 * Converts a meta value to an unsigned smallint column value (0–65535), null if not numeric.
+	 *
 	 * @param mixed $value
 	 *
 	 * @return int|null
@@ -586,6 +592,8 @@ class Projector {
 	}
 
 	/**
+	 * Returns null for empty or zero dates, so they are stored as NULL instead of 0000-00-00.
+	 *
 	 * @param mixed $value
 	 *
 	 * @return string|null

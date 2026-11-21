@@ -22,6 +22,8 @@ use WP_User;
  * ({@see AccessStore}). An admin gets the same access profile as a user with all roles of R: both may book every
  * timeframe of the pair. Roles are joined with commas ('' = no matching role), role names never contain commas.
  *
+ * Booster off: not loaded (no hooks, no cron, no queries). Downgrade: holds no data of its own.
+ *
  * @see design/role-restricted-availability.md
  */
 class AccessProfile {
@@ -97,6 +99,9 @@ class AccessProfile {
 	}
 
 	/**
+	 * Builds the access profile key from a list of roles: unique, sorted, comma separated.
+	 * Users with the same roles share one key and therefore one stored row per pair.
+	 *
 	 * @param string[] $roles
 	 *
 	 * @return string
@@ -109,6 +114,8 @@ class AccessProfile {
 	}
 
 	/**
+	 * Inverse of {@see self::fromRoles()}: the roles contained in an access profile key.
+	 *
 	 * @param string $accessProfile
 	 *
 	 * @return string[]
@@ -136,7 +143,7 @@ class AccessProfile {
 		try {
 			return $callback();
 		} finally {
-			$current_user = $previous; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+			$current_user = $previous; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- restores the user that was current before running as the access profile
 		}
 	}
 

@@ -2,6 +2,8 @@
 
 *English version: [technische-dokumentation-booster-02.en.md](technische-dokumentation-booster-02.en.md)*
 
+> Code-Referenz im aktuellen Stand (Klassen, Optionen, Cron, Filter, Eingriffe in Originaldateien): [`technische-referenz-booster.md`](technische-referenz-booster.md).
+
 Stand: 07.11.2026 · Branch `booster/index-availability` · Vergleichsbasis: CommonsBooking 2.11.3 (`master`, `7aa75a81`)
 · Plugin-Version des Branches: `2.11.4-beta.5`
 

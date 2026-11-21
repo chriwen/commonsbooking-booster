@@ -7,6 +7,9 @@ namespace CommonsBooking\Service\Index;
  *
  * Safety net for writes that bypass the WordPress hooks (direct SQL, imports, aborted requests).
  * A daily cron run checks a random sample, `wp commonsbooking index verify` can check everything.
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries).
+ * Downgrade: only writes the index tables.
  */
 class Verifier {
 
@@ -70,9 +73,9 @@ class Verifier {
 		$postTypes  = Projector::getPostTypes();
 		$typeMarker = implode( ',', array_fill( 0, count( $postTypes ), '%s' ) );
 		$order      = $sampleSize ? 'ORDER BY RAND() LIMIT ' . (int) $sampleSize : 'ORDER BY ID';
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- only table names are interpolated; the IN list consists of placeholders filled by prepare()
 		$sql     = $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($typeMarker) $order", $postTypes );
-		$postIds = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$postIds = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		$mismatches = [];
 		foreach ( array_chunk( $postIds, 500 ) as $chunk ) {
@@ -90,7 +93,7 @@ class Verifier {
 
 		// rows whose post does not exist anymore
 		$table = Schema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$orphans = array_map( 'intval', $wpdb->get_col( "SELECT i.post_id FROM $table i LEFT JOIN {$wpdb->posts} p ON p.ID = i.post_id WHERE p.ID IS NULL" ) );
 		if ( $repair ) {
 			foreach ( $orphans as $postId ) {

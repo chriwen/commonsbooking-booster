@@ -2,6 +2,8 @@
 
 *Deutsche Fassung: [booster-aenderungen-bestehender-dateien.md](booster-aenderungen-bestehender-dateien.md)*
 
+> **Superseded** by section 6 of [`technische-referenz-booster.en.md`](technische-referenz-booster.en.md) (as of 19.11.2026, includes later changes). This file is kept as the state of 6 Nov 2026.
+
 As of 6 Nov 2026. Comparison of `master` (wielebenwir, `7aa75a81`, corresponds to 2.11.3) with
 `chriwen/commonsbooking-booster` branch `booster/index-availability` (working state
 after `8ade45b8`, including the change to `Item::getClosestBooking()`).

@@ -12,6 +12,9 @@ use CommonsBooking\Service\Index\Backfill;
  * - {@see Calculator}: (re)computes pairs after the response, in cron runs or when a reader finds no usable row.
  * - {@see Maintenance}: cron jobs, verification and WP-CLI.
  *
+ * Booster off, index incomplete or filter commonsbooking_use_availability_cache = false: {@see self::isEnabled()}
+ * is false and every day is computed live like in the original version. Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
+ *
  * @see design/availability-precompute.md
  */
 class Availability {
@@ -84,6 +87,9 @@ class Availability {
 	}
 
 	/**
+	 * Maximum age of a stored row in seconds. Older rows are recomputed before they are used, to limit the
+	 * effect of changes that bypassed the hooks (direct SQL, imports).
+	 *
 	 * @return int seconds
 	 */
 	public static function getMaxAge(): int {

@@ -1598,6 +1598,7 @@ User Email: {{user:user_email}}',
 					),
 				],
 			),
+			// Booster (2.11.4): switch and status of the performance booster, off by default
 			'booster' => array(
 				'title'  => commonsbooking_sanitizeHTML( __( 'Performance booster', 'commonsbooking' ) ),
 				'id'     => 'booster_group',

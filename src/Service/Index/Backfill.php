@@ -12,6 +12,9 @@ namespace CommonsBooking\Service\Index;
  * projecting a post twice is harmless.
  *
  * The index is only used for reading when {@see self::isReady()} returns true.
+ *
+ * Booster off: not scheduled; switching on starts a full rebuild. Downgrade: options and tables are prefixed,
+ * an older version ignores them, `booster purge` removes them.
  */
 class Backfill {
 
@@ -81,6 +84,8 @@ class Backfill {
 	}
 
 	/**
+	 * Returns true if the index is complete for the current projector version.
+	 *
 	 * @return bool true if a complete backfill with the current projector version exists
 	 */
 	public static function isDone(): bool {
@@ -88,6 +93,8 @@ class Backfill {
 	}
 
 	/**
+	 * Returns true while a rebuild is in progress (the cursor option exists).
+	 *
 	 * @return bool
 	 */
 	public static function isRunning(): bool {
@@ -111,6 +118,8 @@ class Backfill {
 	}
 
 	/**
+	 * Seconds the next rebuild step is overdue, 0 if it is not scheduled or not overdue.
+	 *
 	 * @return int seconds the cron event is overdue (0 if it is not)
 	 */
 	public static function getOverdueSeconds(): int {
@@ -160,9 +169,9 @@ class Backfill {
 		$postTypes  = Projector::getPostTypes();
 		$typeMarker = implode( ',', array_fill( 0, count( $postTypes ), '%s' ) );
 
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- only table names are interpolated; the IN list consists of placeholders filled by prepare()
 		$sql     = $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE ID > %d AND post_type IN ($typeMarker) ORDER BY ID ASC LIMIT %d", array_merge( [ $cursor ], $postTypes, [ $batchSize ] ) );
-		$postIds = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$postIds = array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		if ( $postIds ) {
 			// load posts and meta with two queries instead of two per post
@@ -275,7 +284,7 @@ class Backfill {
 	 */
 	private static function acquireLock( int $ttl ): bool {
 		global $wpdb;
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery -- the lock must bypass the options cache (atomic INSERT IGNORE / DELETE on the options table)
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND CAST(option_value AS UNSIGNED) < %d", self::LOCK_OPTION, time() ) );
 		$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", self::LOCK_OPTION, (string) ( time() + $ttl ) ) );
 		// phpcs:enable
@@ -286,11 +295,13 @@ class Backfill {
 	}
 
 	/**
+	 * Releases the lock of the rebuild (direct query, see {@see self::acquireLock()}).
+	 *
 	 * @return void
 	 */
 	private static function releaseLock(): void {
 		global $wpdb;
-		$wpdb->delete( $wpdb->options, [ 'option_name' => self::LOCK_OPTION ] ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->delete( $wpdb->options, [ 'option_name' => self::LOCK_OPTION ] ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery -- the lock must bypass the options cache (atomic INSERT IGNORE / DELETE on the options table)
 		wp_cache_delete( self::LOCK_OPTION, 'options' );
 	}
 
@@ -303,7 +314,7 @@ class Backfill {
 		global $wpdb;
 		$table    = Schema::table();
 		$relTable = Schema::relTable();
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$wpdb->query( "DELETE i FROM $table i LEFT JOIN {$wpdb->posts} p ON p.ID = i.post_id WHERE p.ID IS NULL" );
 		$wpdb->query( "DELETE r FROM $relTable r LEFT JOIN $table i ON i.post_id = r.post_id WHERE i.post_id IS NULL" );
 		// phpcs:enable
@@ -319,6 +330,8 @@ class Backfill {
 	}
 
 	/**
+	 * Schedules the next rebuild step, unless one is already scheduled.
+	 *
 	 * @param int $delay seconds
 	 *
 	 * @return void

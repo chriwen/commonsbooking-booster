@@ -12,6 +12,8 @@ class Location extends CustomPostType {
 
 	/**
 	 * Initiates needed hooks.
+	 *
+	 * @since 2.11.4 Booster: registers the box "Assigned timeframes". Also active without the booster.
 	 */
 	public function initHooks() {
 		add_filter( 'the_content', array( $this, 'getTemplate' ) );

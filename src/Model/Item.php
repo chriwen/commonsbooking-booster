@@ -125,6 +125,11 @@ class Item extends BookablePost {
 	/**
 	 * Gets the closest Booking for a given Item.
 	 *
+	 * @since 2.11.4 Booster: with the index only the bookings with the latest start are loaded
+	 *               (Repository\Booking::getLatestPastConfirmed()) instead of all confirmed bookings of the pair, which
+	 *               exceeded the memory limit in vehicle_availability.json. Without index the original path runs, the
+	 *               result is identical.
+	 *
 	 * @return ?Booking the booking that is past and closest to the current time, null if no booking is present
 	 */
 	public function getClosestBooking(): ?Booking {

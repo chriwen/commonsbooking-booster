@@ -15,6 +15,9 @@ use CommonsBooking\Wordpress\CustomPostType\Timeframe as TimeframeCPT;
  *
  * Works on postmeta. If the booster index is available, it is only used to find the candidate post ids faster.
  *
+ * Active with and without the booster (part of the booster update, read-only). Without the index the candidates
+ * are found with postmeta queries. Downgrade: writes nothing, nothing to clean up.
+ *
  * @see design/zugeordnete-zeitrahmen.md
  */
 class AssignedTimeframes {
@@ -72,6 +75,9 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Collects all timeframes and restrictions that affect one item or location, sorted into the groups
+	 * current / future / expired. Shared implementation of {@see self::forItem()} and {@see self::forLocation()}.
+	 *
 	 * @param string   $entity 'item' or 'location'
 	 * @param int      $entityId
 	 * @param int|null $now
@@ -281,7 +287,7 @@ class AssignedTimeframes {
 		);
 		// phpcs:enable
 
-		return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 	}
 
 	/**
@@ -306,7 +312,7 @@ class AssignedTimeframes {
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table and column are fixed
 			$sql = $wpdb->prepare( "SELECT post_id FROM $table WHERE post_type = %s AND post_status = 'publish' AND $column IN (0, %d) ORDER BY post_id", RestrictionCPT::$postType, $entityId );
 
-			return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 		}
 
 		$metaKey = $entity === 'item' ? RestrictionModel::META_ITEM_ID : RestrictionModel::META_LOCATION_ID;
@@ -321,7 +327,7 @@ class AssignedTimeframes {
 			(string) $entityId
 		);
 
-		return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		return array_map( 'intval', $wpdb->get_col( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 	}
 
 	/**
@@ -358,6 +364,9 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Builds the display entry of one timeframe for the item or location: assignment, group, repetition,
+	 * times and whether it is effective here (a timeframe only controls an item at the locations selected with it).
+	 *
 	 * @param TimeframeModel $timeframe
 	 * @param string         $entity
 	 * @param int            $entityId
@@ -542,6 +551,9 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Restrictions store one item or location id; 0 means "all". Converts it to the assignment format of
+	 * timeframes so both kinds of entries can be rendered the same way.
+	 *
 	 * @param int $id 0 = all
 	 *
 	 * @return array{mode: string, ids: int[], category_ids: int[]}
@@ -555,6 +567,9 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Sorts a validity period into the group expired, future or current, relative to today.
+	 * Open start or end (null) counts as unlimited in that direction.
+	 *
 	 * @param int|null $start
 	 * @param int|null $end null = open end
 	 * @param int      $todayStart
@@ -574,6 +589,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * End date of the timeframe as timestamp, null if the timeframe has no end date.
+	 *
 	 * @param TimeframeModel $timeframe
 	 *
 	 * @return int|null null = open end
@@ -585,6 +602,9 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Normalizes a stored time (12 h or 24 h format) to "H:i" for display.
+	 * Unparsable values are returned unchanged, so the admin still sees what is stored.
+	 *
 	 * @param mixed $time e.g. '8:00 AM' or '08:00'
 	 *
 	 * @return string|null H:i

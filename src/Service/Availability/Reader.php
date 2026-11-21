@@ -15,6 +15,9 @@ use CommonsBooking\View\Calendar;
  * - the facts of the days come from the stored rows ({@see Store}), or are computed and stored if the row is not usable,
  * - pairs with role limited timeframes read the row of the current user's access profile ({@see AccessStore}),
  * - ranges beyond the horizon and access profiles beyond the maximum per pair are evaluated live with the calendar json.
+ *
+ * Booster off or precomputation disabled: not called, map and table evaluate the calendar json live as before.
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class Reader {
 
@@ -276,6 +279,9 @@ class Reader {
 	}
 
 	/**
+	 * Takes the needed days from a result computed in this request, so a pair computed on the way does
+	 * not have to be read back from the table. Null if the result does not cover the current horizon.
+	 *
 	 * @param array{from: string, flags: int[]} $computed result of the {@see Calculator}
 	 * @param string[]                          $needed dates
 	 *

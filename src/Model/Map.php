@@ -19,6 +19,9 @@ class Map extends CustomPost {
 	 * attaches start / enddate of the bookable timeframe to the item
 	 * Fetches location & item metadata to be displayed on the map
 	 *
+	 * @since 2.11.4 Booster: loads items, bookable timeframes of all pairs, terms and preview images in bulk instead of
+	 *               per location / pair, same result. Also active without the booster.
+	 *
 	 * @param $mapItemTerms array of term ids
 	 *
 	 * @return array with postIDs as keys for an array with location data relevant for this map
@@ -191,6 +194,9 @@ class Map extends CustomPost {
 	 * Equivalent to calling Timeframe::getBookableForCurrentUser( [ $locationId ], [ $itemId ], null, true )
 	 * per pair: bookable timeframes only have single item / location ids (lists are removed on save for this type),
 	 * and all filters of the repository work per timeframe.
+	 *
+	 * @since 2.11.4 Booster: bookable timeframes of all pairs with one query instead of one per pair. Also active
+	 *               without the booster.
 	 *
 	 * @param int[] $locationIds
 	 * @param int[] $itemIds

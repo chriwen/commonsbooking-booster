@@ -12,6 +12,8 @@ use WP_CLI;
  *     wp commonsbooking index status
  *     wp commonsbooking index rebuild
  *     wp commonsbooking index verify --repair
+ *
+ * Only registered while the booster is on. Downgrade: only touches the booster tables.
  */
 class Cli {
 
@@ -28,7 +30,7 @@ class Cli {
 		WP_CLI::log( 'Backfill running:  ' . ( Backfill::isRunning() ? 'yes (cursor ' . get_option( Backfill::CURSOR_OPTION ) . ')' : 'no' ) );
 		WP_CLI::log( 'Used for reading:  ' . ( Backfill::isReady() ? 'yes' : 'no' ) );
 		if ( $installed ) {
-			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 			WP_CLI::log( 'Rows:              ' . $wpdb->get_var( 'SELECT COUNT(*) FROM ' . Schema::table() ) );
 			WP_CLI::log( 'Relation rows:     ' . $wpdb->get_var( 'SELECT COUNT(*) FROM ' . Schema::relTable() ) );
 			// phpcs:enable

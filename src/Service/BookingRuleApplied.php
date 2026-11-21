@@ -139,6 +139,9 @@ class BookingRuleApplied extends BookingRule {
 	/**
 	 * Checks if a booking conforms to the rule sets, will always allow bookings from item/location admins & administrators
 	 *
+	 * @since 2.11.4 Booster: the rule "only one unconfirmed booking" loads only the user's own unconfirmed bookings
+	 *               instead of all visible ones, same result. Also active without the booster.
+	 *
 	 * @param Booking $booking
 	 *
 	 * @return void

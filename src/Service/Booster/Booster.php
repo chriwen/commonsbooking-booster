@@ -144,6 +144,8 @@ class Booster {
 	}
 
 	/**
+	 * Returns true while code runs inside {@see self::withoutBooster()}: all reads use the original queries.
+	 *
 	 * @return bool true while {@see self::withoutBooster()} runs
 	 */
 	public static function isBypassed(): bool {
@@ -238,6 +240,8 @@ class Booster {
 	}
 
 	/**
+	 * Returns true if the booster was switched on in this request (the rebuild was started).
+	 *
 	 * @return bool true if this request switched the booster on
 	 */
 	public static function wasActivatedInRequest(): bool {
@@ -320,6 +324,9 @@ class Booster {
 	}
 
 	/**
+	 * Stored state of the booster with defaults: active flag, activation time, last known plugin version and post id
+	 * watermark of the {@see Guard}, reason and time of the last rebuild.
+	 *
 	 * @return array{active: bool, activated_at: int, plugin_version: string, watermark: int, last_rebuild_reason: string, last_rebuild: array{time: int, code: string, args: array}|null}
 	 */
 	public static function getState(): array {
@@ -409,6 +416,9 @@ class Booster {
 	}
 
 	/**
+	 * Progress of the index rebuild in percent (cursor position relative to the highest post id).
+	 * Stays below 100 until the rebuild is marked complete.
+	 *
 	 * @return int percent of the indexable posts processed by the running backfill
 	 */
 	public static function getBackfillProgress(): int {

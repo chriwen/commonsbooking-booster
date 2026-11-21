@@ -18,6 +18,8 @@ use CommonsBooking\Service\Index\Verifier;
  *
  * Writes only two non-autoloaded options: the activity log (once per request with index changes) and the
  * results of the checks (once per check run).
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries). Downgrade: its two options are prefixed and removed by `booster purge`.
  */
 class Diagnostics {
 
@@ -108,6 +110,8 @@ class Diagnostics {
 	}
 
 	/**
+	 * Log of the last index changes (newest first), shown on the settings page.
+	 *
 	 * @return array<int, array{time: int, post_id: int, post_type: string, action: string, old_status: string, new_status: string, source: string}>
 	 */
 	public static function getActivity(): array {
@@ -132,6 +136,8 @@ class Diagnostics {
 	}
 
 	/**
+	 * Last run and result of every check (guard, verifications), shown on the settings page.
+	 *
 	 * @return array<string, array>
 	 */
 	public static function getChecks(): array {
@@ -198,7 +204,7 @@ class Diagnostics {
 				'index' => 0,
 			]
 		);
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQL.NotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare,WordPress.DB.PreparedSQL.NotPrepared -- only table names are interpolated; the IN list consists of placeholders filled by prepare()
 		$posts = $wpdb->get_results(
 			$wpdb->prepare( "SELECT post_type, COUNT(*) AS n, MAX(post_modified_gmt) AS newest FROM {$wpdb->posts} WHERE post_type IN ($typeMarker) AND post_status <> 'auto-draft' GROUP BY post_type", $postTypes ),
 			ARRAY_A
@@ -240,7 +246,7 @@ class Diagnostics {
 		$table = IndexSchema::table();
 
 		// cancellations do not update the modification date (direct SQL), they store a cancellation time
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$byModified = $wpdb->get_col(
 			$wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'cb_booking' AND post_status <> 'auto-draft' ORDER BY post_modified_gmt DESC, ID DESC LIMIT %d", $limit )
 		);
@@ -302,7 +308,7 @@ class Diagnostics {
 	public static function getEventState( array $event ): string {
 		global $wpdb;
 		$post = get_post( (int) $event['post_id'] );
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$indexStatus = IndexSchema::isInstalled() ? $wpdb->get_var( $wpdb->prepare( 'SELECT post_status FROM ' . IndexSchema::table() . ' WHERE post_id = %d', (int) $event['post_id'] ) ) : null;
 
 		if ( ! $post || $post->post_status === 'auto-draft' ) {
@@ -313,6 +319,9 @@ class Diagnostics {
 	}
 
 	/**
+	 * Compares the post status in WordPress with the status in the index. A difference within the grace
+	 * period of the guard is reported as "pending" (the change may still be processed), later as "mismatch".
+	 *
 	 * @param string      $status status in WordPress
 	 * @param string|null $indexStatus status in the index, null = no row
 	 * @param int         $changed time of the last change
@@ -459,6 +468,8 @@ class Diagnostics {
 	}
 
 	/**
+	 * Plural label of a post type for display, the post type itself if it is not registered.
+	 *
 	 * @param string $postType
 	 *
 	 * @return string

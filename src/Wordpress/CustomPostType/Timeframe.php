@@ -336,6 +336,9 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Filters admin list by type (e.g. bookable, repair etc. )
 	 *
+	 * @since 2.11.4 Booster: the item / location filter also finds holidays and repair timeframes that select the post
+	 *               in a list. Also active without the booster.
+	 *
 	 * @param \WP_Query $query for admin list objects
 	 *
 	 * @return void
@@ -973,6 +976,8 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Validates timeframe and sets state to draft if invalid.
 	 *
+	 * @since 2.11.4 Booster: validation inside Booster::withoutBooster(), never reads booster tables.
+	 *
 	 * @param \CommonsBooking\Model\Timeframe $timeframe
 	 *
 	 * @return bool
@@ -1248,6 +1253,9 @@ class Timeframe extends CustomPostType {
 	/**
 	 * Adds data to custom columns
 	 *
+	 * @since 2.11.4 Booster: shows list / category / "all" selection of holidays and repair timeframes. Also active
+	 *               without the booster.
+	 *
 	 * @param $column
 	 * @param $post_id
 	 */
@@ -1418,6 +1426,9 @@ class Timeframe extends CustomPostType {
 
 	/**
 	 * Initiates needed hooks.
+	 *
+	 * @since 2.11.4 Booster: registers the box "Timeframes of the same item and location". Also active without the
+	 *               booster.
 	 *
 	 * @return void
 	 */

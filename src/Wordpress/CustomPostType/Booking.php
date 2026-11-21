@@ -18,6 +18,8 @@ class Booking extends Timeframe {
 
 	/**
 	 * Seconds a booking request waits for another request for the same item.
+	 *
+	 * @since 2.11.4 Booster: see {@see self::withItemLock()}. Also active without the booster.
 	 */
 	private const ITEM_LOCK_TIMEOUT = 20;
 
@@ -94,6 +96,8 @@ class Booking extends Timeframe {
 	/**
 	 * Adds and modifies some booking CPT fields in order to make admin boookings
 	 * compatible to user made bookings via frontend.
+	 *
+	 * @since 2.11.4 Booster: admin validation inside Booster::withoutBooster(), never reads booster tables.
 	 *
 	 * @param  mixed $post_id
 	 * @param  mixed $post
@@ -194,6 +198,10 @@ class Booking extends Timeframe {
 	 * checked and saved one after the other. The lock is released when the callback returns or throws (and by MySQL
 	 * when the connection closes).
 	 *
+	 * @since 2.11.4 Booster: concurrent booking requests for the same item are validated and saved one after the other
+	 *               (database lock, 20 s); without lock support in the database it runs as before. Also active without
+	 *               the booster.
+	 *
 	 * @param int      $itemId
 	 * @param callable $callback
 	 *
@@ -223,6 +231,9 @@ class Booking extends Timeframe {
 	/**
 	 * Handles frontend save-Request for timeframe.
 	 *
+	 * @since 2.11.4 Booster: split into {@see self::processFormRequest()} and {@see self::redirectToBooking()}, kept
+	 *               for existing callers.
+	 *
 	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
 	 */
 	public static function handleFormRequest() {
@@ -234,6 +245,8 @@ class Booking extends Timeframe {
 
 	/**
 	 * Redirects to the booking page and ends the request.
+	 *
+	 * @since 2.11.4 Booster: redirect part of handleFormRequest(), see Plugin::handleBookingForms().
 	 *
 	 * @param int $postId
 	 *
@@ -253,6 +266,9 @@ class Booking extends Timeframe {
 	 * Separate from the redirect so that callers can leave {@see \CommonsBooking\Service\Booster\Booster::withoutBooster()}
 	 * (and release the item lock) before the request ends: `exit` skips the `finally` blocks, the rest of the request
 	 * including the shutdown work would run without the booster.
+	 *
+	 * @since 2.11.4 Booster: processing part of handleFormRequest() without redirect, so the caller can leave
+	 *               Booster::withoutBooster() before the exit of the redirect.
 	 *
 	 * @return int|null id of the booking, null if the request is no valid booking form request
 	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user

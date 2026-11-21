@@ -169,6 +169,8 @@ class Timeframe extends CustomPost {
 	/**
 	 * True while {@see self::withoutBookingWindow()} runs.
 	 *
+	 * @since 2.11.4 Booster
+	 *
 	 * @var bool
 	 */
 	private static bool $ignoreBookingWindow = false;
@@ -179,6 +181,8 @@ class Timeframe extends CustomPost {
 	 *
 	 * Used by the precomputed availability, whose stored days must not depend on the current date. The booking window
 	 * is applied when the days are read.
+	 *
+	 * @since 2.11.4 Booster: used by the precomputed availability.
 	 *
 	 * @template T
 	 * @param callable(): T $callback
@@ -324,6 +328,9 @@ class Timeframe extends CustomPost {
 	 * TODO / CAREFUL: This does not respect the end of the timeframe. So if the timeframe ends before
 	 *       the configured "advance booking days" setting, the function will return a date later than the end date of the timeframe.
 	 *
+	 * @since 2.11.4 Booster: returns PHP_INT_MAX inside {@see self::withoutBookingWindow()}, so stored days do not
+	 *               depend on the current date. Unchanged otherwise.
+	 *
 	 * @return false|int
 	 */
 	public function getLatestPossibleBookingDateTimestamp() {
@@ -348,6 +355,9 @@ class Timeframe extends CustomPost {
 	 * This function will get the formatted end date of the timeframe.
 	 * This is used to display the end date of the timeframe in the frontend.
 	 * This is mainly in use by the [cb_items] shortcode.
+	 *
+	 * @since 2.11.4 Booster: fix: full sentence "Permanently available here" instead of label + "permanently", so
+	 *               translations can order the words. Also active without the booster.
 	 *
 	 * @param   int       $startDate
 	 * @param   int|false $endDate false when timeframe is open ended

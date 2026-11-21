@@ -41,6 +41,8 @@ class Calendar {
 	/**
 	 * The timeframes that are relevant for this calendar, loaded with the first uncached {@see self::getWeeks()}.
 	 *
+	 * @since 2.11.4 Booster: nullable, loaded lazily (before: in the constructor). Also active without the booster.
+	 *
 	 * @var Timeframe[]|null
 	 */
 	protected ?array $timeframes = null;
@@ -76,6 +78,9 @@ class Calendar {
 	/**
 	 * Calendar constructor.
 	 *
+	 * @since 2.11.4 Booster: no longer loads timeframes here (moved to {@see self::loadPosts()}), so a cache hit of
+	 *               getWeeks() needs no queries. Also active without the booster.
+	 *
 	 * @param Day   $startDate
 	 * @param Day   $endDate
 	 * @param int[] $locations
@@ -101,6 +106,9 @@ class Calendar {
 	/**
 	 * Loads the timeframes and restrictions of the range. Not done in the constructor because a calendar answered
 	 * from the cache or from the precomputed availability doesn't need them.
+	 *
+	 * @since 2.11.4 Booster: loads the timeframes and the restrictions of the whole period once (before: restrictions
+	 *               once per day), only when the weeks are not cached. Also active without the booster.
 	 *
 	 * @return void
 	 * @throws \Exception
@@ -136,6 +144,9 @@ class Calendar {
 	 * Returns weeks for calendar time range.
 	 *
 	 * Uses cache and expires at midnight on a daily basis.
+	 *
+	 * @since 2.11.4 Booster: loads the posts only on a cache miss and passes the preloaded restrictions to the weeks.
+	 *               Also active without the booster.
 	 *
 	 * @return array
 	 */
@@ -188,6 +199,10 @@ class Calendar {
 	 *
 	 * Read from the precomputed availability if possible ({@see SlotReader}), otherwise computed live.
 	 *
+	 * @since 2.11.4 Booster: answers from the precomputed slots ({@see
+	 *               \CommonsBooking\Service\Availability\SlotReader}) if possible, otherwise computes them live with
+	 *               {@see self::getAvailabilitySlotsLive()}.
+	 *
 	 * @return array
 	 * @throws \Exception
 	 */
@@ -206,6 +221,9 @@ class Calendar {
 
 	/**
 	 * Computes the availability slots from the day grids.
+	 *
+	 * @since 2.11.4 Booster: the original calculation of getAvailabilitySlots(), logic unchanged; the slot generation
+	 *               moved to {@see \CommonsBooking\Service\Availability\Slots}, shared with the precomputation.
 	 *
 	 * @return array
 	 * @throws \Exception

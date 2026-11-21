@@ -24,6 +24,8 @@ use stdClass;
  * Returns null whenever the live calculation has to answer: precomputation disabled, restrictions ignored, a range
  * outside the horizon, timeframes with several items or locations, access profiles beyond the maximum per pair.
  * Pairs with role limited timeframes are read from the current user's access profile ({@see AccessStore}).
+ *
+ * Booster off: not called, the API computes the slots live. Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class SlotReader {
 
@@ -202,6 +204,9 @@ class SlotReader {
 	}
 
 	/**
+	 * Converts a result computed in this request into the format of a stored row, if it covers the horizon
+	 * and contains slots.
+	 *
 	 * @param array{from: string, flags: int[], slots: ?string} $computed
 	 * @param string                                            $from
 	 *
@@ -275,6 +280,8 @@ class SlotReader {
 	}
 
 	/**
+	 * First bookable day of a timeframe (booking window), null if the timeframe cannot be loaded.
+	 *
 	 * @param int $timeframeId
 	 *
 	 * @return string|null Y-m-d, null if the timeframe does not exist anymore
@@ -288,6 +295,9 @@ class SlotReader {
 	}
 
 	/**
+	 * Last bookable day of a timeframe as timestamp (booking window), null if the
+	 * timeframe cannot be loaded.
+	 *
 	 * @param int $timeframeId
 	 *
 	 * @return int|null timestamp, null if the timeframe does not exist anymore

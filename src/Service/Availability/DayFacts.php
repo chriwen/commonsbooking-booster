@@ -16,6 +16,9 @@ use WP_Post;
  *
  * Can be packed into an integer ({@see self::getFlags()}) to be stored, but then the slots themselves are lost.
  *
+ * Also used while the booster is off: the calendar json evaluates every day through this class (refactoring of
+ * the original mapDay(), same results). Downgrade: pure calculation; the packed flags only live in booster tables.
+ *
  * @see design/availability-precompute.md
  */
 final class DayFacts {
@@ -62,6 +65,13 @@ final class DayFacts {
 	 */
 	private ?WP_Post $firstBookableTimeframe;
 
+	/**
+	 * Use the named constructors (computed from slots or restored from stored flags).
+	 *
+	 * @param int          $flags                  bit field of the class constants
+	 * @param array        $slots                  slots of the day (only when computed)
+	 * @param WP_Post|null $firstBookableTimeframe timeframe of the first bookable slot
+	 */
 	private function __construct( int $flags, array $slots = [], ?WP_Post $firstBookableTimeframe = null ) {
 		$this->flags                  = $flags;
 		$this->slots                  = $slots;
@@ -169,6 +179,8 @@ final class DayFacts {
 	}
 
 	/**
+	 * All flags of the day as bit field (stored in the column days of the availability table).
+	 *
 	 * @return int all flags, e.g. to store them
 	 */
 	public function getFlags(): int {
@@ -176,6 +188,8 @@ final class DayFacts {
 	}
 
 	/**
+	 * Returns true if the day has the given flag.
+	 *
 	 * @param int $flag one of the class constants
 	 *
 	 * @return bool
@@ -185,6 +199,8 @@ final class DayFacts {
 	}
 
 	/**
+	 * Returns true if the day has at least one slot of a bookable timeframe.
+	 *
 	 * @return bool
 	 */
 	public function hasSlots(): bool {
@@ -192,6 +208,8 @@ final class DayFacts {
 	}
 
 	/**
+	 * Timeframe of the first bookable slot of the day, used for its booking window settings.
+	 *
 	 * @return WP_Post|null timeframe of the first slot, if that slot is bookable (null if restored from flags)
 	 */
 	public function getFirstBookableTimeframe(): ?WP_Post {

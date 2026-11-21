@@ -7,6 +7,9 @@ namespace CommonsBooking\Service\Availability;
  *
  * Consistency without locks: {@see self::invalidate()} increases gen, {@see self::write()} only stores days
  * if gen is still the one read before the computation. A row is used only if computed_gen equals gen.
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries).
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class Store {
 
@@ -124,6 +127,8 @@ class Store {
 	}
 
 	/**
+	 * Returns the stored row of a pair (loading it if needed), null if there is none.
+	 *
 	 * @param int $itemId
 	 * @param int $locationId
 	 *
@@ -195,7 +200,7 @@ class Store {
 	public static function getGen( int $itemId, int $locationId ): int {
 		global $wpdb;
 		$table = Schema::table();
-		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $table (item_id, location_id, gen, computed_gen) VALUES (%d, %d, 1, 0)", $itemId, $locationId ) );
 
 		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT gen FROM $table WHERE location_id = %d AND item_id = %d", $locationId, $itemId ) );
@@ -234,7 +239,7 @@ class Store {
 			$gen
 		);
 		// phpcs:enable
-		$stored = (int) $wpdb->query( $sql ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$stored = (int) $wpdb->query( $sql ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		unset( self::$rows[ self::key( $itemId, $locationId ) ] );
 
@@ -282,7 +287,7 @@ class Store {
 	 */
 	public static function invalidateAll(): void {
 		global $wpdb;
-		$wpdb->query( 'UPDATE ' . Schema::table() . ' SET gen = gen + 1' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( 'UPDATE ' . Schema::table() . ' SET gen = gen + 1' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		self::reset();
 	}
 
@@ -297,31 +302,33 @@ class Store {
 	public static function getStalePairs( int $before, int $limit ): array {
 		global $wpdb;
 		$table = Schema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$sql  = $wpdb->prepare(
 			"SELECT item_id, location_id FROM $table WHERE computed_gen <> gen OR calc_version <> %d OR computed_at IS NULL OR computed_at < %s ORDER BY computed_at IS NOT NULL, computed_at LIMIT %d",
 			Calculator::VERSION,
 			gmdate( 'Y-m-d H:i:s', $before ),
 			$limit
 		);
-		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		return array_map( fn( $row ) => [ (int) $row['item_id'], (int) $row['location_id'] ], $rows );
 	}
 
 	/**
+	 * Counts of rows, usable and outdated rows of the availability table, for status and diagnostics.
+	 *
 	 * @return array{rows: int, usable: int, changed: int, role_limited: int}
 	 */
 	public static function getStats(): array {
 		global $wpdb;
 		$table = Schema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$sql = $wpdb->prepare(
 			"SELECT COUNT(*) AS rows_total, SUM(computed_gen = gen AND calc_version = %d AND days IS NOT NULL AND computed_at >= %s) AS usable, SUM(computed_gen <> gen) AS changed, SUM(has_role_limit) AS role_limited FROM $table",
 			Calculator::VERSION,
 			gmdate( 'Y-m-d H:i:s', time() - Availability::getMaxAge() )
 		);
-		$row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		return [
 			'rows'         => (int) ( $row['rows_total'] ?? 0 ),
@@ -338,7 +345,7 @@ class Store {
 	 */
 	public static function getAllPairs(): array {
 		global $wpdb;
-		$rows = $wpdb->get_results( 'SELECT item_id, location_id FROM ' . Schema::table(), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( 'SELECT item_id, location_id FROM ' . Schema::table(), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 
 		return array_map( fn( $row ) => [ (int) $row['item_id'], (int) $row['location_id'] ], $rows );
 	}

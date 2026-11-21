@@ -46,6 +46,10 @@ class MapItemAvailable {
 	const OUT_OF_TIMEFRAME = 'no-timeframe';
 
 	/**
+	 * @since 2.11.4 Booster: reads the day status of all pairs at once from the precomputed availability ({@see
+	 *               \CommonsBooking\Service\Availability\Reader::preload()}); without it Reader::evaluateLive()
+	 *               computes them like before. Only the displayed days are evaluated.
+	 *
 	 * @param $locations
 	 * @param $date_start
 	 * @param $date_end
@@ -105,6 +109,8 @@ class MapItemAvailable {
 
 	/**
 	 * Maps the day status of the calendar data to the status shown in the map.
+	 *
+	 * @since 2.11.4 Booster: replaces the day logic of markDaysInTimeframe(). Also active without the booster.
 	 */
 	private const STATUS_MAPPING = [
 		DayStatus::NO_SLOTS               => self::ITEM_LOCKED,
@@ -119,6 +125,9 @@ class MapItemAvailable {
 	/**
 	 * Sets the map status of the days that are part of the calendar data.
 	 * Uses the same rules as the items table ({@see DayStatus}), other days keep the status "no-timeframe".
+	 *
+	 * @since 2.11.4 Booster: replaces markDaysInTimeframe(): maps the shared day status (DayStatus) to the map status
+	 *               ({@see self::STATUS_MAPPING}), so map and items table use the same day logic.
 	 *
 	 * @param array<string, string> $dayStatuses {@see DayStatus} by date
 	 * @param array                 $availabilities

@@ -13,6 +13,9 @@ use CommonsBooking\Service\Index\Verifier;
 /**
  * Status and diagnostics of the booster on the settings page (Advanced Options), plus the actions
  * "run checks now" and "rebuild index".
+ *
+ * Loaded in the admin area also while the booster is off, to show the switch state and allow switching on.
+ * Downgrade: holds no data of its own.
  */
 class SettingsView {
 
@@ -33,6 +36,8 @@ class SettingsView {
 	public const SETUP_STEP_SECONDS = 8;
 
 	/**
+	 * Registers the handlers of the buttons on the settings page and the admin notice.
+	 *
 	 * @return void
 	 */
 	public static function init(): void {
@@ -417,6 +422,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Prints one key figure of the status card; incomplete values are highlighted.
+	 *
 	 * @param string $value    the figure, e.g. "40 of 40"
 	 * @param string $text     what is counted
 	 * @param bool   $complete false highlights the value
@@ -541,15 +548,18 @@ class SettingsView {
 			var status = box.querySelector( '.cb-booster-setup-status' ), label = box.querySelector( '.cb-booster-bar-label' );
 			var fill = box.querySelector( '.cb-booster-bar-fill' ), text = box.querySelector( '.cb-booster-bar-text' );
 			var running = false, failures = 0;
+			/* Disables the button while a step runs, so the setup is not started twice. */
 			function setBusy( busy ) {
 				running = busy;
 				button.classList.toggle( 'disabled', busy );
 				button.setAttribute( 'aria-disabled', busy ? 'true' : 'false' );
 			}
+			/* Ends the setup and shows the final message. */
 			function stop( message ) {
 				setBusy( false );
 				status.textContent = message;
 			}
+			/* Runs one setup step via AJAX (about 8 s on the server) and schedules the next until it is done. */
 			function step() {
 				var data = new FormData();
 				data.append( 'action', button.dataset.action );
@@ -589,6 +599,7 @@ class SettingsView {
 						stop( box.dataset.error );
 					} );
 			}
+			/* Starts the setup when the button is clicked. */
 			function start() {
 				if ( running ) {
 					return;
@@ -856,6 +867,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Prints a colored status badge (level ok, warning or error).
+	 *
 	 * @param string $level ok|warning|error|off
 	 * @param string $text
 	 *
@@ -866,6 +879,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Prints a progress bar with label and text, e.g. coverage of the index per post type.
+	 *
 	 * @param string $label
 	 * @param int    $value
 	 * @param int    $max
@@ -882,6 +897,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Icon with tooltip for the comparison state ok / pending / mismatch of a booking.
+	 *
 	 * @param string $state ok|pending|mismatch
 	 *
 	 * @return string markup
@@ -902,6 +919,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Prints the styles of the status area (inline, the page is only shown to admins).
+	 *
 	 * @return void
 	 */
 	private static function renderStyles(): void {
@@ -937,6 +956,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Stops the request unless the user may manage options and the nonce of the action is valid.
+	 *
 	 * @param string $action
 	 *
 	 * @return void
@@ -949,6 +970,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Returns to the advanced options with a notice and ends the request.
+	 *
 	 * @param string $notice
 	 *
 	 * @return void
@@ -960,6 +983,8 @@ class SettingsView {
 
 
 	/**
+	 * Label of a post status for display, the status itself if it is not registered.
+	 *
 	 * @param string $status
 	 *
 	 * @return string
@@ -971,6 +996,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Date and time in the site format plus the relative time ("5 mins ago").
+	 *
 	 * @param int $timestamp
 	 *
 	 * @return string
@@ -982,6 +1009,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Formats a GMT datetime from the database, "–" if empty.
+	 *
 	 * @param string|null $gmt Y-m-d H:i:s
 	 *
 	 * @return string
@@ -1010,6 +1039,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Time of the last run of a check, "not yet" if it never ran.
+	 *
 	 * @param array|null $check
 	 *
 	 * @return string
@@ -1019,6 +1050,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Result text of a check: number of repaired differences and, if known, of checked entries.
+	 *
 	 * @param int      $differences
 	 * @param int|null $checked
 	 *
@@ -1038,6 +1071,8 @@ class SettingsView {
 	}
 
 	/**
+	 * Time of the next run of a cron event, marked as overdue if WP-Cron did not run it.
+	 *
 	 * @param int $timestamp
 	 *
 	 * @return string

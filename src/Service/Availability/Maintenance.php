@@ -14,6 +14,9 @@ use CommonsBooking\Wordpress\CustomPostType\Timeframe;
  *   timeframes including the access profiles "no matching role" and "all roles", see {@see Calculator::recompute()}),
  * - daily: remove access profiles that are outdated or unused ({@see AccessStore::cleanup()}),
  *   compare a sample of rows with a fresh computation ({@see self::verify()}).
+ *
+ * Booster off: not loaded (no hooks, no cron, no queries). Switching off removes the cron events.
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class Maintenance {
 
@@ -39,6 +42,8 @@ class Maintenance {
 	public const SYNC_OPTION = COMMONSBOOKING_PLUGIN_SLUG . '_availability_pairs_synced';
 
 	/**
+	 * Registers cron hooks and the WP-CLI command (only while the precomputed availability is enabled).
+	 *
 	 * @return void
 	 */
 	public static function init(): void {
@@ -52,6 +57,8 @@ class Maintenance {
 	}
 
 	/**
+	 * Schedules the hourly maintenance and the daily verification, once the tables are installed.
+	 *
 	 * @return void
 	 */
 	public static function schedule(): void {
@@ -89,6 +96,8 @@ class Maintenance {
 	}
 
 	/**
+	 * Hourly job: adds new pairs, recomputes changed, missing and old rows. Does nothing while disabled.
+	 *
 	 * @return void
 	 */
 	public static function runCron(): void {
@@ -132,6 +141,9 @@ class Maintenance {
 	}
 
 	/**
+	 * Daily job: removes unused access profiles and verifies a random sample of stored rows against a
+	 * fresh calculation, repairing differences. The result is shown on the settings page.
+	 *
 	 * @return void
 	 */
 	public static function runVerifyCron(): void {
@@ -248,14 +260,14 @@ class Maintenance {
 		global $wpdb;
 		[ $from ] = Availability::getHorizon();
 		$table    = IndexSchema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$sql  = $wpdb->prepare(
 			"SELECT DISTINCT item_id, location_id FROM $table WHERE post_type = %s AND type = %d AND post_status = 'publish' AND item_id IS NOT NULL AND location_id IS NOT NULL AND (end_ts IS NULL OR end_ts >= %d)",
 			Timeframe::$postType,
 			Timeframe::BOOKABLE_ID,
 			strtotime( $from )
 		);
-		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		return array_map( fn( $row ) => [ (int) $row['item_id'], (int) $row['location_id'] ], $rows );
 	}
@@ -287,6 +299,9 @@ class Maintenance {
 	}
 
 	/**
+	 * Compares stored rows of access profiles with a fresh calculation (optionally a random sample)
+	 * and recomputes differing rows if $repair is set.
+	 *
 	 * @param int|null $sampleSize
 	 * @param bool     $repair
 	 *
@@ -336,6 +351,9 @@ class Maintenance {
 	}
 
 	/**
+	 * Compares stored rows of pairs with a fresh calculation (optionally a random sample) and recomputes
+	 * differing rows if $repair is set.
+	 *
 	 * @param int|null $sampleSize
 	 * @param bool     $repair
 	 *

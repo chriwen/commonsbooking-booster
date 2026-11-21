@@ -9,6 +9,11 @@ use CommonsBooking\Repository\Index;
 
 /**
  * Computes the {@see DayFacts} of an item/location pair for the precomputation horizon and stores them.
+ *
+ * Uses the same day calculation as the calendar json ({@see DayFacts}, {@see Slots}), so stored and live results
+ * cannot drift apart. Increase {@see self::VERSION} whenever that calculation changes: all rows are recomputed.
+ * Booster off: not loaded (no hooks, no cron, no queries).
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
  */
 class Calculator {
 
@@ -92,6 +97,9 @@ class Calculator {
 	}
 
 	/**
+	 * Computes and stores the days of one pair for one access profile (role restricted timeframes),
+	 * if the pair still has room for another profile. The result is kept for this request in any case.
+	 *
 	 * @param int    $itemId
 	 * @param int    $locationId
 	 * @param string $accessProfile
@@ -147,6 +155,9 @@ class Calculator {
 	}
 
 	/**
+	 * Computes the day facts (flags) and the free slots of every day from $from to $to for one pair, with the
+	 * same code as the calendar json, but without plugin cache and without the booking window.
+	 *
 	 * @param int    $itemId
 	 * @param int    $locationId
 	 * @param string $from Y-m-d
@@ -213,6 +224,8 @@ class Calculator {
 	}
 
 	/**
+	 * Number of pairs computed in this request (used by tests to check that warm reads compute nothing).
+	 *
 	 * @return int number of computations in this request
 	 */
 	public static function getComputeCount(): int {

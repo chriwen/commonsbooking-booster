@@ -6,6 +6,8 @@ namespace CommonsBooking\Service\Availability;
  * Condenses a day of the calendar json into one status.
  * Shared by the map ({@see \CommonsBooking\Map\MapItemAvailable}) and the items table
  * ({@see \CommonsBooking\View\Calendar::renderTable()}), so both show days the same way.
+ *
+ * Also used while the booster is off (map and table use it in both ways). Downgrade: pure calculation, no data.
  */
 final class DayStatus {
 
@@ -28,6 +30,8 @@ final class DayStatus {
 	public const AVAILABLE = 'available';
 
 	/**
+	 * Condenses a day of the calendar json into one status for map and items table.
+	 *
 	 * @param array     $day day array of the calendar json
 	 * @param bool|null $hasSlots overrides the slot check, for day arrays without slots (precomputed)
 	 *

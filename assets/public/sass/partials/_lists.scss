@@ -32,6 +32,7 @@
         border-left: green;
         border-width: 1px;
 
+        // Booster update (2.11.4, fix): only the text keeps its line breaks, not the whitespace of the template
         .cb-location-pickupinstructions-text {
             white-space: pre-wrap; // enable line break in content from meta textfields, but not of the template markup
         }

@@ -22,7 +22,8 @@ git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 The timeframe index and the precomputed availability (both below) form the *performance booster*, a single switch
 under CommonsBooking → Settings → Advanced Options (`Service\Booster\Booster`, setting `booster_enabled`, filter
-`commonsbooking_booster_enabled`). It is **off by default**. Design notes: `design/booster.md`.
+`commonsbooking_booster_enabled`). It is **off by default**. Design notes: `design/booster.md`; code reference
+(classes, data, hooks, changes to original files): `design/technische-referenz-booster.en.md`.
 
 - **Off:** no hooks, no cron jobs, no reads from the additional tables. The plugin runs the original queries, exactly
   like a version without the booster. The existing tables (`wp_posts`, `wp_postmeta`, ...) are never changed by the

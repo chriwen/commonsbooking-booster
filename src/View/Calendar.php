@@ -36,6 +36,9 @@ class Calendar {
 
 	/**
 	 * Markup of a day in the items table per {@see DayStatus}.
+	 *
+	 * @since 2.11.4 Booster: replaces the markup spread over the day logic; map and table now share DayStatus.
+	 *               Also active without the booster.
 	 */
 	private const TABLE_STATUS_MARKUP = [
 		DayStatus::NO_SLOTS               => "<span class='is-locked'></span>",
@@ -51,6 +54,9 @@ class Calendar {
 	 * Renders item table.
 	 * Many thanks to fLotte Berlin!
 	 * Forked from https://github.com/flotte-berlin/cb-shortcodes/blob/master/custom-shortcodes-cb-items.php
+	 *
+	 * @since 2.11.4 Booster: preloads the day status of all pairs via the precomputed availability if enabled; cache
+	 *               key of a row now item_location_today_days (before: collisions possible).
 	 *
 	 * @param $atts array Supports the following attributes:
 	 *                    - locationcat: Filter by location category
@@ -275,6 +281,9 @@ class Calendar {
 	/**
 	 * Renders item/location row.
 	 *
+	 * @since 2.11.4 Booster: optional ?Reader: reads the day status through it, otherwise live; markup per status from
+	 *               {@see self::TABLE_STATUS_MARKUP} (fixes the broken <span'is-locked'>).
+	 *
 	 * @param $item
 	 * @param $locationId
 	 * @param $locationName
@@ -326,6 +335,10 @@ class Calendar {
 
 	/**
 	 * Returns calendar data
+	 *
+	 * @since 2.11.4 Booster: the window (displayed range, booking window) is computed with {@see
+	 *               \CommonsBooking\Service\Availability\CalendarWindow}, shared with the precomputation; same result.
+	 *               Also active without the booster.
 	 *
 	 * @param WP_Post|int|string|CustomPost $item
 	 * @param WP_Post|int|string|CustomPost $location
@@ -466,6 +479,9 @@ class Calendar {
 	 *
 	 * Uses cache which expires at midnight on a daily basis.
 	 *
+	 * @since 2.11.4 Booster: window via CalendarWindow, output via {@see self::renderJsonResponse()}; same result. Also
+	 *               active without the booster.
+	 *
 	 * @param Day   $startDate
 	 * @param Day   $endDate
 	 * @param array $locations []
@@ -493,6 +509,9 @@ class Calendar {
 
 	/**
 	 * Builds the calendar json for a window.
+	 *
+	 * @since 2.11.4 Booster: json of the calendar for a given window, shared by getCalendarDataArray() and
+	 *               prepareJsonResponse(). Also active without the booster.
 	 *
 	 * @param CalendarWindow $window
 	 * @param array          $locations
@@ -587,6 +606,10 @@ class Calendar {
 
 	/**
 	 * Processes day for calendar view of json.
+	 *
+	 * @since 2.11.4 Booster: changed signature; evaluates the day with DayFacts and CalendarWindow (shared with the
+	 *               precomputation, same result, pinned by tests/php/View/CalendarSnapshotTest.php). Also active
+	 *               without the booster.
 	 *
 	 * @param Day            $day
 	 * @param CalendarWindow $window

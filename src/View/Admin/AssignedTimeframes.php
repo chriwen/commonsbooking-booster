@@ -10,6 +10,9 @@ use CommonsBooking\Wordpress\CustomPostType\Timeframe;
 /**
  * Metabox "Assigned timeframes" on the edit page of items and locations: which timeframes and restrictions control them.
  *
+ * Active with and without the booster (read-only display, part of the booster update).
+ * Downgrade: writes nothing; an older version simply does not show the box.
+ *
  * @see design/zugeordnete-zeitrahmen.md
  */
 class AssignedTimeframes {
@@ -46,6 +49,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Registers the meta box and moves it to the top of the "normal / high" boxes of the edit screen.
+	 *
 	 * @param string   $postType
 	 * @param string   $title
 	 * @param callable $callback
@@ -221,6 +226,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Prints one collapsible group (current, future, expired) with its entries.
+	 *
 	 * @param string $group one of the Repository::GROUP_* constants
 	 * @param string $title
 	 * @param array  $entries
@@ -321,6 +328,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Prints one timeframe or restriction with type, period, times, status and link to edit it.
+	 *
 	 * @param array  $entry
 	 * @param string $entity
 	 *
@@ -371,6 +380,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Label of the status of an entry (restriction state or post status).
+	 *
 	 * @param array $entry
 	 *
 	 * @return string
@@ -391,6 +402,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Explains why an entry has no effect on this item or location, empty string if it has.
+	 *
 	 * @param array  $entry
 	 * @param string $entity
 	 *
@@ -414,6 +427,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Label of the repetition of a timeframe, "–" if not set.
+	 *
 	 * @param array $entry
 	 *
 	 * @return string
@@ -443,6 +458,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Short labels of the selected weekdays ("every day" if all are selected).
+	 *
 	 * @param int[] $weekdays 1 = Monday … 7 = Sunday
 	 *
 	 * @return string
@@ -464,6 +481,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Label of the booking grid: full day, slot with times or hourly.
+	 *
 	 * @param array $entry
 	 *
 	 * @return string
@@ -541,6 +560,8 @@ class AssignedTimeframes {
 	}
 
 	/**
+	 * Inline styles of the meta box (only loaded on the edit screens that show it).
+	 *
 	 * @return string
 	 */
 	private static function styles(): string {

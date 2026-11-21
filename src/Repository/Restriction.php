@@ -12,6 +12,9 @@ class Restriction extends PostRepository {
 	/**
 	 * Returns active restrictions.
 	 *
+	 * @since 2.11.4 Booster: reads from the index if available ({@see self::queryPostsFromIndex()}), otherwise
+	 *               queryPosts() as before.
+	 *
 	 * @param array       $locations one or more location ids to filter
 	 * @param array       $items     one or more item ids to filter
 	 * @param string|null $date if provided, filters restrictions to be valid on the given date
@@ -66,6 +69,8 @@ class Restriction extends PostRepository {
 
 	/**
 	 * Same as {@see self::queryPosts()}, but uses the index. Returns WP_Post objects.
+	 *
+	 * @since 2.11.4 Booster: index variant of queryPosts() (active restrictions in the range).
 	 *
 	 * @param string|null $date
 	 * @param int|null    $minTimestamp end must be > minTimestamp (or open end)

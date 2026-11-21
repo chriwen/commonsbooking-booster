@@ -8,6 +8,8 @@ namespace CommonsBooking\Service\Index;
  * The index is a derived projection of the posts of type cb_timeframe, cb_booking and cb_restriction.
  * The posts (and their postmeta) stay the single source of truth, the index can be rebuilt at any time.
  *
+ * Booster off: tables stay untouched until `booster purge`. Downgrade: an older version ignores the tables.
+ *
  * @see \CommonsBooking\Service\Index\Projector for how a post is mapped to a row
  * @see design/timeframe-index.md
  */
@@ -114,7 +116,7 @@ class Schema {
 
 		// dbDelta does not change the NULL constraint of existing columns
 		if ( $installedVersion < 2 ) {
-			$wpdb->query( 'ALTER TABLE ' . self::table() . ' MODIFY start_ts bigint(20) NULL' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$wpdb->query( 'ALTER TABLE ' . self::table() . ' MODIFY start_ts bigint(20) NULL' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name of this plugin, DDL cannot use placeholders
 		}
 
 		update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, true );
@@ -127,8 +129,8 @@ class Schema {
 	 */
 	public static function uninstall(): void {
 		global $wpdb;
-		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::relTable() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::table() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::relTable() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name of this plugin, DDL cannot use placeholders
+		$wpdb->query( 'DROP TABLE IF EXISTS ' . self::table() ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name of this plugin, DDL cannot use placeholders
 		delete_option( self::SCHEMA_VERSION_OPTION );
 		Backfill::reset();
 	}

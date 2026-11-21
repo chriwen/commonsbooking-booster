@@ -60,6 +60,7 @@
 					</ul>
 				</div><!-- .cb_welcome-panel-column -->
 				<?php
+				// Booster (2.11.4): fourth column with the state of the booster, only for admins
 				if ( commonsbooking_isCurrentUserAdmin() ) {
 					\CommonsBooking\Service\Booster\SettingsView::renderDashboardColumn();
 				}

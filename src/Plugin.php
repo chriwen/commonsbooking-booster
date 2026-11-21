@@ -47,6 +47,8 @@ class Plugin {
 
 	/**
 	 * Plugin activation tasks.
+	 *
+	 * @since 2.11.4 Booster: rebuilds the index after a phase of inactivity (only if the booster is switched on).
 	 */
 	public static function activation() {
 		// Register custom user roles (e.g. cb_manager)
@@ -66,6 +68,8 @@ class Plugin {
 
 	/**
 	 * Plugin deactivation tasks.
+	 *
+	 * @since 2.11.4 Booster: removes the cron jobs of the booster.
 	 */
 	public static function deactivation() {
 		do_action( Scheduler::UNSCHEDULER_HOOK );
@@ -419,6 +423,10 @@ class Plugin {
 	 * Handles the validation of booking forms. We customize the transient so that only the user that is supposed to see the transient will
 	 * actually see it.
 	 *
+	 * @since 2.11.4 Booster: validation runs inside Booster::withoutBooster() and never reads booster tables; the
+	 *               redirect happens only afterwards, because its exit would skip the finally block of
+	 *               withoutBooster().
+	 *
 	 * @return void
 	 */
 	public static function handleBookingForms(): void {
@@ -735,6 +743,8 @@ class Plugin {
 
 	/**
 	 *  Init hooks.
+	 *
+	 * @since 2.11.4 Booster: starts the booster (hooks, cron and reads only if it is switched on).
 	 */
 	public function init() {
 		do_action( 'cmb2_init' );

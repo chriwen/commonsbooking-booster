@@ -41,6 +41,9 @@ trait Cache {
 	 * Runs a callback without reading or writing cache items, e.g. to compute values from the current database state
 	 * while the cache may still contain items from before a change.
 	 *
+	 * @since 2.11.4 Booster: used by the precomputation and Booster::withoutBooster(), which must not read or write
+	 *               cached results.
+	 *
 	 * @param callable $callback
 	 *
 	 * @return mixed return value of the callback
@@ -56,6 +59,8 @@ trait Cache {
 
 	/**
 	 * Returns cache item based on calling class, function and args.
+	 *
+	 * @since 2.11.4 Booster: no cache reads inside {@see self::withoutCache()}.
 	 *
 	 * @param mixed|null $custom_id
 	 *
@@ -83,6 +88,10 @@ trait Cache {
 
 	/**
 	 * Returns cache id, based on calling class, function and args.
+	 *
+	 * @since 2.11.4 Booster: includes the role context of the user ({@see self::getRoleContext()}): timeframes limited
+	 *               to roles make results differ per user, before a guest could get an admin's cached view. Also active
+	 *               without the booster.
 	 *
 	 * @param mixed|null $custom_id
 	 *
@@ -113,6 +122,8 @@ trait Cache {
 	/**
 	 * Roles of the current user (and whether CommonsBooking treats the user as admin), part of every cache key.
 	 * Users with the same roles share the cache items.
+	 *
+	 * @since 2.11.4 Booster: see getCacheId(). Also active without the booster.
 	 *
 	 * @return string
 	 */
@@ -285,6 +296,8 @@ trait Cache {
 
 	/**
 	 * Saves cache item based on calling class, function and args.
+	 *
+	 * @since 2.11.4 Booster: no cache writes inside {@see self::withoutCache()}.
 	 *
 	 * @param $value
 	 * @param array       $tags

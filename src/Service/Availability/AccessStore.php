@@ -10,6 +10,9 @@ namespace CommonsBooking\Service\Availability;
  * the pair, so every change of the pair invalidates all its access profiles without touching this table.
  * days_from and days have the same format as in the pair row, {@see Store::getFlags()} reads both.
  *
+ * Booster off: not loaded (no hooks, no cron, no queries).
+ * Downgrade: only reads/writes the booster tables; an older version ignores them, `booster purge` removes them.
+ *
  * @see design/role-restricted-availability.md
  */
 class AccessStore {
@@ -29,6 +32,8 @@ class AccessStore {
 	private static array $rows = [];
 
 	/**
+	 * Key of a row in the request cache: pair key plus access profile.
+	 *
 	 * @param int    $itemId
 	 * @param int    $locationId
 	 * @param string $accessProfile
@@ -60,6 +65,8 @@ class AccessStore {
 	}
 
 	/**
+	 * Returns the stored row of a pair for one access profile (loading it if needed), null if there is none.
+	 *
 	 * @param int    $itemId
 	 * @param int    $locationId
 	 * @param string $accessProfile
@@ -84,6 +91,9 @@ class AccessStore {
 	}
 
 	/**
+	 * Loads the rows of the requested pairs and access profiles from the table. Rows that are read are marked
+	 * as read today (column last_read), so {@see self::cleanup()} can remove profiles nobody needs anymore.
+	 *
 	 * @param array<int, array{0:int,1:int,2:string}> $requests
 	 * @param bool                                    $withSlots
 	 *
@@ -154,7 +164,7 @@ class AccessStore {
 	public static function hasRoom( int $itemId, int $locationId, string $accessProfile, int $gen ): bool {
 		global $wpdb;
 		$table = Schema::accessTable();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $table WHERE location_id = %d AND item_id = %d AND computed_gen = %d AND access_profile <> %s", $locationId, $itemId, $gen, $accessProfile ) );
 
 		return $count < AccessProfile::getMaxPerPair();
@@ -198,7 +208,7 @@ class AccessStore {
 			$gen
 		);
 		// phpcs:enable
-		$stored = (int) $wpdb->query( $sql ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$stored = (int) $wpdb->query( $sql ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		unset( self::$rows[ self::key( $itemId, $locationId, $accessProfile ) ] );
 
@@ -214,13 +224,13 @@ class AccessStore {
 		global $wpdb;
 		$table     = Schema::accessTable();
 		$pairTable = Schema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$sql     = $wpdb->prepare(
 			"DELETE a FROM $table a LEFT JOIN $pairTable p ON p.location_id = a.location_id AND p.item_id = a.item_id
 			WHERE p.item_id IS NULL OR p.has_role_limit = 0 OR a.computed_gen < p.gen OR a.last_read < %s",
 			date( 'Y-m-d', strtotime( '-' . self::UNUSED_DAYS . ' days' ) )
 		);
-		$deleted = (int) $wpdb->query( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$deleted = (int) $wpdb->query( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 		self::reset();
 
 		return $deleted;
@@ -256,26 +266,28 @@ class AccessStore {
 	 */
 	public static function getAll(): array {
 		global $wpdb;
-		$rows = $wpdb->get_results( 'SELECT item_id, location_id, access_profile FROM ' . Schema::accessTable(), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( 'SELECT item_id, location_id, access_profile FROM ' . Schema::accessTable(), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 
 		return array_map( fn( $row ) => [ (int) $row['item_id'], (int) $row['location_id'], (string) $row['access_profile'] ], $rows );
 	}
 
 	/**
+	 * Counts of rows, usable rows and pairs of the access profile table, for status and diagnostics.
+	 *
 	 * @return array{rows: int, usable: int, pairs: int}
 	 */
 	public static function getStats(): array {
 		global $wpdb;
 		$table     = Schema::accessTable();
 		$pairTable = Schema::table();
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- only table names are interpolated, all values are passed through prepare()
 		$sql = $wpdb->prepare(
 			"SELECT COUNT(*) AS rows_total, SUM(a.computed_gen = p.gen AND a.calc_version = %d AND a.computed_at >= %s) AS usable, COUNT(DISTINCT a.location_id, a.item_id) AS pairs
 			FROM $table a LEFT JOIN $pairTable p ON p.location_id = a.location_id AND p.item_id = a.item_id",
 			Calculator::VERSION,
 			gmdate( 'Y-m-d H:i:s', time() - Availability::getMaxAge() )
 		);
-		$row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$row = $wpdb->get_row( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql was built with $wpdb->prepare() above
 
 		return [
 			'rows'   => (int) ( $row['rows_total'] ?? 0 ),
