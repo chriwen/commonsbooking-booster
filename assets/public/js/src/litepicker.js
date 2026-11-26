@@ -329,6 +329,34 @@ document.addEventListener('DOMContentLoaded', function (event) {
                             // Add new day-data to global calendar data object
                             jQuery.extend(globalCalendarData.days, data.days);
 
+                            // Each response only covers the months just loaded (1 month on mobile, 2 on desktop).
+                            // Litepicker extends the maximum range by the locked days / holidays after the picked
+                            // start date, so replacing these lists with the new window loses the days of the month
+                            // we just left and blocks valid end dates (e.g. Friday to Friday with closed days in
+                            // between). Therefore accumulate the lists instead of replacing them.
+                            [
+                                'lockDays',
+                                'holidays',
+                                'bookedDays',
+                                'partiallyBookedDays',
+                                'highlightedDays',
+                            ].forEach((key) => {
+                                data[key] = Array.from(
+                                    new Set([
+                                        ...(globalCalendarData[key] || []),
+                                        ...(data[key] || []),
+                                    ]),
+                                );
+                                globalCalendarData[key] = data[key];
+                            });
+                            // The server derives maxDays from the first bookable day of the requested window and
+                            // returns null if the window has none: keep the known value in that case.
+                            if (!data['maxDays']) {
+                                data['maxDays'] = globalCalendarData['maxDays'];
+                            }
+                            // Days of the previous windows must stay available to the picker, too.
+                            data['days'] = globalCalendarData['days'];
+
                             updatePicker(data);
                             picker.gotoDate(startDate);
                         },
